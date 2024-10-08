@@ -1,6 +1,21 @@
 from django.db import models
 
 # Create your models here.
+# Añadir categoria y marca
+# Un usuario por tienda
+
+#añadir clientes, nombre telefono. tipo precio
+
+#Precios
+# Precio de compra
+# Precio publico
+# Precio minorista
+# Precio medio mayoreo 
+# precio mayoreo
+# Añadir descuento por cierta cantidad
+
+
+#traspasos, un vendedor hace traspasos, se crea, el registro de tienda a tienda, que fue y cuanto
 
 class Base(models.Model):
     name = models.CharField(max_length=20)
