@@ -1,7 +1,9 @@
 from django.db import models
+from django.contrib.auth.models import User
+
 
 # Create your models here.
-# Añadir categoria y marca
+# Añadir categoria y marca h
 # Un usuario por tienda
 
 #añadir clientes, nombre telefono. tipo precio
@@ -27,9 +29,14 @@ class Base(models.Model):
     def __str__(self):
         return self.name
     
+class Brand(Base):
+    pass
+
+class Category(Base):
+    pass
 
 class Store(Base):
-    pass
+    manager = models.OneToOneField(User, on_delete=models.CASCADE)
 
     def save(self, *args, **kwargs):
         # Guardar el producto primero
@@ -42,8 +49,11 @@ class Store(Base):
 
 
 class Product(Base):
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
     code = models.CharField(max_length=20, unique=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
+    public_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
     
 
     def save(self, *args, **kwargs):
