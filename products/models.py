@@ -2,19 +2,6 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
-# Create your models here.
-# Añadir categoria y marca h
-# Un usuario por tienda
-
-#añadir clientes, nombre telefono. tipo precio
-
-#Precios
-# Precio de compra
-# Precio publico
-# Precio minorista
-# Precio medio mayoreo 
-# precio mayoreo
-# Añadir descuento por cierta cantidad
 
 
 #traspasos, un vendedor hace traspasos, se crea, el registro de tienda a tienda, que fue y cuanto

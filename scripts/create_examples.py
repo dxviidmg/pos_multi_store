@@ -17,7 +17,7 @@ def create_products():
     category, created = Category.objects.get_or_create(name='Category')
 
     for data in data_products:
-        Product.objects.get_or_create(**data, brand=brand, category=category, code=[data['name']])
+        Product.objects.get_or_create(**data, brand=brand, category=category, code=data['name'])
         print(data)
 
 
