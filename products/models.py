@@ -57,7 +57,7 @@ class Product(Base):
 class StoreProduct(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField(default=0) 
+    stock = models.PositiveIntegerField(default=0) 
 
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
