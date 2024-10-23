@@ -9,12 +9,14 @@ class SpecialClientTypeSerializer(serializers.ModelSerializer):
 
 class SpecialClientSerializer(serializers.ModelSerializer):
     special_client_type = SpecialClientTypeSerializer()
-
-
     full_name = serializers.SerializerMethodField()
+    discount = serializers.SerializerMethodField()
 
     def get_full_name(self, obj):
         return obj.get_full_name()
+
+    def get_discount(self, obj):
+        return 10
 
     class Meta:
         model = SpecialClient
