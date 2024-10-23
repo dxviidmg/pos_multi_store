@@ -8,6 +8,7 @@ class StoreProductSerializer(serializers.ModelSerializer):
     product_price = serializers.SerializerMethodField()
     brand_name = serializers.SerializerMethodField()
     category_name = serializers.SerializerMethodField()
+    stock_in_other_stores = serializers.SerializerMethodField()
     
     def get_product_code(self, obj):
         return obj.product.code
@@ -23,6 +24,10 @@ class StoreProductSerializer(serializers.ModelSerializer):
 
     def get_category_name(self, obj):
         return obj.product.category.name
+
+    def get_stock_in_other_stores(self, obj):
+        sps = StoreProduct.objects.filter(product=obj.product).exclude(id=obj.id).values('store__name', 'stock')
+        return sps
 
     class Meta:
         model = StoreProduct
