@@ -6,20 +6,20 @@ from products.models import Base
 
 #Precios
 # Precio de compra
-# Precio publico
-# Precio minorista
-# Precio medio mayoreo 
-# precio mayoreo
+# Precio publico 5
+# Precio minorista 10
+# Precio medio mayoreo 15 
+# precio mayoreo 20
 # Añadir descuento por cierta cantidad
 
 
 #definir si los tipos de descuento tienen un % comun, si eres x tipo, tu descuento es de n% en la compra total, eso facilitaria la operacion
-class SpecialClientType(Base):
-    pass
+class Discount(models.Model):
+    stock = models.PositiveIntegerField(default=0)
 
 
-class SpecialClient(models.Model):
-    special_client_type = models.ForeignKey(SpecialClientType, on_delete=models.CASCADE)   
+class Client(models.Model):
+    discount = models.ForeignKey(Discount, on_delete=models.CASCADE)   
     first_name = models.CharField(max_length=20)
     last_name = models.CharField(max_length=20)
     phone_number = models.CharField(max_length=10)
