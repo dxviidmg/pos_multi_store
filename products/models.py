@@ -1,9 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-
-
-
 #traspasos, un vendedor hace traspasos, se crea, el registro de tienda a tienda, que fue y cuanto
 
 class Base(models.Model):
