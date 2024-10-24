@@ -37,8 +37,10 @@ class Product(Base):
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     code = models.CharField(max_length=20, unique=True)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
-    public_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
-    
+    unit_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
+    wholesale_sale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)    
+    min_wholesale_quantity = models.PositiveIntegerField(null=True, blank=True)
+
 
     def save(self, *args, **kwargs):
         # Guardar el producto primero

@@ -1,5 +1,6 @@
 from django.db import models
 from products.models import Base
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 #añadir clientes, nombre telefono. tipo precio
@@ -15,7 +16,11 @@ from products.models import Base
 
 #definir si los tipos de descuento tienen un % comun, si eres x tipo, tu descuento es de n% en la compra total, eso facilitaria la operacion
 class Discount(models.Model):
-    stock = models.PositiveIntegerField(default=0)
+
+    discount_percentage = models.PositiveIntegerField(validators=[MinValueValidator(0), MaxValueValidator(100)], unique=True)
+
+    def __str__(self):
+        return '{}%'.format(self.discount_percentage)
 
 
 class Client(models.Model):
