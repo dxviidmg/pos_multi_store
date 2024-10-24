@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 #traspasos, un vendedor hace traspasos, se crea, el registro de tienda a tienda, que fue y cuanto
 
 class Base(models.Model):
-    name = models.CharField(max_length=20)
+    name = models.CharField(max_length=30)
 
     class Meta:
         abstract = True
@@ -20,7 +20,14 @@ class Category(Base):
     pass
 
 class Store(Base):
+    STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
+    store_type = models.CharField(
+        max_length=1, choices=STORE_TYPE_CHOICES
+    )
     manager = models.OneToOneField(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return '{}: {}'.format(self.get_store_type_display(), self.name)
 
     def save(self, *args, **kwargs):
         # Guardar el producto primero
@@ -33,6 +40,7 @@ class Store(Base):
 
 
 class Product(Base):
+    name = models.CharField(max_length=100)
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     code = models.CharField(max_length=20, unique=True)
@@ -50,6 +58,10 @@ class Product(Base):
         stores = Store.objects.all()
         for store in stores:
             StoreProduct.objects.get_or_create(store=store, product=self)
+
+
+    def get_description(self):
+        return '{} {} {}'.format(self.brand.name, self.category.name, self.name).strip()
 
 
 

@@ -4,29 +4,29 @@ from .models import Product, StoreProduct
 
 class StoreProductSerializer(serializers.ModelSerializer):
     product_code = serializers.SerializerMethodField()
-    product_name = serializers.SerializerMethodField()
-    product_price = serializers.SerializerMethodField()
-    brand_name = serializers.SerializerMethodField()
-    category_name = serializers.SerializerMethodField()
+    prices = serializers.SerializerMethodField()
     stock_in_other_stores = serializers.SerializerMethodField()
-    
+    description = serializers.SerializerMethodField()
+
     def get_product_code(self, obj):
         return obj.product.code
 
-    def get_product_name(self, obj):
-        return obj.product.name
+    def get_description(self, obj):
+        return obj.product.get_description()
 
-    def get_product_price(self, obj):
-        return obj.product.public_sale_price
-
-    def get_brand_name(self, obj):
-        return obj.product.brand.name
-
-    def get_category_name(self, obj):
-        return obj.product.category.name
+    def get_prices(self, obj):
+        return {
+            "unit_sale_price": obj.product.unit_sale_price,
+            "wholesale_sale_price": obj.product.wholesale_sale_price,
+            "min_wholesale_quantity": obj.product.min_wholesale_quantity,
+        }
 
     def get_stock_in_other_stores(self, obj):
-        sps = StoreProduct.objects.filter(product=obj.product).exclude(id=obj.id).values('store__name', 'stock')
+        sps = (
+            StoreProduct.objects.filter(product=obj.product)
+            .exclude(id=obj.id)
+            .values("store__name", "stock")
+        )
         return sps
 
     class Meta:
