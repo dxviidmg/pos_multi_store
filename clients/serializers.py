@@ -3,6 +3,11 @@ from .models import Discount, Client
 
 
 class DiscountSerializer(serializers.ModelSerializer):
+    discount_percentage_complement = serializers.SerializerMethodField()
+
+    def get_discount_percentage_complement(self, obj):
+        return obj.get_discount_percentage_complement()
+
     class Meta:
         model = Discount
         fields = "__all__"
