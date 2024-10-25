@@ -2,6 +2,9 @@ from products.models import Store, Product, Brand, Category, StoreProduct
 from django.contrib.auth.models import User
 import xlrd
 from decimal import Decimal
+from tqdm import tqdm 
+from django.contrib.auth.hashers import make_password
+
 
 class StoreManager:
     """Clase para gestionar la creación de tiendas y usuarios."""
@@ -11,7 +14,12 @@ class StoreManager:
 
     def create_store(self, data):
         username = f"{data['name'].replace(' ', '_')}_{data['store_type']}"
-        user, _ = User.objects.get_or_create(username=username, defaults={'password': username})
+        user, created = User.objects.get_or_create(username=username, defaults={'password': make_password(username)})
+
+        if not created:  # If the user already exists, you may want to update the password
+            user.password = make_password(username)  # Set the password
+            user.save()
+
         Store.objects.get_or_create(**data, manager=user)
 
     def create_stores(self):
@@ -71,7 +79,8 @@ class ProductManager:
         StoreProduct.objects.filter(product=product).update(stock=10)
 
     def create_products(self):
-        for row_idx in range(1, self.sheet.nrows):
+        # Use tqdm to create a progress bar for the row processing
+        for row_idx in tqdm(range(1, self.sheet.nrows), desc="Creating Products", unit="product"):
             row_values = self.sheet.row_values(row_idx)
             self.process_row(row_values)
 
@@ -92,5 +101,5 @@ def run():
     product_manager = ProductManager(products_file_path)
 
     # Ejecutar la creación de tiendas y productos
-    store_manager.create_stores()
-    product_manager.create_products()
+#    store_manager.create_stores()
+#    product_manager.create_products()

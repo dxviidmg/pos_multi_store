@@ -15,8 +15,6 @@ class ClientSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return obj.get_full_name()
 
-
-
     class Meta:
         model = Client
         fields = "__all__"
