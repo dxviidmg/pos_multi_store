@@ -27,8 +27,7 @@ class StoreProductSerializer(serializers.ModelSerializer):
         return [
             {"store_name": str(sp.store), "stock": sp.stock}
             for sp in StoreProduct.objects.filter(product=obj.product).exclude(
-                id=obj.id, stock=0
-            )
+                id=obj.id).exclude(stock=0)
         ]
 
     class Meta:
