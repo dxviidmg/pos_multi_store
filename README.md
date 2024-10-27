@@ -3,17 +3,13 @@
 #añadir opcion para precio mayoreo, ejemplo
 una ampolleta vale 10 pero apartir de 12 ampolletas vale 8.33
 
-mayoreo 20
-medio mayoreo 15
-menudeo 10
-x 5
+Dudas:
 
+Importacion, todas las tiendas tienen los mismos productos?
 
-nombre de tiendas
-Zaragoza
-Rayon
-Victoria 1
-Victoria 2
+Usamos categoria??
+Uso la primer palabra como categoria??? o uso una generica?? y ya despues le vamos moviendo?? o simplemente no la usamos
 
-Bodegas 
-Bodega Casa, rayon, v1, v2 
+Para la cantidad mayoreo pongo un num generico y ya lo vas cambiando??
+
+preguntar que datos necesitas de las ventas??

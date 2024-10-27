@@ -19,16 +19,17 @@ class StoreProductSerializer(serializers.ModelSerializer):
             "unit_sale_price": obj.product.unit_sale_price,
             "wholesale_sale_price": obj.product.wholesale_sale_price,
             "min_wholesale_quantity": obj.product.min_wholesale_quantity,
-            "apply_wholesale": obj.product.wholesale_sale_price is not None and obj.product.min_wholesale_quantity is not None
+            "apply_wholesale": obj.product.wholesale_sale_price is not None
+            and obj.product.min_wholesale_quantity is not None,
         }
 
     def get_stock_in_other_stores(self, obj):
-        sps = (
-            StoreProduct.objects.filter(product=obj.product)
-            .exclude(id=obj.id)
-            .values("store__name", "stock")
-        )
-        return sps
+        return [
+            {"store_name": str(sp.store), "stock": sp.stock}
+            for sp in StoreProduct.objects.filter(product=obj.product).exclude(
+                id=obj.id, stock=0
+            )
+        ]
 
     class Meta:
         model = StoreProduct
