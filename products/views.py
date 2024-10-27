@@ -11,21 +11,37 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         q = self.request.GET.get("q", "")
-        
+        code = self.request.GET.get("code", "")
         # Intentar obtener la tienda, manejar la excepción si no existe
         try:
             store = Store.objects.get(manager=self.request.user)
         except Store.DoesNotExist:
-            return StoreProduct.objects.none()  # Retornar un queryset vacío si la tienda no existe
+            return (
+                StoreProduct.objects.none()
+            )  # Retornar un queryset vacío si la tienda no existe
+        if code:
+            try:
+                product = Product.objects.get(code=code)
+                return StoreProduct.objects.filter(product=product, store=store)
+            except Exception as e:
+                print(e)
+                return []
 
-        # Construir la consulta de búsqueda si se proporciona un término
         if q:
-            search_fields = ['brand__name', 'category__name', 'code', 'name']
-            query = reduce(or_, (Q(**{f"{field}__icontains": q}) for field in search_fields))
-            product_queryset = Product.objects.filter(query).select_related('brand', 'category')[:3]
+
+            search_fields = ["brand__name", "category__name", "code", "name"]
+            query = reduce(
+                or_, (Q(**{f"{field}__icontains": q}) for field in search_fields)
+            )
+            product_queryset = Product.objects.filter(query).select_related(
+                "brand", "category"
+            )[:3]
         else:
-            product_queryset = Product.objects.all().select_related('brand', 'category')[:3]
+            product_queryset = Product.objects.all().select_related(
+                "brand", "category"
+            )[:3]
 
         # Filtrar los productos de la tienda de forma eficiente
-        return StoreProduct.objects.filter(product__in=product_queryset, store=store).prefetch_related('product')
-
+        return StoreProduct.objects.filter(
+            product__in=product_queryset, store=store
+        ).prefetch_related("product")

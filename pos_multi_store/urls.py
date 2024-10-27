@@ -22,6 +22,6 @@ urlpatterns = [
     path('api/', include('accounts.urls', namespace="accounts")),
     path('api/', include('clients.urls', namespace="clients")),
     path('api/', include('products.urls', namespace="products")),
-#    path('api/', include('sales.urls', namespace="sales")),
+    path('api/', include('sales.urls', namespace="sales")),
 ]
 
