@@ -1,8 +1,7 @@
 from django.contrib import admin
-from .models import Sale
+from .models import Sale, SaleProduct, Payment
 
 
-class SaleAdmin(admin.ModelAdmin):
-    pass
-
-admin.site.register(Sale, SaleAdmin)
+admin.site.register(Sale)
+admin.site.register(SaleProduct)
+admin.site.register(Payment)

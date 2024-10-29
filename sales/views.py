@@ -1,8 +1,8 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
-from .models import Sale
-from products.models import StoreProduct
+from .models import Sale, SaleProduct
+from products.models import StoreProduct, Product
 from django.db import transaction
 
 
@@ -25,12 +25,24 @@ class SaleViewSet(viewsets.ModelViewSet):
         # Using a transaction to ensure all updates are executed together
         with transaction.atomic():
             for product_data in store_products_data:
-                product_instance = StoreProduct.objects.get(id=product_data['id'])
-                product_instance.stock -= product_data['quantity']
-                updated_store_products.append(product_instance)
+                product_store = StoreProduct.objects.get(id=product_data['id'])
+                product_store.stock -= product_data['quantity']
+                updated_store_products.append(product_store)
 
             # Perform a bulk update on the stock of StoreProduct instances
             StoreProduct.objects.bulk_update(updated_store_products, ['stock'])
 
         # Save the sale and associate it with the current user
-        return serializer.save(saler=self.request.user)
+        sale_instance = serializer.save(saler=self.request.user)
+
+        for product_data in store_products_data:
+            product_store = StoreProduct.objects.get(id=product_data['id'])
+            product = product_store.product
+
+            data = {'sale': sale_instance, 'product': product, 'quantity': product_data['quantity'], 'price': product_data['price']}
+            SaleProduct.objects.create(**data)
+
+
+
+
+        return sale_instance

@@ -29,16 +29,16 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         if q:
 
-            search_fields = ["brand__name", "category__name", "code", "name"]
+            search_fields = ["brand__name", "code", "name"]
             query = reduce(
                 or_, (Q(**{f"{field}__icontains": q}) for field in search_fields)
             )
             product_queryset = Product.objects.filter(query).select_related(
-                "brand", "category"
+                "brand"
             )[:3]
         else:
             product_queryset = Product.objects.all().select_related(
-                "brand", "category"
+                "brand"
             )[:3]
 
         # Filtrar los productos de la tienda de forma eficiente

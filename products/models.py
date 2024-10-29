@@ -16,9 +16,6 @@ class Base(models.Model):
 class Brand(Base):
     pass
 
-class Category(Base):
-    pass
-
 class Store(Base):
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
     store_type = models.CharField(
@@ -42,7 +39,6 @@ class Store(Base):
 class Product(Base):
     name = models.CharField(max_length=100)
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
     code = models.CharField(max_length=20, unique=True)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -61,7 +57,7 @@ class Product(Base):
 
 
     def get_description(self):
-        return '{} {} {}'.format(self.brand.name, self.category.name, self.name).strip()
+        return '{} {}'.format(self.brand.name, self.name).strip()
 
 
 

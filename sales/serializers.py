@@ -11,7 +11,7 @@ class SaleSerializer(serializers.ModelSerializer):
 class SaleCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
-        fields = ["total"]
+        fields = ["total", "client"]
 #        fields = ["total"]
 
 

@@ -1,15 +1,33 @@
 # pos_multi_store
 
-#añadir opcion para precio mayoreo, ejemplo
-una ampolleta vale 10 pero apartir de 12 ampolletas vale 8.33
-
-Dudas:
-
-Importacion, todas las tiendas tienen los mismos productos?
-
-Usamos categoria??
-Uso la primer palabra como categoria??? o uso una generica?? y ya despues le vamos moviendo?? o simplemente no la usamos
-
-Para la cantidad mayoreo pongo un num generico y ya lo vas cambiando??
+#para la migracion
+numero generico mayoreo = 3
 
 preguntar que datos necesitas de las ventas??
+
+VENTAS
+lista de ventas.
+
+CREAR CLIENTE
+crear cliente...
+
+
+
+TRASPASOS
+traspasos, colocar en input en modal y creacion.
+
+detalle de mercancia
+
+hora
+
+tiendas involucradas
+
+comprobante... si el comprobante existe... el status es finalizado, sino es en tramite
+
+DETALLE MERCANCIA VENTA...
+PRODUCTO, CANTIDAD
+
+PONER EL CURSOR POR DEFAULT EN LA ENTRADA DE CODIGO DE BARRA
+
+NOTA DE CUANDO NO ESTA EL EL CODIGO DE BARRA
+
