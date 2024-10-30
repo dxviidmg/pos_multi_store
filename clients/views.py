@@ -1,10 +1,10 @@
 from rest_framework import viewsets
 from .serializers import ClientSerializer
 from .models import Client
-from django.db.models import Q
+from django.db.models import Q, Value
 from functools import reduce
 from operator import or_
-
+from django.db.models.functions import Concat
 
 class ClientViewSet(viewsets.ModelViewSet):
     serializer_class = ClientSerializer
@@ -13,7 +13,11 @@ class ClientViewSet(viewsets.ModelViewSet):
         q = self.request.GET.get("q")
 
         if q:
-            search_fields = ['first_name', 'last_name', 'phone_number']
-            query = reduce(or_, (Q(**{f"{field}__icontains": q}) for field in search_fields))
-            return Client.objects.filter(query)
+            # Anotar `full_name` y filtrar en una sola línea
+            return Client.objects.annotate(
+                full_name=Concat('first_name', Value(' '), 'last_name')
+            ).filter(
+                Q(phone_number__icontains=q) | Q(full_name__icontains=q)
+            )
+        
         return Client.objects.all()

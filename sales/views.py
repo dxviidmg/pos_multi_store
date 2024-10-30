@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
-from .models import Sale, SaleProduct
+from .models import Sale, SaleProduct, Payment
 from products.models import StoreProduct, Product
 from django.db import transaction
 
@@ -18,7 +18,8 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get('store_products')
-        
+        payments_data = self.request.data.get('payments')
+
         # List to hold the StoreProduct instances that need to be updated
         updated_store_products = []
 
@@ -42,6 +43,15 @@ class SaleViewSet(viewsets.ModelViewSet):
             data = {'sale': sale_instance, 'product': product, 'quantity': product_data['quantity'], 'price': product_data['price']}
             SaleProduct.objects.create(**data)
 
+
+
+        print('payments_data', payments_data)
+        for payment_data in payments_data:
+            print(payment_data)
+
+
+            data = {'sale': sale_instance, 'payment_method': payment_data['payment_method'], 'amount': payment_data['amount']}
+            Payment.objects.create(**data)
 
 
 
