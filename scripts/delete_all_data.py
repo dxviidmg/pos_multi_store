@@ -1,4 +1,4 @@
-from products.models import Store, Product, Brand, Category, StoreProduct
+from products.models import Store, Product, Brand, StoreProduct
 from django.contrib.auth.models import User
 import xlrd
 from decimal import Decimal

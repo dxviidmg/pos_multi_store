@@ -61,6 +61,7 @@ class Product(Base):
 
 
 
+
 class StoreProduct(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
@@ -68,3 +69,23 @@ class StoreProduct(models.Model):
 
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
+
+
+    def calculate_available_stock(self):
+        transfers = self.store.transfers_from.filter(
+            product=self.product,
+            is_delivered=False  # Opcional: considerar solo transferencias no entregadas
+        )
+
+        return self.stock - sum(transfer.quantity for transfer in transfers)
+
+class ProductTransfer(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    origin_store = models.ForeignKey(Store, related_name='transfers_from', on_delete=models.CASCADE)
+    destination_store = models.ForeignKey(Store, related_name='transfers_to', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+    is_delivered = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"

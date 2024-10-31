@@ -1,4 +1,4 @@
-from products.models import Store, Product, Brand, Category, StoreProduct
+from products.models import Store, Product, Brand, StoreProduct
 from django.contrib.auth.models import User
 import xlrd
 from decimal import Decimal
@@ -13,7 +13,7 @@ class StoreManager:
         self.stores_data = stores_data
 
     def create_store(self, data):
-        username = f"{data['name'].replace(' ', '_')}_{data['store_type']}"
+        username = f"{data['store_type'].lower()}_{data['name'].replace(' ', '_')}"
         user, created = User.objects.get_or_create(username=username, defaults={'password': make_password(username)})
 
         if not created:  # If the user already exists, you may want to update the password
@@ -38,11 +38,6 @@ class ProductManager:
     def process_row(self, row_values):
         code = str(row_values[0])
         name = row_values[1]
-        name_parts = name.split()
-
-        # Determinar la categoría basada en el nombre del producto
-        category = name_parts[0] if name_parts[0] not in ['2', '10'] else ' '.join(name_parts[:3] if name_parts[0] == '10' else name_parts[0:2])
-        category_name = category.title() if len(category) > 2 else category.upper()
 
         # Procesar precios y cantidades
         purchase_price = Decimal(row_values[2].replace('$', '').replace(',', ''))
@@ -55,10 +50,8 @@ class ProductManager:
         brand_name = row_values[8].replace('.', '').replace(',', '').replace('- Sin Departamento -', 'NA')
         brand_name = brand_name.title() if len(brand_name) > 2 else brand_name.upper()
 
-        name = name.replace(brand_name, '').replace(category, '').strip()
         # Crear objetos relacionados
         brand, _ = Brand.objects.get_or_create(name=brand_name)
-        category, _ = Category.objects.get_or_create(name=category_name)
 
         # Datos del producto
         product_data = {
@@ -73,23 +66,30 @@ class ProductManager:
         # Crear el producto
         product, created = Product.objects.get_or_create(
                     code=code,
-                    defaults={**product_data, 'brand': brand, 'category': category}
+                    defaults={**product_data, 'brand': brand}
                 )
 
         StoreProduct.objects.filter(product=product).update(stock=10)
 
     def create_products(self):
         # Use tqdm to create a progress bar for the row processing
+        l = 0
+        c = ''
         for row_idx in tqdm(range(1, self.sheet.nrows), desc="Creating Products", unit="product"):
             row_values = self.sheet.row_values(row_idx)
-            self.process_row(row_values)
+            if len(row_values[1]) > l:
+                l =len(row_values[1]) 
+                c = row_values[0]
+        print(c, l)
+        
+#            self.process_row(row_values)
 
 
 def run():
     """Función principal que será ejecutada por runscript"""
     data_stores = [
-        {'name': 'Casa', 'store_type': 'A'}, {'name': 'Victoria 1', 'store_type': 'A'},
-        {'name': 'Victoria 2', 'store_type': 'A'}, {'name': 'Rayon', 'store_type': 'A'},
+#        {'name': 'Casa', 'store_type': 'A'}, {'name': 'Victoria 1', 'store_type': 'A'},
+#        {'name': 'Victoria 2', 'store_type': 'A'}, {'name': 'Rayon', 'store_type': 'A'},
         {'name': 'Casa', 'store_type': 'T'}, {'name': 'Victoria 1', 'store_type': 'T'},
         {'name': 'Victoria 2', 'store_type': 'T'}, {'name': 'Rayon', 'store_type': 'T'}
     ]
@@ -101,5 +101,5 @@ def run():
     product_manager = ProductManager(products_file_path)
 
     # Ejecutar la creación de tiendas y productos
-#    store_manager.create_stores()
-#    product_manager.create_products()
+    store_manager.create_stores()
+    product_manager.create_products()

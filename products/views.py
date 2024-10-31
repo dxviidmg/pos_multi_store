@@ -1,9 +1,10 @@
 from rest_framework import viewsets
-from .serializers import StoreProductSerializer
-from .models import StoreProduct, Product, Store
+from .serializers import StoreProductSerializer, ProductTransferSerializer
+from .models import StoreProduct, Product, Store, ProductTransfer
 from django.db.models import Q
 from functools import reduce
 from operator import or_
+
 
 
 class StoreProductViewSet(viewsets.ModelViewSet):
@@ -32,4 +33,19 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         # Obtener productos y filtrar `StoreProduct` según la tienda
         product_queryset = Product.objects.filter(filters).select_related("brand")[:5]
         return StoreProduct.objects.filter(product__in=product_queryset, store=store).prefetch_related("product")
+
+
+
+
+class ProductTransferViewSet(viewsets.ModelViewSet):
+    serializer_class = ProductTransferSerializer
+
+    def get_queryset(self):
+        try:
+            store = Store.objects.get(manager=self.request.user)
+        except Store.DoesNotExist:
+            return StoreProduct.objects.none()
+
+
+        return ProductTransfer.objects.filter(Q(origin_store=store) | Q(destination_store=store))
 
