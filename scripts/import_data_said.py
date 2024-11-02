@@ -73,23 +73,16 @@ class ProductManager:
 
     def create_products(self):
         # Use tqdm to create a progress bar for the row processing
-        l = 0
-        c = ''
         for row_idx in tqdm(range(1, self.sheet.nrows), desc="Creating Products", unit="product"):
-            row_values = self.sheet.row_values(row_idx)
-            if len(row_values[1]) > l:
-                l =len(row_values[1]) 
-                c = row_values[0]
-        print(c, l)
-        
-#            self.process_row(row_values)
+            row_values = self.sheet.row_values(row_idx)        
+            self.process_row(row_values)
 
 
 def run():
     """Función principal que será ejecutada por runscript"""
     data_stores = [
-#        {'name': 'Casa', 'store_type': 'A'}, {'name': 'Victoria 1', 'store_type': 'A'},
-#        {'name': 'Victoria 2', 'store_type': 'A'}, {'name': 'Rayon', 'store_type': 'A'},
+        {'name': 'Casa', 'store_type': 'A'}, {'name': 'Victoria 1', 'store_type': 'A'},
+        {'name': 'Victoria 2', 'store_type': 'A'}, {'name': 'Rayon', 'store_type': 'A'},
         {'name': 'Casa', 'store_type': 'T'}, {'name': 'Victoria 1', 'store_type': 'T'},
         {'name': 'Victoria 2', 'store_type': 'T'}, {'name': 'Rayon', 'store_type': 'T'}
     ]

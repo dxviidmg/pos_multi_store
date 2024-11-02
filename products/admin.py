@@ -6,8 +6,11 @@ from .models import Store, Product, StoreProduct, Brand, ProductTransfer
 class ProductAdmin(admin.ModelAdmin):
     search_fields = ['code', 'name']
 
-# Registrar los demás modelos directamente sin clases de administración innecesarias
+@admin.register(StoreProduct)
+class StoreProductAdmin(admin.ModelAdmin):
+    search_fields = ['product__code']
+    list_display = ['product__id', 'store__id', 'product__code', 'store__name', 'stock']
+
 admin.site.register(Store)
-admin.site.register(StoreProduct)
 admin.site.register(Brand)
 admin.site.register(ProductTransfer)
