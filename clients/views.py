@@ -11,11 +11,6 @@ from django.http import Http404
 class ClientViewSet(viewsets.ModelViewSet):
 	serializer_class = ClientSerializer
 	
-	def get_serializer_class(self):
-		if self.request.method == "POST":  # Cambia aquí según el método HTTP que desees
-			return ClientSerializer
-		return ClientSerializer
-
 	def get_queryset(self):
 		q = self.request.GET.get("q")
 
