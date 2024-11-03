@@ -1,23 +1,38 @@
 from rest_framework import viewsets
-from .serializers import ClientSerializer
-from .models import Client
+from .serializers import ClientSerializer, DiscountSerializer
+from .models import Client, Discount
 from django.db.models import Q, Value
 from functools import reduce
 from operator import or_
 from django.db.models.functions import Concat
+from django.http import Http404
+
 
 class ClientViewSet(viewsets.ModelViewSet):
-    serializer_class = ClientSerializer
+	serializer_class = ClientSerializer
+	
+	def get_serializer_class(self):
+		if self.request.method == "POST":  # Cambia aquí según el método HTTP que desees
+			return ClientSerializer
+		return ClientSerializer
 
-    def get_queryset(self):
-        q = self.request.GET.get("q")
+	def get_queryset(self):
+		q = self.request.GET.get("q")
 
-        if q:
-            # Anotar `full_name` y filtrar en una sola línea
-            return Client.objects.annotate(
-                full_name=Concat('first_name', Value(' '), 'last_name')
-            ).filter(
-                Q(phone_number__icontains=q) | Q(full_name__icontains=q)
-            )
-        
-        return Client.objects.all()
+		if q:
+			# Anotar `full_name` y filtrar en una sola línea
+			return Client.objects.annotate(
+				full_name=Concat('first_name', Value(' '), 'last_name')
+			).filter(
+				Q(phone_number__icontains=q) | Q(full_name__icontains=q)
+			)
+		
+		return Client.objects.all()
+
+
+class DiscountViewSet(viewsets.ModelViewSet):
+	serializer_class = DiscountSerializer
+
+	def get_queryset(self):
+		return Discount.objects.all()
+		

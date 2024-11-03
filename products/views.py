@@ -72,18 +72,43 @@ class ConfirmProductTransfer(APIView):
         try:
             transfer = ProductTransfer.objects.get(**data, transfer_datetime=None)
         except ProductTransfer.DoesNotExist:
+            print('aqui')
             return Response({"status": "Transpaso no encontrado"}, status=status.HTTP_404_NOT_FOUND)            
         
-        transfer.transfer_datetime = datetime.now()  # Asignar fecha y hora actuales con datetime
-        transfer.save()
 
-        store_product_destination = StoreProduct.objects.get(**data2)
-        store_product_destination.stock += int(quantity)
-        store_product_destination.save()
+        try:
+            with transaction.atomic():  # Comienza una transacción
+                # Verifica si el traspaso existe
+                transfer = ProductTransfer.objects.get(
+                    product=product, 
+                    origin_store=origin_store, 
+                    destination_store=destination_store, 
+                    transfer_datetime=None
+                )
 
+                # Actualiza la fecha y hora del traspaso
+                transfer.transfer_datetime = datetime.now()
+                transfer.save()
 
-        store_product_origin = StoreProduct.objects.get(**data3)
-        store_product_origin.stock -= int(quantity)
-        store_product_origin.save()
-        return Response({'status': 'Transpaso confirmado'}, status=status.HTTP_200_OK)
+                # Actualiza el stock en la tienda de destino
+                store_product_destination = StoreProduct.objects.get(product=product, store=destination_store)
+                store_product_destination.stock += quantity
+                store_product_destination.save()
+
+                # Verifica y actualiza el stock en la tienda de origen
+                store_product_origin = StoreProduct.objects.get(product=product, store=origin_store)
+                if store_product_origin.stock < quantity:
+                    return Response({"status": "Stock insuficiente en la tienda de origen"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                store_product_origin.stock -= quantity
+                store_product_origin.save()
+
+            return Response({'status': 'Traspaso confirmado'}, status=status.HTTP_200_OK)
+
+        except ProductTransfer.DoesNotExist:
+            return Response({"status": "Traspaso no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        except StoreProduct.DoesNotExist:
+            return Response({"status": "Producto o tienda no encontrados"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"status": "Error al confirmar el traspaso", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
