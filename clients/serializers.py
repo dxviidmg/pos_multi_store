@@ -16,14 +16,18 @@ class DiscountSerializer(serializers.ModelSerializer):
 
 
 class ClientSerializer(serializers.ModelSerializer):
-    discount_percentage = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
+    discount_percentage = serializers.SerializerMethodField()
+    discount_percentage_complement = serializers.SerializerMethodField()
 
     def get_full_name(self, obj):
         return obj.get_full_name()
 
     def get_discount_percentage(self, obj):
         return obj.discount.discount_percentage
+
+    def get_discount_percentage_complement(self, obj):
+        return obj.discount.get_discount_percentage_complement()
 
     class Meta:
         model = Client

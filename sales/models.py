@@ -27,10 +27,10 @@ class SaleProduct(models.Model):
 
 class Payment(models.Model):
     PAYMENT_METHOD_CHOICES = (
-        ("E", "Efectivo"),
-        ("P", "Pago con tarjeta"),
-        ("T", "Transferencia"),
+        ("EF", "Efectivo"),
+        ("PT", "Pago con tarjeta"),
+        ("TR", "Transferencia"),
     )
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="payments")
-    payment_method = models.CharField(max_length=1)
+    payment_method = models.CharField(max_length=2, choices=PAYMENT_METHOD_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)

@@ -72,13 +72,17 @@ class StoreProduct(models.Model):
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
 
-    def calculate_available_stock(self):
+
+    def calculate_reserved_stock(self):
         transfers = self.store.transfers_from.filter(
             product=self.product,
-            transfer_datetime=None,  # Opcional: considerar solo transferencias no entregadas
+            transfer_datetime=None
         )
 
-        return self.stock - sum(transfer.quantity for transfer in transfers)
+        return sum(transfer.quantity for transfer in transfers)
+
+    def calculate_available_stock(self):
+        return self.stock - self.calculate_reserved_stock()
 
 
 class ProductTransfer(models.Model):

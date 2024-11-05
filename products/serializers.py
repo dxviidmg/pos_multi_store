@@ -9,7 +9,7 @@ class StoreProductSerializer(serializers.ModelSerializer):
 	stock_in_other_stores = serializers.SerializerMethodField()
 	description = serializers.SerializerMethodField()
 	available_stock = serializers.SerializerMethodField()
-
+	reserved_stock = serializers.SerializerMethodField()
 
 	def get_product_id(self, obj):
 		return obj.product.id
@@ -23,6 +23,8 @@ class StoreProductSerializer(serializers.ModelSerializer):
 	def get_available_stock(self, obj):
 		return obj.calculate_available_stock()
 
+	def get_reserved_stock(self, obj):
+		return obj.calculate_reserved_stock()
 
 	def get_prices(self, obj):
 		return {
