@@ -50,7 +50,8 @@ class Product(Base):
         max_digits=10, decimal_places=2, null=True, blank=True
     )
     min_wholesale_quantity = models.PositiveIntegerField(null=True, blank=True)
-
+    apply_wholesale_price_on_costumer_discount = models.BooleanField(default=False)
+    
     def save(self, *args, **kwargs):
         # Guardar el producto primero
         super().save(*args, **kwargs)

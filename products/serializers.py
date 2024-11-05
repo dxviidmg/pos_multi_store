@@ -33,6 +33,7 @@ class StoreProductSerializer(serializers.ModelSerializer):
 			"min_wholesale_quantity": obj.product.min_wholesale_quantity,
 			"apply_wholesale": obj.product.wholesale_sale_price is not None
 			and obj.product.min_wholesale_quantity is not None,
+			"apply_wholesale_price_on_costumer_discount": obj.product.apply_wholesale_price_on_costumer_discount
 		}
 
 	def get_stock_in_other_stores(self, obj):
