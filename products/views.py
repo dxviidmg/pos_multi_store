@@ -62,7 +62,7 @@ class StoreViewSet(viewsets.ModelViewSet):
 class ConfirmProductTransfer(APIView):
     def post(self, request):
         product = request.data.get("product")
-        quantity = request.data.get("quantity")
+        quantity = int(request.data.get("quantity"))
         destination_store = request.data.get("destination_store")
 
         origin_store = self.request.user.get_store()

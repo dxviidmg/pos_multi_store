@@ -8,7 +8,7 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(StoreProduct)
 class StoreProductAdmin(admin.ModelAdmin):
-    search_fields = ['product__code', 'product__name']
+    search_fields = ['product__id', 'product__code', 'product__name']
     list_display = ['id', 'product__id', 'product__name', 'store__id', 'product__code', 'store__name', 'stock']
 
 admin.site.register(Store)
