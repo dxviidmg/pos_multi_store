@@ -19,5 +19,6 @@ class CustomAuthToken(ObtainAuthToken):
             'first_name': user.first_name,
             'last_name': user.last_name,
             'full_name': user.get_full_name(),
-            'email': user.email
+            'email': user.email,
+            'store': user.get_store().get_full_name()
             })
