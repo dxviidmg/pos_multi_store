@@ -13,7 +13,8 @@ class StoreManager:
         self.stores_data = stores_data
 
     def create_store(self, data):
-        username = f"{data['store_type'].lower()}_{data['name'].replace(' ', '_')}"
+        store_type = 'tienda' if data['store_type'] == 'T' else 'almacen'
+        username = f"{store_type}_{data['name'].replace(' ', '_').lower()}"
         user, created = User.objects.get_or_create(username=username, defaults={'password': make_password(username)})
 
         if not created:  # If the user already exists, you may want to update the password
