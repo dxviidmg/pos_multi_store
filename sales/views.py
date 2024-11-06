@@ -54,10 +54,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 			}
 			SaleProduct.objects.create(**data)
 
-		print("payments_data", payments_data)
 		for payment_data in payments_data:
-			print(payment_data)
-
 			data = {
 				"sale": sale_instance,
 				"payment_method": payment_data["payment_method"],

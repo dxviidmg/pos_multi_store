@@ -70,11 +70,10 @@ class ConfirmProductTransfer(APIView):
         data = {"product": product, "quantity": quantity, "destination_store": destination_store, 'origin_store': origin_store.id}
         data2 = {"product": product, "store": destination_store}
         data3 = {"product": product, "store": origin_store}
-        print('data', data)
+
         try:
             transfer = ProductTransfer.objects.get(**data, transfer_datetime=None)
         except ProductTransfer.DoesNotExist:
-            print('aqui')
             return Response({"status": "Transpaso no encontrado"}, status=status.HTTP_404_NOT_FOUND)            
         
 
