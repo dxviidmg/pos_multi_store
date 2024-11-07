@@ -38,7 +38,7 @@ class ProductManager:
 
     def process_row(self, row_values):
         code = str(row_values[0])
-        name = row_values[1]
+        name = row_values[1].lower()
 
         # Procesar precios y cantidades
         purchase_price = Decimal(row_values[2].replace('$', '').replace(',', ''))
@@ -49,10 +49,16 @@ class ProductManager:
 
         # Procesar marca
         brand_name = row_values[8].replace('.', '').replace(',', '').replace('- Sin Departamento -', 'NA')
+        brand_name = brand_name.lower()
+        name = name.replace(brand_name, '')
+        name = name.strip()
+        name = name.title()
         brand_name = brand_name.title() if len(brand_name) > 2 else brand_name.upper()
 
         # Crear objetos relacionados
         brand, _ = Brand.objects.get_or_create(name=brand_name)
+
+
 
         # Datos del producto
         product_data = {
