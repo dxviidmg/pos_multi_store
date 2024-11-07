@@ -41,9 +41,9 @@ class Store(Base):
 
 
 class Product(Base):
-    name = models.CharField(max_length=100)
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE)
     code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=100)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
     wholesale_sale_price = models.DecimalField(
@@ -63,6 +63,12 @@ class Product(Base):
 
     def get_description(self):
         return "{} {}".format(self.brand.name, self.name).strip()
+
+    def get_description(self):
+        return "{} {}".format(self.brand.name, self.name).strip()
+    
+    def apply_wholesale(self):
+        return self.wholesale_sale_price is not None and self.min_wholesale_quantity is not None
 
 
 class StoreProduct(models.Model):

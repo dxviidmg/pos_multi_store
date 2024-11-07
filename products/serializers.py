@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, StoreProduct, ProductTransfer, Store
+from .models import Product, StoreProduct, ProductTransfer, Store, Brand
 
 
 class StoreProductSerializer(serializers.ModelSerializer):
@@ -31,8 +31,7 @@ class StoreProductSerializer(serializers.ModelSerializer):
 			"unit_sale_price": obj.product.unit_sale_price,
 			"wholesale_sale_price": obj.product.wholesale_sale_price,
 			"min_wholesale_quantity": obj.product.min_wholesale_quantity,
-			"apply_wholesale": obj.product.wholesale_sale_price is not None
-			and obj.product.min_wholesale_quantity is not None,
+			"apply_wholesale": obj.product.apply_wholesale(),
 			"apply_wholesale_price_on_costumer_discount": obj.product.apply_wholesale_price_on_costumer_discount
 		}
 
@@ -88,4 +87,27 @@ class StoreSerializer(serializers.ModelSerializer):
 
 	class Meta:
 		model = Store
+		fields = "__all__"
+
+
+class ProductSerializer(serializers.ModelSerializer):
+
+	brand_name = serializers.SerializerMethodField()
+	apply_wholesale = serializers.SerializerMethodField()
+
+	def get_brand_name(self, obj):
+		return obj.brand.name
+
+	def get_apply_wholesale(self, obj):
+		return obj.apply_wholesale()
+
+	class Meta:
+		model = Product
+		fields = "__all__"
+
+
+class BrandSerializer(serializers.ModelSerializer):
+
+	class Meta:
+		model = Brand
 		fields = "__all__"

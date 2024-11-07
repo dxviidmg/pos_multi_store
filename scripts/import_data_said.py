@@ -4,6 +4,7 @@ import xlrd
 from decimal import Decimal
 from tqdm import tqdm 
 from django.contrib.auth.hashers import make_password
+from decimal import Decimal
 
 
 class StoreManager:
@@ -36,25 +37,25 @@ class ProductManager:
         self.workbook = xlrd.open_workbook(file_path)
         self.sheet = self.workbook.sheet_by_index(0)
 
+    def clean_price(self, value):
+            return Decimal(value.replace('$', '').replace(',', ''))
+
     def process_row(self, row_values):
         code = str(row_values[0])
-        name = row_values[1].lower()
+        name = row_values[1].replace('anven', '').replace('wahl', '').replace('obelli', '').lower().strip()
 
-        # Procesar precios y cantidades
-        purchase_price = Decimal(row_values[2].replace('$', '').replace(',', ''))
-        unit_sale_price = Decimal(row_values[3].replace('$', '').replace(',', ''))
-        wholesale_sale_price = Decimal(row_values[4].replace('$', '').replace(',', '')) if row_values[4] else None
+
+        purchase_price = self.clean_price(row_values[2])
+        unit_sale_price = self.clean_price(row_values[3])
+        wholesale_sale_price = self.clean_price(row_values[4]) if row_values[4] else None
         wholesale_sale_price = wholesale_sale_price if unit_sale_price != wholesale_sale_price else None
         min_wholesale_quantity = 3 if wholesale_sale_price else None
 
         # Procesar marca
-        brand_name = row_values[8].replace('.', '').replace(',', '').replace('- Sin Departamento -', 'NA')
-        brand_name = brand_name.lower()
-        name = name.replace(brand_name, '')
-        name = name.strip()
-        name = name.title()
-        brand_name = brand_name.title() if len(brand_name) > 2 else brand_name.upper()
-
+        brand_name = row_values[8].replace('.', '').replace(',', '').replace('- Sin Departamento -', 'NA').strip().title()
+        if len(brand_name) <= 2:
+            brand_name = brand_name.upper()
+        name = name.replace(brand_name.lower(), '').strip().capitalize()
         # Crear objetos relacionados
         brand, _ = Brand.objects.get_or_create(name=brand_name)
 

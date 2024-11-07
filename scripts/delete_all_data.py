@@ -15,8 +15,8 @@ class DeleteProductManager:
         p.delete()
 
 def run():
-    store_manager = DeleteStoreManager()
-    store_manager.delete_stores()
+#    store_manager = DeleteStoreManager()
+#    store_manager.delete_stores()
 
     product_manager = DeleteProductManager()
     product_manager.delete_products()

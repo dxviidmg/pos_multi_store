@@ -5,7 +5,8 @@ from .models import Store, Product, StoreProduct, Brand, ProductTransfer
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     search_fields = ['code', 'name']
-
+    list_display = ['brand__name', 'code', 'name']
+    list_filter = ['brand__name']
 @admin.register(StoreProduct)
 class StoreProductAdmin(admin.ModelAdmin):
     search_fields = ['product__id', 'product__code', 'product__name']
