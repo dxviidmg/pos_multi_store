@@ -73,64 +73,98 @@ class StoreViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         store = self.request.user.get_store()
+        return Store.objects.filter(store_type='T').exclude(id=store.id)
 
-        return Store.objects.exclude(id=store.id)
 
-
-class ConfirmProductTransfers(APIView):
+class ConfirmProductTransfersView(APIView):
+    @transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
     def post(self, request):
-        transfers_data = request.data.get("transfers")
-        destination_store = request.data.get("destination_store")
+        transfer_list = request.data.get("transfers")
+        destination_store_id = request.data.get("destination_store")
         origin_store = self.request.user.get_store()
 
-        transfers_to_update = []
-        for transfer_data in transfers_data:
-            data = {
-                "product": transfer_data['product_id'],
-                "quantity": transfer_data['quantity'],
-                "destination_store": destination_store,
+        transfers_to_process = []
+
+        for transfer_item in transfer_list:
+            product_id = transfer_item['product_id']
+            quantity = transfer_item['quantity']
+
+            transfer_filter = {
+                "product": product_id,
+                "quantity": quantity,
+                "destination_store": destination_store_id,
                 "origin_store": origin_store.id,
+                "transfer_datetime": None
             }
 
             try:
-                transfer = ProductTransfer.objects.get(**data, transfer_datetime=None)
+                transfer_record = ProductTransfer.objects.get(**transfer_filter)
             except ProductTransfer.DoesNotExist:
                 return Response(
-                    {"status": "Transpaso no encontrado"}, status=status.HTTP_404_NOT_FOUND
+                    {"status": "Transfer not found"}, status=status.HTTP_404_NOT_FOUND
                 )
-            transfers_to_update.append({'transfer': transfer, 'quantity': transfer_data['quantity']})
 
+            transfers_to_process.append({'transfer': transfer_record, 'quantity': quantity})
 
+        for transfer_info in transfers_to_process:
+            transfer = transfer_info['transfer']
 
-        for transfer_to_update in transfers_to_update:
-            with transaction.atomic():  # Comienza una transacción
+            # Update the transfer timestamp
+            transfer.transfer_datetime = datetime.now()
+            transfer.save()
 
-                transfer = transfer_to_update['transfer']
+            # Update the stock in the destination store
+            destination_store = transfer.destination_store
 
-                # Actualiza la fecha y hora del traspaso
-                transfer.transfer_datetime = datetime.now()
-                transfer.save()
+            destination_stock_filter = {"product": transfer.product, "store": destination_store}
+            origin_stock_filter = {"product": transfer.product, "store": transfer.origin_store}
 
-                # Actualiza el stock en la tienda de destino
-                destination_store = transfer.destination_store
+            try:
+                destination_store_product = StoreProduct.objects.get(**destination_stock_filter)
+                destination_store_product.stock += transfer_info['quantity']
+                destination_store_product.save()
 
-                store_product_destination_data = {"product": transfer.product, "store": transfer.destination_store}
-                store_product_origin_data = {"product": transfer.product, "store": transfer.origin_store}
-                
-                store_product_destination_data = StoreProduct.objects.get(**store_product_destination_data)
-                store_product_destination_data.stock += transfer_to_update['quantity']
-                store_product_destination_data.save()
+                # Update the stock in the origin store
+                origin_store_product = StoreProduct.objects.get(**origin_stock_filter)
+                origin_store_product.stock -= transfer_info['quantity']
+                origin_store_product.save()
 
-                # Verifica y actualiza el stock en la tienda de origen
-                store_product_origin_data = StoreProduct.objects.get(**store_product_origin_data)
-                store_product_origin_data.stock -= transfer_to_update['quantity']
-                store_product_origin_data.save()
+            except StoreProduct.DoesNotExist:
+                return Response(
+                    {"status": "Product stock not found in one of the stores"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
         return Response(
-            {"status": "Traspaso confirmado"}, status=status.HTTP_200_OK
+            {"status": "Transfer confirmed"}, status=status.HTTP_200_OK
         )
 
 
 class BrandViewSet(viewsets.ModelViewSet):
     serializer_class = BrandSerializer
     queryset = Brand.objects.all()
+
+
+class AddProductsView(APIView):
+    @transaction.atomic
+    def post(self, request):
+        product_list = request.data.get("products")
+        user_store = self.request.user.get_store()
+
+        product_ids = [product_data['product_id'] for product_data in product_list]
+        store_products = StoreProduct.objects.filter(product__in=product_ids, store=user_store)
+
+        store_product_dict = {store_product.product_id: store_product for store_product in store_products}
+
+        for product_data in product_list:
+            product_id = product_data['product_id']
+            if product_id in store_product_dict:
+                store_product = store_product_dict[product_id]
+                store_product.stock += product_data['quantity']
+
+        # Bulk update all modified store products
+        StoreProduct.objects.bulk_update(store_products, ['stock'])
+
+        return Response(
+            {"status": "Stock increment confirmed"}, status=status.HTTP_200_OK
+        )
