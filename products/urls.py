@@ -1,5 +1,5 @@
 from rest_framework.routers import DefaultRouter
-from .views import StoreProductViewSet, ProductViewSet, ProductTransferViewSet, StoreViewSet, ConfirmProductTransfer, BrandViewSet
+from .views import StoreProductViewSet, ProductViewSet, ProductTransferViewSet, StoreViewSet, ConfirmProductTransfers, BrandViewSet
 from django.urls import path
 
 app_name = 'products'
@@ -14,5 +14,5 @@ router.register('product-transfer', ProductTransferViewSet, basename='product-tr
 urlpatterns = router.urls
 
 urlpatterns += [
-    path('confirm-transfer/', ConfirmProductTransfer.as_view(), name='confirm-transfer'),
+    path('confirm-transfers/', ConfirmProductTransfers.as_view(), name='confirm-transfers'),
 ]

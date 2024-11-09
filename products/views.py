@@ -77,82 +77,58 @@ class StoreViewSet(viewsets.ModelViewSet):
         return Store.objects.exclude(id=store.id)
 
 
-class ConfirmProductTransfer(APIView):
+class ConfirmProductTransfers(APIView):
     def post(self, request):
-        product = request.data.get("product")
-        quantity = int(request.data.get("quantity"))
+        transfers_data = request.data.get("transfers")
         destination_store = request.data.get("destination_store")
-
         origin_store = self.request.user.get_store()
 
-        data = {
-            "product": product,
-            "quantity": quantity,
-            "destination_store": destination_store,
-            "origin_store": origin_store.id,
-        }
-        data2 = {"product": product, "store": destination_store}
-        data3 = {"product": product, "store": origin_store}
+        transfers_to_update = []
+        for transfer_data in transfers_data:
+            data = {
+                "product": transfer_data['product_id'],
+                "quantity": transfer_data['quantity'],
+                "destination_store": destination_store,
+                "origin_store": origin_store.id,
+            }
 
-        try:
-            transfer = ProductTransfer.objects.get(**data, transfer_datetime=None)
-        except ProductTransfer.DoesNotExist:
-            return Response(
-                {"status": "Transpaso no encontrado"}, status=status.HTTP_404_NOT_FOUND
-            )
-
-        try:
-            with transaction.atomic():  # Comienza una transacción
-                # Verifica si el traspaso existe
-                transfer = ProductTransfer.objects.get(
-                    product=product,
-                    origin_store=origin_store,
-                    destination_store=destination_store,
-                    transfer_datetime=None,
+            try:
+                transfer = ProductTransfer.objects.get(**data, transfer_datetime=None)
+            except ProductTransfer.DoesNotExist:
+                return Response(
+                    {"status": "Transpaso no encontrado"}, status=status.HTTP_404_NOT_FOUND
                 )
+            transfers_to_update.append({'transfer': transfer, 'quantity': transfer_data['quantity']})
+
+
+
+        for transfer_to_update in transfers_to_update:
+            with transaction.atomic():  # Comienza una transacción
+
+                transfer = transfer_to_update['transfer']
 
                 # Actualiza la fecha y hora del traspaso
                 transfer.transfer_datetime = datetime.now()
                 transfer.save()
 
                 # Actualiza el stock en la tienda de destino
-                store_product_destination = StoreProduct.objects.get(
-                    product=product, store=destination_store
-                )
-                store_product_destination.stock += quantity
-                store_product_destination.save()
+                destination_store = transfer.destination_store
+
+                store_product_destination_data = {"product": transfer.product, "store": transfer.destination_store}
+                store_product_origin_data = {"product": transfer.product, "store": transfer.origin_store}
+                
+                store_product_destination_data = StoreProduct.objects.get(**store_product_destination_data)
+                store_product_destination_data.stock += transfer_to_update['quantity']
+                store_product_destination_data.save()
 
                 # Verifica y actualiza el stock en la tienda de origen
-                store_product_origin = StoreProduct.objects.get(
-                    product=product, store=origin_store
-                )
-                if store_product_origin.stock < quantity:
-                    return Response(
-                        {"status": "Stock insuficiente en la tienda de origen"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                store_product_origin_data = StoreProduct.objects.get(**store_product_origin_data)
+                store_product_origin_data.stock -= transfer_to_update['quantity']
+                store_product_origin_data.save()
 
-                store_product_origin.stock -= quantity
-                store_product_origin.save()
-
-            return Response(
-                {"status": "Traspaso confirmado"}, status=status.HTTP_200_OK
-            )
-
-        except ProductTransfer.DoesNotExist:
-            return Response(
-                {"status": "Traspaso no encontrado"}, status=status.HTTP_404_NOT_FOUND
-            )
-        except StoreProduct.DoesNotExist:
-            return Response(
-                {"status": "Producto o tienda no encontrados"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Exception as e:
-            return Response(
-                {"status": "Error al confirmar el traspaso", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {"status": "Traspaso confirmado"}, status=status.HTTP_200_OK
+        )
 
 
 class BrandViewSet(viewsets.ModelViewSet):
