@@ -29,5 +29,5 @@ class DiscountViewSet(viewsets.ModelViewSet):
 	serializer_class = DiscountSerializer
 
 	def get_queryset(self):
-		return Discount.objects.all()
+		return Discount.objects.all().order_by('discount_percentage')
 		
