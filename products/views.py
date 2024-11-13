@@ -138,6 +138,61 @@ class ConfirmProductTransfersView(APIView):
         return Response(
             {"status": "Transfer confirmed"}, status=status.HTTP_200_OK
         )
+    
+
+
+
+class ConfirmDistributionView(APIView):
+    @transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
+    def post(self, request):
+        products = request.data.get("products")
+        destination_store_id = request.data.get("destination_store")
+        origin_store = self.request.user.get_store()
+
+        if not products or not destination_store_id:
+            return Response(
+                {"status": "Missing required data"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        for product_data in products:
+            product_id = product_data.get('product_id')
+            quantity = product_data.get('quantity')
+
+            if not product_id or quantity is None or quantity <= 0:
+                return Response(
+                    {"status": "Invalid product data"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                # Obtener y actualizar el stock en la tienda de destino
+                destination_store_product = StoreProduct.objects.get(
+                    product=product_id, store=destination_store_id
+                )
+                destination_store_product.stock += quantity
+                destination_store_product.save()
+
+                # Obtener y actualizar el stock en la tienda de origen
+                origin_store_product = StoreProduct.objects.get(
+                    product=product_id, store=origin_store.id
+                )
+                if origin_store_product.stock < quantity:
+                    return Response(
+                        {"status": f"Insufficient stock for product {product_id}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                origin_store_product.stock -= quantity
+                origin_store_product.save()
+
+            except StoreProduct.DoesNotExist:
+                return Response(
+                    {"status": "Product stock not found in one of the stores"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        return Response({"status": "Transfer confirmed"}, status=status.HTTP_200_OK)
+    
 
 
 class BrandViewSet(viewsets.ModelViewSet):
