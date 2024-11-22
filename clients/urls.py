@@ -6,4 +6,6 @@ app_name = 'clients'
 router = DefaultRouter() 
 router.register('client', ClientViewSet, basename='client')
 router.register('discount', DiscountViewSet, basename='discount')
+
 urlpatterns = router.urls
+
