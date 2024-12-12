@@ -2,10 +2,7 @@ from rest_framework import viewsets
 from .serializers import ClientSerializer, DiscountSerializer
 from .models import Client, Discount
 from django.db.models import Q, Value
-from functools import reduce
-from operator import or_
 from django.db.models.functions import Concat
-from django.http import Http404
 
 
 class ClientViewSet(viewsets.ModelViewSet):
