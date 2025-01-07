@@ -38,13 +38,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'tenants',
+    'accounts',
     'products',
     'clients',
     'sales',
     'django_extensions',
     'rest_framework',
     'rest_framework.authtoken',
-    'corsheaders'
+    'corsheaders',
+
+
 
 ]
 
@@ -58,6 +62,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+#    'tenants.middleware.TenantMiddleware'
 ]
 
 ROOT_URLCONF = 'pos_multi_store.urls'
@@ -144,7 +149,6 @@ REST_FRAMEWORK = {
     ),
 
 }
-
 
 db_from_env = dj_database_url.config(conn_max_age=500)
 if db_from_env:

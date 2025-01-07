@@ -10,7 +10,7 @@ router.register('brand', views.BrandViewSet, basename='brand')
 router.register('product', views.ProductViewSet, basename='product')
 router.register('store-product', views.StoreProductViewSet, basename='store-product')
 
-router.register('product-transfer', views.ProductTransferViewSet, basename='product-transfer')
+router.register('transfer', views.TransferViewSet, basename='transfer')
 urlpatterns = router.urls
 
 urlpatterns += [

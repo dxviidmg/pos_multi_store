@@ -5,24 +5,43 @@ from decimal import Decimal
 from tqdm import tqdm 
 from django.contrib.auth.hashers import make_password
 from decimal import Decimal
+from tenants.models import Tenant
+from accounts.models import Profile
 
+
+class TenantManager:
+    """Clase para gestionar la creación de tiendas y usuarios."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def create_tenant(self):
+        data = {
+            'name': self.name,
+            'domain': self.name.replace(' ', '_').lower()
+        }
+
+        tenant, created = Tenant.objects.get_or_create(**data)
+        return tenant
 
 class StoreManager:
     """Clase para gestionar la creación de tiendas y usuarios."""
 
-    def __init__(self, stores_data):
+    def __init__(self, stores_data, tenant_instance):
         self.stores_data = stores_data
+        self.tenant_instance = tenant_instance
 
     def create_store(self, data):
         store_type = 'tienda' if data['store_type'] == 'T' else 'almacen'
         username = f"{store_type}_{data['name'].replace(' ', '_').lower()}"
         user, created = User.objects.get_or_create(username=username, defaults={'password': make_password(username)})
+        Profile.objects.get_or_create(user=user, tenant=self.tenant_instance)
 
         if not created:  # If the user already exists, you may want to update the password
             user.password = make_password(username)  # Set the password
             user.save()
 
-        Store.objects.get_or_create(**data, manager=user)
+        Store.objects.get_or_create(**data, manager=user, tenant=self.tenant_instance)
 
     def create_stores(self):
         for data in self.stores_data:
@@ -97,8 +116,11 @@ def run():
 
     products_file_path = 'scripts/import_data/said_store/inv 300924.xls'
 
+    tenant = TenantManager('Tienda said')
+    tenant_instance = tenant.create_tenant()
+
     # Crear managers y ejecutar los procesos
-    store_manager = StoreManager(data_stores)
+    store_manager = StoreManager(data_stores, tenant_instance)
     product_manager = ProductManager(products_file_path)
 
     # Ejecutar la creación de tiendas y productos

@@ -1,18 +1,18 @@
 from rest_framework import viewsets
 from .serializers import (
     StoreProductSerializer,
-    ProductTransferSerializer,
+    TransferSerializer,
     StoreSerializer,
     ProductSerializer,
     BrandSerializer
 )
-from .models import StoreProduct, Product, Store, ProductTransfer, Brand
+from .models import StoreProduct, Product, Store, Transfer, Brand
 from django.db.models import Q
 from functools import reduce
 from operator import or_
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import generics, status
+from rest_framework import status
 from datetime import datetime
 from django.db import transaction
 
@@ -52,19 +52,22 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         ).prefetch_related("product")
 
 
-class ProductTransferViewSet(viewsets.ModelViewSet):
-    serializer_class = ProductTransferSerializer
+class TransferViewSet(viewsets.ModelViewSet):
+    serializer_class = TransferSerializer
 
     def get_queryset(self):
         store = self.request.user.get_store()
 
-        return ProductTransfer.objects.filter(
+        return Transfer.objects.filter(
             Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
         )
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
-    queryset = Product.objects.all()
+
+    def get_queryset(self):
+        tenant = self.request.user.get_tenant()   
+        return Product.objects.filter(brand__tenant=tenant)
 
 
 
@@ -98,8 +101,8 @@ class ConfirmProductTransfersView(APIView):
             }
 
             try:
-                transfer_record = ProductTransfer.objects.get(**transfer_filter)
-            except ProductTransfer.DoesNotExist:
+                transfer_record = Transfer.objects.get(**transfer_filter)
+            except Transfer.DoesNotExist:
                 return Response(
                     {"status": "Transfer not found"}, status=status.HTTP_404_NOT_FOUND
                 )
@@ -197,9 +200,11 @@ class ConfirmDistributionView(APIView):
 
 class BrandViewSet(viewsets.ModelViewSet):
     serializer_class = BrandSerializer
-    queryset = Brand.objects.all()
 
-
+    def get_queryset(self):
+        tenant = self.request.user.get_tenant()   
+        return Brand.objects.filter(tenant=tenant)
+    
 class AddProductsView(APIView):
     @transaction.atomic
     def post(self, request):

@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-
-# traspasos, un vendedor hace traspasos, se crea, el registro de tienda a tienda, que fue y cuanto
+from tenants.models import Tenant
 
 
 class Base(models.Model):
@@ -16,10 +15,11 @@ class Base(models.Model):
 
 
 class Brand(Base):
-    pass
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE) 
 
 
 class Store(Base):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
     store_type = models.CharField(max_length=1, choices=STORE_TYPE_CHOICES)
     manager = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -92,7 +92,7 @@ class StoreProduct(models.Model):
         return self.stock - self.calculate_reserved_stock()
 
 
-class ProductTransfer(models.Model):
+class Transfer(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     origin_store = models.ForeignKey(
         Store, related_name="transfers_from", on_delete=models.CASCADE
@@ -108,8 +108,3 @@ class ProductTransfer(models.Model):
         return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"
 
 
-def get_store(self):
-    return Store.objects.filter(manager=self).first()
-
-
-User.add_to_class("get_store", get_store)

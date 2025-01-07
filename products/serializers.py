@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, StoreProduct, ProductTransfer, Store, Brand
+from .models import Product, StoreProduct, Transfer, Store, Brand
 
 
 class StoreProductSerializer(serializers.ModelSerializer):
@@ -55,7 +55,7 @@ class StoreProductSerializer(serializers.ModelSerializer):
 
 
 
-class ProductTransferSerializer(serializers.ModelSerializer):
+class TransferSerializer(serializers.ModelSerializer):
 	product_code = serializers.SerializerMethodField()
 	product_description = serializers.SerializerMethodField()
 	description = serializers.SerializerMethodField()
@@ -75,7 +75,7 @@ class ProductTransferSerializer(serializers.ModelSerializer):
 		return 'No tengo gerencia entre traspaso'
 
 	class Meta:
-		model = ProductTransfer
+		model = Transfer
 		fields = "__all__"
 
 

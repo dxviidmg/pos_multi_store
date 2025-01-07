@@ -13,9 +13,6 @@ class Sale(models.Model):
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)
 
-#    def get_amounts_from_payment(self):
-
-#        return sum(self.payments.all().values_list("amount", flat=True))
 
 
 class SaleProduct(models.Model):
