@@ -6,7 +6,6 @@ from tqdm import tqdm
 from django.contrib.auth.hashers import make_password
 from decimal import Decimal
 from tenants.models import Tenant
-from accounts.models import Profile
 
 
 class TenantManager:
@@ -15,10 +14,10 @@ class TenantManager:
     def __init__(self, name):
         self.name = name
 
+
     def create_tenant(self):
         data = {
-            'name': self.name,
-            'domain': self.name.replace(' ', '_').lower()
+            'name': self.name
         }
 
         tenant, created = Tenant.objects.get_or_create(**data)
@@ -33,15 +32,15 @@ class StoreManager:
 
     def create_store(self, data):
         store_type = 'tienda' if data['store_type'] == 'T' else 'almacen'
-        username = f"{store_type}_{data['name'].replace(' ', '_').lower()}"
-        user, created = User.objects.get_or_create(username=username, defaults={'password': make_password(username)})
-        Profile.objects.get_or_create(user=user, tenant=self.tenant_instance)
+#        username = f"{store_type}_{data['name'].replace(' ', '_').lower()}"
+#        user, created = User.objects.get_or_create(username=username, defaults={'password': make_password(username)})
+#        Profile.objects.get_or_create(user=user, tenant=self.tenant_instance)
 
-        if not created:  # If the user already exists, you may want to update the password
-            user.password = make_password(username)  # Set the password
-            user.save()
+#        if not created:  # If the user already exists, you may want to update the password
+#            user.password = make_password(username)  # Set the password
+#            user.save()
 
-        Store.objects.get_or_create(**data, manager=user, tenant=self.tenant_instance)
+        Store.objects.get_or_create(**data, tenant=self.tenant_instance)
 
     def create_stores(self):
         for data in self.stores_data:

@@ -18,7 +18,7 @@ class Discount(models.Model):
         return 100 - self.discount_percentage
 
     class Meta:
-        unique_together = ('tenant', 'discount_percentage')
+        unique_together = ['tenant', 'discount_percentage']
 
 class Client(models.Model):
     discount = models.ForeignKey(Discount, on_delete=models.CASCADE)
@@ -31,12 +31,3 @@ class Client(models.Model):
 
     def __str__(self):
         return self.get_full_name()
-
-#    class Meta:
-#        constraints = [
-#            models.UniqueConstraint(
-#                fields=['phone_number'],
-#                condition=Q(discount__tenant=models.F('discount__tenant')),
-#                name='unique_tenant_phone_number'
-#            )
-#        ]

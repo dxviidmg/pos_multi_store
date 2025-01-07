@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from tenants.models import Tenant
+from django.contrib.auth.hashers import make_password
 
 
 class Base(models.Model):
@@ -22,7 +23,7 @@ class Store(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
     store_type = models.CharField(max_length=1, choices=STORE_TYPE_CHOICES)
-    manager = models.OneToOneField(User, on_delete=models.CASCADE)
+    manager = models.OneToOneField(User, on_delete=models.CASCADE, blank=True, null=True)
 
     def get_full_name(self):
         return "{}: {}".format(self.get_store_type_display(), self.name)
@@ -31,13 +32,33 @@ class Store(Base):
         return self.get_full_name()
 
     def save(self, *args, **kwargs):
-        # Guardar el producto primero
+        if not self.pk:  # Solo para nuevos objetos
+            # Generar el dominio en formato slug
+            print(self.tenant.domain)
+            tenant = self.tenant
+            domain = tenant.domain
+            store_name = self.name.replace(' ', '_').lower()
+
+            # Crear un username y nombre para el propietario
+            username = f"manager_{domain}_{self.get_store_type_display().lower()}_{store_name}"
+            first_name = username.replace('_', ' ').title()
+
+            # Crear o recuperar al usuario propietario
+            self.manager, _ = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    'first_name': first_name,
+                    'password': make_password(username),
+                },
+            )
+
         super().save(*args, **kwargs)
 
         # Crear una entrada de StoreProduct para cada tienda
-        products = Product.objects.all()
+        products = Product.objects.filter(brand__tenant=tenant)
         for product in products:
             StoreProduct.objects.get_or_create(store=self, product=product)
+
 
 
 class Product(Base):
@@ -57,9 +78,13 @@ class Product(Base):
         super().save(*args, **kwargs)
 
         # Crear una entrada de StoreProduct para cada tienda
-        stores = Store.objects.all()
-        for store in stores:
-            StoreProduct.objects.get_or_create(store=store, product=self)
+
+        if not self.pk:  # Solo para nuevos objetos
+            # Generar el dominio en formato slug
+
+            stores = Store.objects.filter(tenant=self.brand__tenant)
+            for store in stores:
+                StoreProduct.objects.get_or_create(store=store, product=self)
 
     def get_description(self):
         return "{} {}".format(self.brand.name, self.name).strip()
