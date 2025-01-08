@@ -55,10 +55,6 @@ class Store(Base):
 
         super().save(*args, **kwargs)
 
-        # Crear una entrada de StoreProduct para cada tienda
-        products = Product.objects.filter(brand__tenant=tenant)
-        for product in products:
-            StoreProduct.objects.get_or_create(store=self, product=product)
 
 
 
@@ -76,13 +72,9 @@ class Product(Base):
     
 
     def clean(self):
-        # Verifica si el código ya existe en otro objeto
         if Product.objects.filter(code=self.code, brand=self.brand).exclude(pk=self.pk).exists():
             raise ValidationError({"code": "product with this code already exists."})
         
-    def save(self, **kwargs):
-#        self.full_clean()
-        return super().save(**kwargs)
     
 
 

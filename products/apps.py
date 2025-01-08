@@ -8,7 +8,8 @@ class ProductsConfig(AppConfig):
 
 
     def ready(self):
-        from .models import Product
-        from .signals import create_product_in_stores
+        from .models import Product, Store
+        from .signals import create_product_in_stores, create_products_in_store
 
         post_save.connect(create_product_in_stores, sender=Product)
+        post_save.connect(create_products_in_store, sender=Store)
