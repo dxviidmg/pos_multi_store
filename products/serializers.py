@@ -1,5 +1,13 @@
 from rest_framework import serializers
 from .models import Product, StoreProduct, Transfer, Store, Brand
+from django.core.exceptions import ValidationError
+
+
+class BrandSerializer(serializers.ModelSerializer):
+
+	class Meta:
+		model = Brand
+		exclude =["tenant"]
 
 
 class StoreProductSerializer(serializers.ModelSerializer):
@@ -105,9 +113,14 @@ class ProductSerializer(serializers.ModelSerializer):
 		model = Product
 		fields = "__all__"
 
+	def validate(self, data):
+		# Llama al método clean() de la instancia del modelo
+		instance = Product(**data)
+		try:
+			instance.clean()
+		except ValidationError as e:
+			raise serializers.ValidationError(e.message_dict)
 
-class BrandSerializer(serializers.ModelSerializer):
+		return data
 
-	class Meta:
-		model = Brand
-		fields = "__all__"
+

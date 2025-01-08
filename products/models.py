@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from tenants.models import Tenant
 from django.contrib.auth.hashers import make_password
+from django.core.exceptions import ValidationError
 
 
 class Base(models.Model):
@@ -23,7 +24,7 @@ class Store(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
     store_type = models.CharField(max_length=1, choices=STORE_TYPE_CHOICES)
-    manager = models.OneToOneField(User, on_delete=models.CASCADE, blank=True, null=True)
+    manager = models.OneToOneField(User, on_delete=models.CASCADE)
 
     def get_full_name(self):
         return "{}: {}".format(self.get_store_type_display(), self.name)
@@ -63,28 +64,27 @@ class Store(Base):
 
 class Product(Base):
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE)
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
     wholesale_sale_price = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
-    min_wholesale_quantity = models.PositiveIntegerField(null=True, blank=True)
+    min_wholesale_quantity = models.IntegerField(null=True, blank=True)
     apply_wholesale_price_on_costumer_discount = models.BooleanField(default=False)
     
-    def save(self, *args, **kwargs):
-        # Guardar el producto primero
-        super().save(*args, **kwargs)
 
-        # Crear una entrada de StoreProduct para cada tienda
+    def clean(self):
+        # Verifica si el código ya existe en otro objeto
+        if Product.objects.filter(code=self.code, brand=self.brand).exclude(pk=self.pk).exists():
+            raise ValidationError({"code": "product with this code already exists."})
+        
+    def save(self, **kwargs):
+#        self.full_clean()
+        return super().save(**kwargs)
+    
 
-        if not self.pk:  # Solo para nuevos objetos
-            # Generar el dominio en formato slug
-
-            stores = Store.objects.filter(tenant=self.brand__tenant)
-            for store in stores:
-                StoreProduct.objects.get_or_create(store=store, product=self)
 
     def get_description(self):
         return "{} {}".format(self.brand.name, self.name).strip()

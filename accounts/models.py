@@ -3,18 +3,8 @@ from django.contrib.auth.models import User
 from tenants.models import Tenant
 from products.models import Store
 
-
-#class Profile(models.Model):
-#    user = models.ForeignKey(User, on_delete=models.CASCADE)
-#    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True)
-
-
-
 def get_full_name(self):
     return "{} {}".format(self.first_name, self.last_name)
-
-#def get_tenant(self):
-#    return Profile.objects.get(user=self).tenant.pk
 
 def get_tenant(self):
     return Tenant.objects.filter(owner=self).first()

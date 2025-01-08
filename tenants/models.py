@@ -7,7 +7,7 @@ from django.utils.text import slugify
 class Tenant(models.Model):
     name = models.CharField(max_length=100)
     domain = models.CharField(max_length=100, unique=True, blank=True)  # Dominio único para identificar el tenant
-    owner = models.OneToOneField(User, on_delete=models.CASCADE, blank=True, null=True)
+    owner = models.OneToOneField(User, on_delete=models.CASCADE)
     
 
     def __str__(self):
