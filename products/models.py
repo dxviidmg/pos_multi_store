@@ -17,7 +17,7 @@ class Base(models.Model):
 
 
 class Brand(Base):
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE) 
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
 
 
 class Store(Base):
@@ -38,24 +38,24 @@ class Store(Base):
             print(self.tenant.domain)
             tenant = self.tenant
             domain = tenant.domain
-            store_name = self.name.replace(' ', '_').lower()
+            store_name = self.name.replace(" ", "_").lower()
 
             # Crear un username y nombre para el propietario
-            username = f"manager_{domain}_{self.get_store_type_display().lower()}_{store_name}"
-            first_name = username.replace('_', ' ').title()
+            username = (
+                f"manager_{domain}_{self.get_store_type_display().lower()}_{store_name}"
+            )
+            first_name = username.replace("_", " ").title()
 
             # Crear o recuperar al usuario propietario
             self.manager, _ = User.objects.get_or_create(
                 username=username,
                 defaults={
-                    'first_name': first_name,
-                    'password': make_password(username),
+                    "first_name": first_name,
+                    "password": make_password(username),
                 },
             )
 
         super().save(*args, **kwargs)
-
-
 
 
 class Product(Base):
@@ -69,21 +69,26 @@ class Product(Base):
     )
     min_wholesale_quantity = models.IntegerField(null=True, blank=True)
     apply_wholesale_price_on_costumer_discount = models.BooleanField(default=False)
-    
 
     def clean(self):
-        if  Product.objects.filter(code=self.code, brand__tenant=self.brand.tenant).exclude(pk=self.pk).exists():
+        if (
+            Product.objects.filter(code=self.code, brand__tenant=self.brand.tenant)
+            .exclude(pk=self.pk)
+            .exists()
+        ):
             raise ValidationError({"code": "product with this code already exists."})
 
-
     def get_description(self):
         return "{} {}".format(self.brand.name, self.name).strip()
 
     def get_description(self):
         return "{} {}".format(self.brand.name, self.name).strip()
-    
+
     def apply_wholesale(self):
-        return self.wholesale_sale_price is not None and self.min_wholesale_quantity is not None
+        return (
+            self.wholesale_sale_price is not None
+            and self.min_wholesale_quantity is not None
+        )
 
 
 class StoreProduct(models.Model):
@@ -94,11 +99,9 @@ class StoreProduct(models.Model):
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
 
-
     def calculate_reserved_stock(self):
         transfers = self.store.transfers_from.filter(
-            product=self.product,
-            transfer_datetime=None
+            product=self.product, transfer_datetime=None
         )
 
         return sum(transfer.quantity for transfer in transfers)
@@ -121,5 +124,3 @@ class Transfer(models.Model):
 
     def __str__(self):
         return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"
-
-

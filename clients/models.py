@@ -12,7 +12,7 @@ class Discount(models.Model):
     )
 
     def __str__(self):
-        return "{}%".format(self.discount_percentage)
+        return "{}% {}".format(self.discount_percentage, self.tenant)
 
     def get_discount_percentage_complement(self):
         return 100 - self.discount_percentage

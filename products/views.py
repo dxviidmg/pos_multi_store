@@ -209,7 +209,6 @@ class BrandViewSet(viewsets.ModelViewSet):
 	def perform_create(self, serializer):
 		tenant = self.request.user.get_tenant()
 		sale_instance = serializer.save(tenant=tenant)
-
 		return sale_instance
 		
 	
