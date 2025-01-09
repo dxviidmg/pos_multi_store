@@ -72,10 +72,8 @@ class Product(Base):
     
 
     def clean(self):
-        if Product.objects.filter(code=self.code, brand=self.brand).exclude(pk=self.pk).exists():
+        if  Product.objects.filter(code=self.code, brand__tenant=self.brand.tenant).exclude(pk=self.pk).exists():
             raise ValidationError({"code": "product with this code already exists."})
-        
-    
 
 
     def get_description(self):

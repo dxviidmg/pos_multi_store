@@ -114,12 +114,12 @@ class ProductSerializer(serializers.ModelSerializer):
 		fields = "__all__"
 
 	def validate(self, data):
-		# Llama al método clean() de la instancia del modelo
-		instance = Product(**data)
-		try:
-			instance.clean()
-		except ValidationError as e:
-			raise serializers.ValidationError(e.message_dict)
+		request = self.context.get('request')
+		method = request.method if request else None
+
+		if method == 'POST':
+			if  Product.objects.filter(code=data['code'], brand__tenant=data['brand'].tenant).exists():
+				raise ValidationError({"code": "product with this code already exists."})
 
 		return data
 
