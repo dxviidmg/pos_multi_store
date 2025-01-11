@@ -8,8 +8,7 @@ def run():
     data_stores = [
         {"name": "Almacen", "store_type": "A"},
         {"name": "Principal", "store_type": "T"},
-        {"name": "Secundaria", "store_type": "T"},
-
+        {"name": "Secundaria", "store_type": "T"}
     ]
 
     data_products = [
@@ -65,7 +64,7 @@ def run():
     tenant = TenantManager(data_tenant)
     tenant_instance = tenant.create_tenant()
 
-    store_manager = StoreManager(data_stores)
+    store_manager = StoreManager(tenant_instance)
     product_manager = ProductManager(tenant_instance)
     client_manager = ClientManager(tenant_instance)
 

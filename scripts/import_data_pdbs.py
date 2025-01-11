@@ -21,4 +21,4 @@ def run():
 
     # Ejecutar la creación de tiendas y productos
     store_manager.create_stores(data_stores)
-    product_manager.create_products_from_eleventa(products_file_path)
+#    product_manager.create_products_from_eleventa(products_file_path)

@@ -24,12 +24,10 @@ class StoreManager:
         self.tenant = tenant
 
     def create_store(self, data):
-        print(data)
         Store.objects.get_or_create(**data, tenant=self.tenant)
 
     def create_stores(self, stores_data):
         for data in stores_data:
-            print(data)
             self.create_store(data)
 
 
