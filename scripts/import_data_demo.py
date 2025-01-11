@@ -1,14 +1,20 @@
 from .managers import TenantManager, StoreManager, ProductManager, ClientManager
 
+
 def run():
     """Función principal que será ejecutada por runscript"""
 
-    data_tenant = {'name': 'Demo', 'short_name': 'demo', 'stores': 3, 'is_sandbox': True}
+    data_tenant = {
+        "name": "Demo",
+        "short_name": "demo",
+        "stores": 3,
+        "is_sandbox": True,
+    }
 
     data_stores = [
         {"name": "Almacen", "store_type": "A"},
         {"name": "Principal", "store_type": "T"},
-        {"name": "Secundaria", "store_type": "T"}
+        {"name": "Secundaria", "store_type": "T"},
     ]
 
     data_products = [
@@ -51,15 +57,17 @@ def run():
             "wholesale_sale_price": None,
             "min_wholesale_quantity": None,
             "apply_wholesale_price_on_costumer_discount": False,
-        }
+        },
     ]
 
-    data_clients = [{
-        'discount_percentage': 5,
-        'first_name': 'Juan',
-        'last_name': 'Perez',
-        'phone_number': '9999999999'
-    }]
+    data_clients = [
+        {
+            "discount_percentage": 5,
+            "first_name": "Juan",
+            "last_name": "Perez",
+            "phone_number": "9999999999",
+        }
+    ]
 
     tenant = TenantManager(data_tenant)
     tenant_instance = tenant.create_tenant()

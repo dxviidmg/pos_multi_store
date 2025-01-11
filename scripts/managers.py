@@ -6,6 +6,7 @@ from decimal import Decimal
 from tenants.models import Tenant
 from clients.models import Discount, Client
 
+
 class TenantManager:
     """Clase para gestionar la creación de tiendas y usuarios."""
 
@@ -89,7 +90,7 @@ class ProductManager:
             code=code, defaults={**product_data, "brand": brand}
         )
 
-#        StoreProduct.objects.filter(product=product).update(stock=10)
+    #        StoreProduct.objects.filter(product=product).update(stock=10)
 
     def read_file_from_eleventa(self, file_path):
         workbook = xlrd.open_workbook(file_path)
@@ -97,16 +98,16 @@ class ProductManager:
 
     def create_products_from_eleventa(self, file_path):
         file = self.read_file_from_eleventa(file_path)
-        for row_idx in tqdm(range(1, file.nrows), desc="Creating Products", unit="product"):
+        for row_idx in tqdm(
+            range(1, file.nrows), desc="Creating Products", unit="product"
+        ):
             row_values = file.row_values(row_idx)
             self.create_product_from_eleventa(row_values)
 
-
-
     def create_demo_product(self, demo_product):
         # Procesar marca
-        code = demo_product.pop('code')
-        brand_name = demo_product.pop('brand')
+        code = demo_product.pop("code")
+        brand_name = demo_product.pop("brand")
         # Crear objetos relacionados
         brand, _ = Brand.objects.get_or_create(name=brand_name, tenant=self.tenant)
         # Crear el producto
@@ -117,22 +118,10 @@ class ProductManager:
         StoreProduct.objects.filter(product=product).update(stock=10)
 
     def create_demo_products(self, demo_products):
-        for demo_product in tqdm(demo_products, desc="Creating Products", unit="product"):
+        for demo_product in tqdm(
+            demo_products, desc="Creating Products", unit="product"
+        ):
             self.create_demo_product(demo_product)
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
 
 
 class ClientManager:
@@ -141,10 +130,14 @@ class ClientManager:
 
     def create_demo_client(self, demo_client):
         # Procesar marca
-        discount = demo_client.pop('discount_percentage')
-        discount, _ = Discount.objects.get_or_create(discount_percentage=discount, tenant=self.tenant)
+        discount = demo_client.pop("discount_percentage")
+        discount, _ = Discount.objects.get_or_create(
+            discount_percentage=discount, tenant=self.tenant
+        )
         # Crear el producto
-        client, _ = Client.objects.get_or_create(defaults={**demo_client, "discount": discount})
+        client, _ = Client.objects.get_or_create(
+            defaults={**demo_client, "discount": discount}
+        )
 
     def create_demo_clients(self, demo_clients):
         for demo_client in tqdm(demo_clients, desc="Creating Products", unit="product"):
