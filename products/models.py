@@ -35,14 +35,11 @@ class Store(Base):
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos
             # Generar el dominio en formato slug
-            print(self.tenant.domain)
-            tenant = self.tenant
-            domain = tenant.domain
             store_name = self.name.replace(" ", "_").lower()
 
             # Crear un username y nombre para el propietario
             username = (
-                f"manager_{domain}_{self.get_store_type_display().lower()}_{store_name}"
+                f"manager_{self.get_store_type_display().lower()}_{self.tenant.short_name}_{store_name}"
             )
             first_name = username.replace("_", " ").title()
 
