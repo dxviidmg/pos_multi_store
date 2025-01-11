@@ -76,7 +76,10 @@ class StoreViewSet(viewsets.ModelViewSet):
 
 	def get_queryset(self):
 		store = self.request.user.get_store()
-		return Store.objects.filter(store_type='T').exclude(id=store.id)
+
+		tenant = self.request.user.get_tenant()
+		
+		return Store.objects.filter(store_type='T', tenant=tenant).exclude(id=store.id)
 
 
 class ConfirmProductTransfersView(APIView):

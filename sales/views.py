@@ -20,7 +20,8 @@ class SaleViewSet(viewsets.ModelViewSet):
 
 	def get_queryset(self):
 		today = date.today()
-		return Sale.objects.filter(saler=self.request.user, created_at__date=today)
+		store = self.request.user.get_store()
+		return Sale.objects.filter(store=store, created_at__date=today)
 
 	def perform_create(self, serializer):
 		store_products_data = self.request.data.get("store_products")
@@ -39,8 +40,9 @@ class SaleViewSet(viewsets.ModelViewSet):
 			# Perform a bulk update on the stock of StoreProduct instances
 			StoreProduct.objects.bulk_update(updated_store_products, ["stock"])
 
+		store = self.request.user.get_store()
 		# Save the sale and associate it with the current user
-		sale_instance = serializer.save(saler=self.request.user)
+		sale_instance = serializer.save(store=store)
 
 		for product_data in store_products_data:
 			product_store = StoreProduct.objects.get(id=product_data["id"])
@@ -66,30 +68,30 @@ class SaleViewSet(viewsets.ModelViewSet):
 
 
 class DailyEarnings(APIView):
-    def get(self, request):
-        today = date.today()
-        
-        user_sales = Sale.objects.filter(saler=self.request.user, created_at__date=today)
-        total_sales_sum = user_sales.aggregate(total=Sum("total"))['total'] or 0
-        related_payments = Payment.objects.filter(sale__in=user_sales)
-        payments_by_method = related_payments.values("payment_method").annotate(total_amount=Sum("amount"))
-        total_payments_sum = related_payments.aggregate(total=Sum("amount"))['total'] or 0
+	def get(self, request):
+		today = date.today()
+		store = self.request.user.get_store()
+		user_sales = Sale.objects.filter(store=store, created_at__date=today)
+		total_sales_sum = user_sales.aggregate(total=Sum("total"))['total'] or 0
+		related_payments = Payment.objects.filter(sale__in=user_sales)
+		payments_by_method = related_payments.values("payment_method").annotate(total_amount=Sum("amount"))
+		total_payments_sum = related_payments.aggregate(total=Sum("amount"))['total'] or 0
 
-        # Obtener significados de métodos de pago
-        payment_methods_meaning = dict(Payment.PAYMENT_METHOD_CHOICES)
-        payments_by_method = [
-            {
-                "payment_method": payment_methods_meaning.get(payment["payment_method"], payment["payment_method"]),
-                "total_amount": payment["total_amount"]
-            }
-            for payment in payments_by_method
-        ]
+		# Obtener significados de métodos de pago
+		payment_methods_meaning = dict(Payment.PAYMENT_METHOD_CHOICES)
+		payments_by_method = [
+			{
+				"payment_method": payment_methods_meaning.get(payment["payment_method"], payment["payment_method"]),
+				"total_amount": payment["total_amount"]
+			}
+			for payment in payments_by_method
+		]
 
-        return Response(
-            {
-                "is_balance_matched": total_sales_sum == total_payments_sum,
-                "total_sales_sum": total_sales_sum,
-                "total_payments_sum": total_payments_sum,
-                "payments_by_method": payments_by_method,
-            }
-        )
+		return Response(
+			{
+				"is_balance_matched": total_sales_sum == total_payments_sum,
+				"total_sales_sum": total_sales_sum,
+				"total_payments_sum": total_payments_sum,
+				"payments_by_method": payments_by_method,
+			}
+		)
