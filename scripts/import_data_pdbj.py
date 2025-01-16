@@ -7,7 +7,7 @@ def run():
     data_tenant = {
         "name": "Productos de belleza Josue",
         "short_name": "pdbj",
-        "stores": 2,
+        "stores": 5,
     }
 
     data_stores = [
