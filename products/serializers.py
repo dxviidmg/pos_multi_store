@@ -43,18 +43,24 @@ class StoreProductSerializer(serializers.ModelSerializer):
 			"apply_wholesale_price_on_costumer_discount": obj.product.apply_wholesale_price_on_costumer_discount
 		}
 
-	def get_stock_in_other_stores(self, obj):
-		return [
-			{
-				"store_id": str(sp.store.id),
-				"store_name": str(sp.store),
-				"available_stock": sp.calculate_available_stock(),
-			}
-			for sp in StoreProduct.objects.filter(product=obj.product)
-			.exclude(id=obj.id)
-			.exclude(stock=0) 
-			if sp.calculate_available_stock() > 0  # Excluir si calculate_stock_to_share() es 0
-		]
+
+class StoreProductSerializer2(serializers.ModelSerializer):
+	product_code = serializers.SerializerMethodField()
+	description = serializers.SerializerMethodField()
+	available_stock = serializers.SerializerMethodField()
+	reserved_stock = serializers.SerializerMethodField()
+
+	def get_product_code(self, obj):
+		return obj.product.code
+
+	def get_description(self, obj):
+		return obj.product.get_description()
+
+	def get_available_stock(self, obj):
+		return obj.calculate_available_stock()
+
+	def get_reserved_stock(self, obj):
+		return obj.calculate_reserved_stock()
 
 	class Meta:
 		model = StoreProduct
