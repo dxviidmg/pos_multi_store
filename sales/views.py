@@ -111,6 +111,15 @@ class SalesImportValidation(APIView):
         if list(df.columns) != expected_columns:
             raise ValueError("Formato de excel incorrecto")
 
+    def rename_columns(self, df):
+        return df.rename(
+            columns={
+                "Código": "code",
+                "Cantidad": "quantity",
+                "Descripción": "description",
+            }
+        )
+
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -126,44 +135,46 @@ class SalesImportValidation(APIView):
             df = pd.read_excel(file_obj)
             self.validate_columns(df)
 
+            df = self.rename_columns(df)
+
             data = []
             product_quantities = (
                 {}
             )  # Diccionario para rastrear existencias por código de producto
 
             for _, row in df.iterrows():
-                data_to_update = row.to_dict()
-                data_to_update["status"] = "Exitoso"
+                aux = row.to_dict()
+                aux["status"] = "Exitoso"
 
-                # Intentar obtener el producto
+                code = row["code"]
+                quantity = row["quantity"]
                 try:
-                    product = Product.objects.get(
-                        code=row["Código"], brand__tenant=tenant
-                    )
+
+                    product = Product.objects.get(code=code, brand__tenant=tenant)
                 except Product.DoesNotExist:
-                    data_to_update["status"] = "Código no encontrado"
-                    data.append(data_to_update)
+                    aux["status"] = "Código no encontrado"
+                    data.append(aux)
                     continue
 
                 # Verificar existencias y manejar cantidades
-                if row["Código"] in product_quantities:
-                    available_quantity = product_quantities[row["Código"]]
+                if code in product_quantities:
+                    available_quantity = product_quantities[code]
                 else:
                     store_product = StoreProduct.objects.get(
                         product=product, store=store
                     )
                     available_quantity = store_product.calculate_available_stock()
-                    product_quantities[row["Código"]] = available_quantity
+                    product_quantities[code] = available_quantity
 
-                if available_quantity < row["Cantidad"]:
-                    data_to_update["status"] = "Cantidad insuficiente"
-                    product_quantities[row["Código"]] = (
+                if available_quantity < quantity:
+                    aux["status"] = "Cantidad insuficiente"
+                    product_quantities[code] = (
                         0  # Actualizar a 0 porque no hay suficiente stock
                     )
                 else:
-                    product_quantities[row["Código"]] -= row["Cantidad"]
+                    product_quantities[code] -= quantity
 
-                data.append(data_to_update)
+                data.append(aux)
 
             return Response(data, status=status.HTTP_200_OK)
 
@@ -185,6 +196,15 @@ class SalesImport(APIView):
         if list(df.columns) != expected_columns:
             raise ValueError("Formato de excel incorrecto")
 
+    def rename_columns(self, df):
+        return df.rename(
+            columns={
+                "Código": "code",
+                "Cantidad": "quantity",
+                "Descripción": "description",
+            }
+        )
+    
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -199,27 +219,29 @@ class SalesImport(APIView):
         try:
             df = pd.read_excel(file_obj)
             self.validate_columns(df)
-
+            df = self.rename_columns(df)
+            
             for _, row in df.iterrows():
-                data_to_update = row.to_dict()
-                data_to_update["status"] = "Exitoso"
 
+                code = row["code"]
+                quantity = row["quantity"]
+                
                 # Intentar obtener el producto
-                product = Product.objects.get(code=row["Código"], brand__tenant=tenant)
+                product = Product.objects.get(code=code, brand__tenant=tenant)
                 store_product = StoreProduct.objects.get(product=product, store=store)
 
-                store_product.stock -= row["Cantidad"]
+                store_product.stock -= quantity
                 store_product.save()
 
                 store = self.request.user.get_store()
                 # Save the sale and associate it with the current user
-                total = product.unit_sale_price * row["Cantidad"]
+                total = product.unit_sale_price * quantity
                 sale_instance = Sale.objects.create(store=store, total=total)
 
                 data = {
                     "sale": sale_instance,
                     "product": product,
-                    "quantity": row["Cantidad"],
+                    "quantity": quantity,
                     "price": product.unit_sale_price,
                 }
                 SaleProduct.objects.create(**data)
