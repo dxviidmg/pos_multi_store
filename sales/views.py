@@ -137,6 +137,11 @@ class SalesImportValidation(APIView):
 
             df = self.rename_columns(df)
 
+            all_integers = df['quantity'].apply(lambda x: isinstance(x, int)).all()
+
+            if not all_integers:
+                raise ValueError("No todos los datos en la columna Cantidad son números")
+
             data = []
             product_quantities = (
                 {}
