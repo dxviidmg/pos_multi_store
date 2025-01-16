@@ -1,9 +1,6 @@
 # pos_multi_store
 
-preguntar que datos necesitas de las ventas??
-
-CREAR CLIENTE
-crear cliente...
-
-#Analizar doble check
-comprobante... si el comprobante existe... el status es finalizado, sino es en tramite
+Pendientes: 
+1 Cancelar o devolucion a nivel parcial o total
+2 Actualizar stock con unmodal y añadir
+3 Atajos en cart
