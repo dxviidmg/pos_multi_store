@@ -5,9 +5,9 @@ def run():
     """Función principal que será ejecutada por runscript"""
 
     data_tenant = {
-        "name": "Productos de belleza SAID",
-        "short_name": "pdbs",
-        "stores": 5,
+        "name": "Productos de belleza Josue",
+        "short_name": "pdbj",
+        "stores": 2,
     }
 
     data_stores = [
