@@ -12,10 +12,10 @@ def run():
 
     data_stores = [
         {"name": "Zaragoza", "store_type": "T"},
-        {"name": "Zaragoza", "store_type": "A"},
+        {"name": "1", "store_type": "A"},
     ]
 
-    products_file_path = "scripts/import_data/said_store/inv 300924.xls"
+    products_file_path = "scripts/import_data/pdbj/inventario.xls"
 
     tenant = TenantManager(data_tenant)
     tenant_instance = tenant.create_tenant()
