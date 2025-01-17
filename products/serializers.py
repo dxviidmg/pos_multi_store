@@ -48,7 +48,7 @@ class StoreProductSerializer(StoreProductBaseSerializer):
             "wholesale_sale_price": obj.product.wholesale_sale_price,
             "min_wholesale_quantity": obj.product.min_wholesale_quantity,
             "apply_wholesale": obj.product.apply_wholesale(),
-            "apply_wholesale_price_on_costumer_discount": obj.product.apply_wholesale_price_on_costumer_discount, 
+            "apply_wholesale_price_on_customer_discount": obj.product.apply_wholesale_price_on_customer_discount, 
 		
         }
 
