@@ -33,6 +33,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 		
 		return super().get_serializer_class()
 	
+	"""
 	def get_queryset(self):
 		q = self.request.GET.get("q", "").strip()
 		code = self.request.GET.get("code", "").strip()
@@ -63,6 +64,47 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 			]  # Limitar los resultados solo si se busca por `q`
 
 		# Filtrar los productos de la tienda
+		return StoreProduct.objects.filter(
+			product__in=product_queryset, store=store
+		).prefetch_related("product")
+	"""
+	
+
+
+	def get_queryset(self):
+		q = self.request.GET.get("q", None)
+		code = self.request.GET.get("code", None)
+		
+
+		# Intentar obtener la tienda, retornar un queryset vacío si no existe
+		store = self.request.user.get_store()
+		tenant = self.request.user.get_tenant()
+
+		# Filtrar por código del producto si está especificado
+		if code:
+			product = Product.objects.filter(code=code, brand__tenant=tenant).first()
+			return (
+				StoreProduct.objects.filter(product=product, store=store)
+				if product
+				else [StoreProduct.objects.none()]
+			)
+
+		# Construir la consulta de búsqueda en `Product` si se proporciona `q`
+		filters = Q()
+		if q:
+			filters |= (
+				Q(brand__name__icontains=q)
+				| Q(code__icontains=q)
+				| Q(name__icontains=q)
+			)
+
+		# Obtener productos y filtrar `StoreProduct` según la tienda
+
+		if not q:
+			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")
+		else:
+			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")[:5]
+
 		return StoreProduct.objects.filter(
 			product__in=product_queryset, store=store
 		).prefetch_related("product")
