@@ -5,7 +5,7 @@ from .serializers import (
 	StoreSerializer,
 	ProductSerializer,
 	BrandSerializer,
-	StoreProductSerializer2
+	StoreProductBaseSerializer
 )
 from .models import StoreProduct, Product, Store, Transfer, Brand
 from django.db.models import Q
@@ -20,7 +20,7 @@ from django.db import transaction
 
 class StoreProductViewSet(viewsets.ModelViewSet):
 	serializer_class = StoreProductSerializer
-	alternate_serializer_class = StoreProductSerializer2
+	alternate_serializer_class = StoreProductBaseSerializer
 
 	def get_serializer_class(self):
 		# Obtener el parámetro 'q' de la solicitud
