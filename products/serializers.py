@@ -7,66 +7,62 @@ class BrandSerializer(serializers.ModelSerializer):
 
 	class Meta:
 		model = Brand
-		exclude =["tenant"]
+		exclude = ["tenant"]
 
 
-class StoreProductSerializer(serializers.ModelSerializer):
-	product_id = serializers.SerializerMethodField()
-	product_code = serializers.SerializerMethodField()
-	prices = serializers.SerializerMethodField()
-	stock_in_other_stores = serializers.SerializerMethodField()
-	description = serializers.SerializerMethodField()
-	available_stock = serializers.SerializerMethodField()
-	reserved_stock = serializers.SerializerMethodField()
+class StoreProductBaseSerializer(serializers.ModelSerializer):
+    product_code = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+    available_stock = serializers.SerializerMethodField()
+    reserved_stock = serializers.SerializerMethodField()
 
-	def get_product_id(self, obj):
-		return obj.product.id
+    def get_product_code(self, obj):
+        return obj.product.code
 
-	def get_product_code(self, obj):
-		return obj.product.code
+    def get_description(self, obj):
+        return obj.product.get_description()
 
-	def get_description(self, obj):
-		return obj.product.get_description()
+    def get_available_stock(self, obj):
+        return obj.calculate_available_stock()
 
-	def get_available_stock(self, obj):
-		return obj.calculate_available_stock()
+    def get_reserved_stock(self, obj):
+        return obj.calculate_reserved_stock()
 
-	def get_reserved_stock(self, obj):
-		return obj.calculate_reserved_stock()
-
-	def get_prices(self, obj):
-		return {
-			"unit_sale_price": obj.product.unit_sale_price,
-			"wholesale_sale_price": obj.product.wholesale_sale_price,
-			"min_wholesale_quantity": obj.product.min_wholesale_quantity,
-			"apply_wholesale": obj.product.apply_wholesale(),
-			"apply_wholesale_price_on_costumer_discount": obj.product.apply_wholesale_price_on_costumer_discount
-		}
+    class Meta:
+        model = StoreProduct
+        fields = "__all__"
 
 
-class StoreProductSerializer2(serializers.ModelSerializer):
-	product_code = serializers.SerializerMethodField()
-	description = serializers.SerializerMethodField()
-	available_stock = serializers.SerializerMethodField()
-	reserved_stock = serializers.SerializerMethodField()
 
-	def get_product_code(self, obj):
-		return obj.product.code
+class StoreProductSerializer(StoreProductBaseSerializer):
+    product_id = serializers.SerializerMethodField()
+    prices = serializers.SerializerMethodField()
+    stock_in_other_stores = serializers.SerializerMethodField()
 
-	def get_description(self, obj):
-		return obj.product.get_description()
+    def get_product_id(self, obj):
+        return obj.product.id
 
-	def get_available_stock(self, obj):
-		return obj.calculate_available_stock()
+    def get_prices(self, obj):
+        return {
+            "unit_sale_price": obj.product.unit_sale_price,
+            "wholesale_sale_price": obj.product.wholesale_sale_price,
+            "min_wholesale_quantity": obj.product.min_wholesale_quantity,
+            "apply_wholesale": obj.product.apply_wholesale(),
+            "apply_wholesale_price_on_costumer_discount": obj.product.apply_wholesale_price_on_costumer_discount, 
+		
+        }
 
-	def get_reserved_stock(self, obj):
-		return obj.calculate_reserved_stock()
-
-	class Meta:
-		model = StoreProduct
-		fields = "__all__"
-
-
+    def get_stock_in_other_stores(self, obj):
+        # Optimize by pre-filtering and reducing unnecessary calculations
+        return [
+            {
+                "store_id": str(sp.store.id),
+                "store_name": str(sp.store),
+                "available_stock": sp.calculate_available_stock(),
+            }
+            for sp in StoreProduct.objects.filter(product=obj.product).exclude(id=obj.id).exclude(stock=0)
+            if sp.calculate_available_stock() > 0
+        ]
 
 
 class TransferSerializer(serializers.ModelSerializer):
@@ -81,12 +77,12 @@ class TransferSerializer(serializers.ModelSerializer):
 		return obj.product.get_description()
 
 	def get_description(self, obj):
-		store = Store.objects.get(manager=self.context['request'].user)
+		store = Store.objects.get(manager=self.context["request"].user)
 		if store == obj.origin_store:
-			return 'Le proveere este producto a ' + obj.destination_store.__str__()
+			return "Le proveere este producto a " + obj.destination_store.__str__()
 		elif store == obj.destination_store:
-			return 'Le solicite este producto a ' + obj.origin_store.__str__()
-		return 'No tengo gerencia entre traspaso'
+			return "Le solicite este producto a " + obj.origin_store.__str__()
+		return "No tengo gerencia entre traspaso"
 
 	class Meta:
 		model = Transfer
@@ -120,13 +116,15 @@ class ProductSerializer(serializers.ModelSerializer):
 		fields = "__all__"
 
 	def validate(self, data):
-		request = self.context.get('request')
+		request = self.context.get("request")
 		method = request.method if request else None
 
-		if method == 'POST':
-			if  Product.objects.filter(code=data['code'], brand__tenant=data['brand'].tenant).exists():
-				raise ValidationError({"code": "product with this code already exists."})
+		if method == "POST":
+			if Product.objects.filter(
+				code=data["code"], brand__tenant=data["brand"].tenant
+			).exists():
+				raise ValidationError(
+					{"code": "product with this code already exists."}
+				)
 
 		return data
-
-
