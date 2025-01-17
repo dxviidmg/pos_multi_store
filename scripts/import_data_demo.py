@@ -26,7 +26,7 @@ def run():
             "unit_sale_price": 10.00,
             "wholesale_sale_price": 8.00,
             "min_wholesale_quantity": 5,
-            "apply_wholesale_price_on_customer_discount": False,
+            "apply_wholesale_price_on_client_discount": False,
         },
         {
             "brand": "Aguas embotelladas",
@@ -36,7 +36,7 @@ def run():
             "unit_sale_price": 15.00,
             "wholesale_sale_price": 12.00,
             "min_wholesale_quantity": 5,
-            "apply_wholesale_price_on_customer_discount": True,
+            "apply_wholesale_price_on_client_discount": True,
         },
         {
             "brand": "Refrescos Inc",
@@ -46,7 +46,7 @@ def run():
             "unit_sale_price": 15.50,
             "wholesale_sale_price": None,
             "min_wholesale_quantity": None,
-            "apply_wholesale_price_on_customer_discount": False,
+            "apply_wholesale_price_on_client_discount": False,
         },
         {
             "brand": "Refrescos Inc",
@@ -56,7 +56,7 @@ def run():
             "unit_sale_price": 20.00,
             "wholesale_sale_price": None,
             "min_wholesale_quantity": None,
-            "apply_wholesale_price_on_customer_discount": False,
+            "apply_wholesale_price_on_client_discount": False,
         },
     ]
 
