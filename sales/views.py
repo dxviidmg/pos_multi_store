@@ -20,9 +20,9 @@ class SaleViewSet(viewsets.ModelViewSet):
         return SaleSerializer
 
     def get_queryset(self):
-        today = date.today()
+        date = self.request.GET.get("date")
         store = self.request.user.get_store()
-        return Sale.objects.filter(store=store, created_at__date=today)
+        return Sale.objects.filter(store=store, created_at__date=date)
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
@@ -70,9 +70,9 @@ class SaleViewSet(viewsets.ModelViewSet):
 
 class DailyEarnings(APIView):
     def get(self, request):
-        today = date.today()
-        store = self.request.user.get_store()
-        user_sales = Sale.objects.filter(store=store, created_at__date=today)
+        date = request.GET.get("date")
+        store = request.user.get_store()
+        user_sales = Sale.objects.filter(store=store, created_at__date=date)
         total_sales_sum = user_sales.aggregate(total=Sum("total"))["total"] or 0
         related_payments = Payment.objects.filter(sale__in=user_sales)
         payments_by_method = related_payments.values("payment_method").annotate(
@@ -94,14 +94,21 @@ class DailyEarnings(APIView):
             for payment in payments_by_method
         ]
 
-        return Response(
-            {
-                "is_balance_matched": total_sales_sum == total_payments_sum,
-                "total_sales_sum": total_sales_sum,
-                "total_payments_sum": total_payments_sum,
-                "payments_by_method": payments_by_method,
-            }
+        payments_by_method.extend(
+            [
+                {"payment_method": "Total en ventas", "total_amount": total_sales_sum},
+                {
+                    "payment_method": "Total en pagos",
+                    "total_amount": total_payments_sum,
+                },
+                {
+                    "payment_method": "Balanceado",
+                    "total_amount": 'Si' if total_sales_sum == total_payments_sum else 'No',
+                },
+            ]
         )
+
+        return Response(payments_by_method)
 
 
 class SalesImportValidation(APIView):
@@ -137,10 +144,12 @@ class SalesImportValidation(APIView):
 
             df = self.rename_columns(df)
 
-            all_integers = df['quantity'].apply(lambda x: isinstance(x, int)).all()
+            all_integers = df["quantity"].apply(lambda x: isinstance(x, int)).all()
 
             if not all_integers:
-                raise ValueError("No todos los datos en la columna Cantidad son números")
+                raise ValueError(
+                    "No todos los datos en la columna Cantidad son números"
+                )
 
             data = []
             product_quantities = (
@@ -209,7 +218,7 @@ class SalesImport(APIView):
                 "Descripción": "description",
             }
         )
-    
+
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -225,12 +234,12 @@ class SalesImport(APIView):
             df = pd.read_excel(file_obj)
             self.validate_columns(df)
             df = self.rename_columns(df)
-            
+
             for _, row in df.iterrows():
 
                 code = row["code"]
                 quantity = row["quantity"]
-                
+
                 # Intentar obtener el producto
                 product = Product.objects.get(code=code, brand__tenant=tenant)
                 store_product = StoreProduct.objects.get(product=product, store=store)
