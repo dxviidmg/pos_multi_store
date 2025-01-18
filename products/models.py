@@ -27,7 +27,7 @@ class Store(Base):
     manager = models.OneToOneField(User, on_delete=models.CASCADE)
 
     def get_full_name(self):
-        return "{}: {}".format(self.get_store_type_display(), self.name)
+        return "{} {}".format(self.get_store_type_display(), self.name)
 
     def __str__(self):
         return self.get_full_name()
