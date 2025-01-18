@@ -49,7 +49,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 			return (
 				StoreProduct.objects.filter(product=product, store=store)
 				if product
-				else [StoreProduct.objects.none()]
+				else []
 			)
 
 		# Construir la consulta de búsqueda en `Product` si se proporciona `q`
