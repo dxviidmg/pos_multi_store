@@ -90,8 +90,6 @@ class ProductManager:
             code=code, defaults={**product_data, "brand": brand}
         )
 
-    #        StoreProduct.objects.filter(product=product).update(stock=10)
-
     def read_file_from_eleventa(self, file_path):
         workbook = xlrd.open_workbook(file_path)
         return workbook.sheet_by_index(0)
