@@ -151,3 +151,10 @@ REST_FRAMEWORK = {
 db_from_env = dj_database_url.config(conn_max_age=500)
 if db_from_env:
     DATABASES["default"].update(db_from_env)
+
+CORS_ALLOW_HEADERS = [
+    'store-id',
+    'content-type',
+    'authorization',
+    'accept',
+]

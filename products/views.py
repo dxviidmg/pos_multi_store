@@ -16,8 +16,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from datetime import datetime
 from django.db import transaction
+from products.decorators import get_store
+from django.utils.decorators import method_decorator
 
-
+@method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
 	serializer_class = StoreProductSerializer
 	alternate_serializer_class = StoreProductBaseSerializer
@@ -40,7 +42,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 		
 
 		# Intentar obtener la tienda, retornar un queryset vacío si no existe
-		store = self.request.user.get_store()
+		store = self.request.store
 		tenant = self.request.user.get_tenant()
 
 		# Filtrar por código del producto si está especificado
@@ -72,12 +74,12 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 			product__in=product_queryset, store=store
 		).prefetch_related("product")
 
-
+@method_decorator(get_store(), name="dispatch")
 class TransferViewSet(viewsets.ModelViewSet):
 	serializer_class = TransferSerializer
 
 	def get_queryset(self):
-		store = self.request.user.get_store()
+		store = self.request.store
 
 		return Transfer.objects.filter(
 			Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
@@ -92,21 +94,24 @@ class ProductViewSet(viewsets.ModelViewSet):
 		return Product.objects.filter(brand__tenant=tenant)
 
 
+@method_decorator(get_store(), name="dispatch")
 class StoreViewSet(viewsets.ModelViewSet):
 	serializer_class = StoreSerializer
 
 	def get_queryset(self):
-		store = self.request.user.get_store()
 		tenant = self.request.user.get_tenant()
-		return Store.objects.filter(store_type="T", tenant=tenant).exclude(id=store.id)
+		store = self.request.store
 
+		if store:
+			return Store.objects.filter(store_type="T", tenant=tenant).exclude(id=store.id)
+		return Store.objects.filter(tenant=tenant)
 
 class ConfirmProductTransfersView(APIView):
 	@transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
 	def post(self, request):
 		transfer_list = request.data.get("transfers")
 		destination_store_id = request.data.get("destination_store")
-		origin_store = self.request.user.get_store()
+		origin_store = self.request.store
 
 		transfers_to_process = []
 
@@ -178,7 +183,7 @@ class ConfirmDistributionView(APIView):
 	def post(self, request):
 		products = request.data.get("products")
 		destination_store_id = request.data.get("destination_store")
-		origin_store = self.request.user.get_store()
+		origin_store = self.request.store
 
 		if not products or not destination_store_id:
 			return Response(
@@ -241,7 +246,7 @@ class AddProductsView(APIView):
 	@transaction.atomic
 	def post(self, request):
 		product_list = request.data.get("products")
-		store = self.request.user.get_store()
+		store = self.request.store
 
 		product_ids = [product_data["product_id"] for product_data in product_list]
 		store_products = StoreProduct.objects.filter(

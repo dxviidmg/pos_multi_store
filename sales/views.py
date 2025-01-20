@@ -10,8 +10,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Sum
 import pandas as pd
+from products.decorators import get_store
+from django.utils.decorators import method_decorator
 
-
+@method_decorator(get_store(), name="dispatch")
 # Create your views here.
 class SaleViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
@@ -21,7 +23,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         date = self.request.GET.get("date")
-        store = self.request.user.get_store()
+        store = self.request.store
         return Sale.objects.filter(store=store, created_at__date=date)
 
     def perform_create(self, serializer):
@@ -41,7 +43,7 @@ class SaleViewSet(viewsets.ModelViewSet):
             # Perform a bulk update on the stock of StoreProduct instances
             StoreProduct.objects.bulk_update(updated_store_products, ["stock"])
 
-        store = self.request.user.get_store()
+        store = self.request.store
         # Save the sale and associate it with the current user
         sale_instance = serializer.save(store=store)
 
@@ -111,6 +113,7 @@ class DailyEarnings(APIView):
         return Response(payments_by_method)
 
 
+@method_decorator(get_store(), name="dispatch")
 class SalesImportValidation(APIView):
 
     def validate_columns(self, df):
@@ -135,7 +138,7 @@ class SalesImportValidation(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        store = self.request.user.get_store()
+        store = self.request.store
         tenant = self.request.user.get_tenant()
 
         try:
@@ -202,7 +205,7 @@ class SalesImportValidation(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
+@method_decorator(get_store(), name="dispatch")
 class SalesImport(APIView):
 
     def validate_columns(self, df):
@@ -227,7 +230,7 @@ class SalesImport(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        store = self.request.user.get_store()
+        store = self.request.store
         tenant = self.request.user.get_tenant()
 
         try:
@@ -247,7 +250,6 @@ class SalesImport(APIView):
                 store_product.stock -= quantity
                 store_product.save()
 
-                store = self.request.user.get_store()
                 # Save the sale and associate it with the current user
                 total = product.unit_sale_price * quantity
                 sale_instance = Sale.objects.create(store=store, total=total)
