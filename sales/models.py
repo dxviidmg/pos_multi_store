@@ -10,7 +10,7 @@ class Sale(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='sales')
     #Despues de prod quitar el null y blank
-    saler = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    saler = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)
@@ -21,13 +21,6 @@ class Sale(models.Model):
 
     def get_payments_methods_display(self):
         return [payment.get_payment_method_display() for payment in self.payments.all()]
-    
-
-class SaleProduct(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='sale_products')
-    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='sold_products')
-    quantity = models.PositiveIntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
 
 
 class ProductSale(models.Model):
