@@ -91,9 +91,13 @@ class TransferSerializer(serializers.ModelSerializer):
 
 class StoreSerializer(serializers.ModelSerializer):
 	full_name = serializers.SerializerMethodField()
+	store_type_display = serializers.SerializerMethodField()
 
 	def get_full_name(self, obj):
 		return obj.get_full_name()
+
+	def get_store_type_display(self, obj):
+		return obj.get_store_type_display()
 
 	class Meta:
 		model = Store

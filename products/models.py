@@ -31,7 +31,7 @@ class Store(Base):
 
     def __str__(self):
         return self.get_full_name()
-
+    
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos
             username = (f"{self.tenant.short_name}.manager.{self.get_store_type_display().lower()}.{self.name.replace(' ', '_').lower()}")

@@ -17,6 +17,7 @@ class CustomAuthToken(ObtainAuthToken):
             'full_name': user.get_full_name(),
             'email': user.email,
             'tenant_name': user.get_tenant().name,
-            'store_name': user.get_store().get_full_name() if user.get_store() else None,
-            'store_type': user.get_store().store_type if user.get_store() else None
+            'store_id': user.get_store().id if user.get_store() else None,
+            'store_type': user.get_store().store_type if user.get_store() else None,
+            'is_owner': user.is_owner()
             })
