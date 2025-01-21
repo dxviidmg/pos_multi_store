@@ -341,4 +341,4 @@ class CancelSale(APIView):
         sale2.delete()
 
 
-        return Response([{'sale': {}, 'cash_back': cash_back}], status=status.HTTP_200_OK)
+        return Response({'sale': {}, 'cash_back': cash_back}, status=status.HTTP_200_OK)
