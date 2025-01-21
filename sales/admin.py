@@ -1,12 +1,11 @@
 from django.contrib import admin
-from .models import Sale, SaleProduct, Payment, ProductSale
+from .models import Sale, Payment, ProductSale
 
 
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
-    list_display = ['created_at']
+    list_display = ['created_at', 'saler']
 
-admin.site.register(SaleProduct)
 admin.site.register(ProductSale)
 
 @admin.register(Payment)
