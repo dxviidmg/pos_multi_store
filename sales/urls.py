@@ -1,16 +1,17 @@
 from rest_framework.routers import DefaultRouter
-from .views import SaleViewSet, DailyEarnings, SalesImportValidation, SalesImport
+from . import views 
 from django.urls import path
 
 
 app_name = 'sale'
 
 router = DefaultRouter() 
-router.register('sale', SaleViewSet, basename='sale')
+router.register('sale', views.SaleViewSet, basename='sale')
 urlpatterns = router.urls
 
 urlpatterns += [
-    path('daily-earnings/', DailyEarnings.as_view(), name='daily-earnings'),
-    path('sales-import-validation/', SalesImportValidation.as_view(), name='sales-import-validation'),
-    path('sales-import/', SalesImport.as_view(), name='sales-import'),
+    path('daily-earnings/', views.DailyEarnings.as_view(), name='daily-earnings'),
+    path('import-sales-validation/', views.ImportSalesValidation.as_view(), name='import-sales-validation'),
+    path('import-sales/', views.ImportSales.as_view(), name='import-sales'),
+    path('cancel-sale/', views.CancelSale.as_view(), name='cancel-sale'),
 ]

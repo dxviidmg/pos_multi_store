@@ -1,7 +1,6 @@
-from django.shortcuts import render
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
-from .models import Sale, SaleProduct, Payment
+from .models import Sale, ProductSale, Payment
 from products.models import StoreProduct, Product
 from django.db import transaction
 from datetime import date
@@ -44,8 +43,9 @@ class SaleViewSet(viewsets.ModelViewSet):
             StoreProduct.objects.bulk_update(updated_store_products, ["stock"])
 
         store = self.request.store
+        saler = self.request.user
         # Save the sale and associate it with the current user
-        sale_instance = serializer.save(store=store)
+        sale_instance = serializer.save(store=store, saler=saler)
 
         for product_data in store_products_data:
             product_store = StoreProduct.objects.get(id=product_data["id"])
@@ -57,7 +57,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                 "quantity": product_data["quantity"],
                 "price": product_data["price"],
             }
-            SaleProduct.objects.create(**data)
+            ProductSale.objects.create(**data)
 
         for payment_data in payments_data:
             data = {
@@ -69,11 +69,11 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         return sale_instance
 
-
+@method_decorator(get_store(), name="dispatch")
 class DailyEarnings(APIView):
     def get(self, request):
         date = request.GET.get("date")
-        store = request.user.get_store()
+        store = request.store
         user_sales = Sale.objects.filter(store=store, created_at__date=date)
         total_sales_sum = user_sales.aggregate(total=Sum("total"))["total"] or 0
         related_payments = Payment.objects.filter(sale__in=user_sales)
@@ -114,7 +114,7 @@ class DailyEarnings(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class SalesImportValidation(APIView):
+class ImportSalesValidation(APIView):
 
     def validate_columns(self, df):
         expected_columns = ["Código", "Cantidad", "Descripción"]
@@ -206,7 +206,7 @@ class SalesImportValidation(APIView):
             )
 
 @method_decorator(get_store(), name="dispatch")
-class SalesImport(APIView):
+class ImportSales(APIView):
 
     def validate_columns(self, df):
         expected_columns = ["Código", "Cantidad", "Descripción"]
@@ -230,8 +230,10 @@ class SalesImport(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        store = self.request.store
+
         tenant = self.request.user.get_tenant()
+        store = self.request.store
+        saler = self.request.user
 
         try:
             df = pd.read_excel(file_obj)
@@ -252,7 +254,7 @@ class SalesImport(APIView):
 
                 # Save the sale and associate it with the current user
                 total = product.unit_sale_price * quantity
-                sale_instance = Sale.objects.create(store=store, total=total)
+                sale_instance = Sale.objects.create(store=store, total=total, saler=saler)
 
                 data = {
                     "sale": sale_instance,
@@ -260,7 +262,7 @@ class SalesImport(APIView):
                     "quantity": quantity,
                     "price": product.unit_sale_price,
                 }
-                SaleProduct.objects.create(**data)
+                ProductSale.objects.create(**data)
 
                 data = {
                     "sale": sale_instance,
@@ -280,3 +282,63 @@ class SalesImport(APIView):
                 {"error": f"Unexpected error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+
+
+
+@method_decorator(get_store(), name="dispatch")
+class CancelSale(APIView):
+    def post(self, request):
+
+        print('xxx')
+        print(request.data)
+
+        id = self.request.data.get("id")
+        products_sale_to_cancel = self.request.data.get("products_sale_to_cancel")
+
+        print(id, products_sale_to_cancel)
+
+        sale = Sale.objects.get(id=id)
+
+        products_sale_selected = ProductSale.objects.filter(id__in=products_sale_to_cancel)
+
+        print('products_sale_selected', products_sale_selected, type(products_sale_selected))
+
+        cash_back = 0
+        for product_sale in products_sale_selected:
+            print('products_sale', product_sale)
+
+            store_product = StoreProduct.objects.get(store=sale.store, product=product_sale.product)
+
+            print('sp id', store_product.id)
+            store_product.stock = store_product.stock + product_sale.quantity
+            store_product.save()
+
+            cash_back += product_sale.get_total()
+
+            product_sale.delete()
+            print('sp ???', store_product)
+
+        
+
+        sale2= Sale.objects.get(id=id)
+        products_sale2 = sale2.products_sale.all()
+
+        if products_sale2:
+            total2 = 0
+            for product_sale2 in products_sale2:
+                total2 += product_sale2.get_total()
+
+            sale2.total = total2
+            sale2.save()
+
+            serializer = SaleSerializer(sale2)
+
+            return Response({'sale': serializer.data, 'cash_back': cash_back}, status=status.HTTP_200_OK)
+        
+        cash_back = sale2.total
+        sale2.delete()
+
+
+        return Response([{'sale': {}, 'cash_back': cash_back}], status=status.HTTP_200_OK)

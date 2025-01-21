@@ -9,8 +9,6 @@ from .serializers import (
 )
 from .models import StoreProduct, Product, Store, Transfer, Brand
 from django.db.models import Q
-from functools import reduce
-from operator import or_
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -178,6 +176,7 @@ class ConfirmProductTransfersView(APIView):
 		return Response({"status": "Transfer confirmed"}, status=status.HTTP_200_OK)
 
 
+@method_decorator(get_store(), name="dispatch")
 class ConfirmDistributionView(APIView):
 	@transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
 	def post(self, request):
@@ -242,6 +241,7 @@ class BrandViewSet(viewsets.ModelViewSet):
 		return sale_instance
 
 
+@method_decorator(get_store(), name="dispatch")
 class AddProductsView(APIView):
 	@transaction.atomic
 	def post(self, request):
