@@ -3,6 +3,7 @@ from .models import Sale, ProductSale
 from clients.serializers import ClientSerializer
 
 
+
 class ProductSaleSerializer(serializers.ModelSerializer):
     description = serializers.SerializerMethodField()
 

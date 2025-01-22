@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from tenants.models import Tenant
+from tenants.models import Tenant, TimeStampedModel
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 
@@ -85,7 +85,7 @@ class Product(Base):
 class StoreProduct(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    stock = models.PositiveIntegerField(default=0)
+    stock = models.IntegerField(default=0)
 
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
@@ -110,8 +110,34 @@ class Transfer(models.Model):
         Store, related_name="transfers_to", on_delete=models.CASCADE
     )
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField()
+    quantity = models.IntegerField()
     transfer_datetime = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"
+
+
+class StoreProductLog(TimeStampedModel):
+    ACTIONS_CHOICES = [
+        ('E', 'Entrada'),
+        ('S', 'Salida'),
+        ('A', 'Ajuste')
+    ]
+
+    MOVEMENT_CHOICES = [
+        ('D', 'Distribucion'),
+        ('T', 'Transferencia'),
+        ('C', 'Cancelación de compra'),
+        ('V', 'Venta')
+    ]
+
+    #E, ED, ET, EC, 
+    #SD, ST, SV
+    #A
+        
+    store_product = models.ForeignKey(StoreProduct, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    previous_quantity = models.IntegerField()
+    updated_quantity = models.IntegerField()
+    action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
+    movement = models.CharField(max_length=1, choices=MOVEMENT_CHOICES, null=True, blank=True)
