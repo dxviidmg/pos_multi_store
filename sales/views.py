@@ -12,6 +12,7 @@ import pandas as pd
 from products.decorators import get_store
 from django.utils.decorators import method_decorator
 
+
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.
 class SaleViewSet(viewsets.ModelViewSet):
@@ -69,6 +70,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         return sale_instance
 
+
 @method_decorator(get_store(), name="dispatch")
 class DailyEarnings(APIView):
     def get(self, request):
@@ -105,7 +107,9 @@ class DailyEarnings(APIView):
                 },
                 {
                     "payment_method": "Balanceado",
-                    "total_amount": 'Si' if total_sales_sum == total_payments_sum else 'No',
+                    "total_amount": (
+                        "Si" if total_sales_sum == total_payments_sum else "No"
+                    ),
                 },
             ]
         )
@@ -205,6 +209,7 @@ class ImportSalesValidation(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+
 @method_decorator(get_store(), name="dispatch")
 class ImportSales(APIView):
 
@@ -230,7 +235,6 @@ class ImportSales(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-
         tenant = self.request.user.get_tenant()
         store = self.request.store
         saler = self.request.user
@@ -254,7 +258,9 @@ class ImportSales(APIView):
 
                 # Save the sale and associate it with the current user
                 total = product.unit_sale_price * quantity
-                sale_instance = Sale.objects.create(store=store, total=total, saler=saler)
+                sale_instance = Sale.objects.create(
+                    store=store, total=total, saler=saler
+                )
 
                 data = {
                     "sale": sale_instance,
@@ -284,61 +290,65 @@ class ImportSales(APIView):
             )
 
 
-
-
-
 @method_decorator(get_store(), name="dispatch")
 class CancelSale(APIView):
     def post(self, request):
+        sale_id = request.data.get("id")
+        products_sale_to_cancel_ids = request.data.get("products_sale_to_cancel")
 
-        print('xxx')
-        print(request.data)
+        if not sale_id or not products_sale_to_cancel_ids:
+            return Response(
+                {"detail": "Sale ID and products to cancel are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        id = self.request.data.get("id")
-        products_sale_to_cancel = self.request.data.get("products_sale_to_cancel")
+        try:
+            sale = Sale.objects.get(id=sale_id)
+        except Sale.DoesNotExist:
+            raise NotFound("Sale not found.")
 
-        print(id, products_sale_to_cancel)
+        products_sale_to_cancel = ProductSale.objects.filter(
+            id__in=products_sale_to_cancel_ids
+        )
 
-        sale = Sale.objects.get(id=id)
-
-        products_sale_selected = ProductSale.objects.filter(id__in=products_sale_to_cancel)
-
-        print('products_sale_selected', products_sale_selected, type(products_sale_selected))
+        if not products_sale_to_cancel.exists():
+            return Response(
+                {"detail": "No products found to cancel."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         cash_back = 0
-        for product_sale in products_sale_selected:
-            print('products_sale', product_sale)
 
-            store_product = StoreProduct.objects.get(store=sale.store, product=product_sale.product)
+        # Use a transaction to ensure atomicity
+        with transaction.atomic():
+            for product_sale in products_sale_to_cancel:
+                store_product = StoreProduct.objects.filter(
+                    store=sale.store, product=product_sale.product
+                ).first()
 
-            print('sp id', store_product.id)
-            store_product.stock = store_product.stock + product_sale.quantity
-            store_product.save()
+                if store_product:
+                    store_product.stock += product_sale.quantity
+                    store_product.save()
 
-            cash_back += product_sale.get_total()
+                cash_back += product_sale.get_total()
+                product_sale.delete()
 
-            product_sale.delete()
-            print('sp ???', store_product)
+            # Recalculate the sale total
+            remaining_products = sale.products_sale.all()
+            if remaining_products.exists():
+                sale.total = sum(
+                    product.get_total() for product in remaining_products
+                )
+                sale.save()
+                serializer = SaleSerializer(sale)
 
-        
+                return Response(
+                    {"sale": serializer.data, "cash_back": cash_back},
+                    status=status.HTTP_200_OK,
+                )
 
-        sale2= Sale.objects.get(id=id)
-        products_sale2 = sale2.products_sale.all()
+            # If no products remain, delete the sale
+            cash_back = sale.total
+            sale.delete()
 
-        if products_sale2:
-            total2 = 0
-            for product_sale2 in products_sale2:
-                total2 += product_sale2.get_total()
-
-            sale2.total = total2
-            sale2.save()
-
-            serializer = SaleSerializer(sale2)
-
-            return Response({'sale': serializer.data, 'cash_back': cash_back}, status=status.HTTP_200_OK)
-        
-        cash_back = sale2.total
-        sale2.delete()
-
-
-        return Response({'sale': {}, 'cash_back': cash_back}, status=status.HTTP_200_OK)
+        return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)

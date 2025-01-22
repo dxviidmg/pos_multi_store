@@ -1,4 +1,4 @@
-from .managers import TenantManager, ProductManager
+from ..managers import TenantManager, ProductManager
 from tqdm import tqdm
 from products.models import Product
 
