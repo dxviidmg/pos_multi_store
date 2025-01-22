@@ -73,7 +73,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('quantity', models.PositiveIntegerField()),
+                ('quantity', models.IntegerField()),
                 ('transfer_datetime', models.DateTimeField(blank=True, null=True)),
                 ('destination_store', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='transfers_to', to='products.store')),
                 ('origin_store', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='transfers_from', to='products.store')),
