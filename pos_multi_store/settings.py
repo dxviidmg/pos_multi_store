@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import dj_database_url
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -148,9 +149,18 @@ REST_FRAMEWORK = {
 
 }
 
+#Para heroku
 db_from_env = dj_database_url.config(conn_max_age=500)
+
 if db_from_env:
     DATABASES["default"].update(db_from_env)
+
+#Para conectarse a una base de datos remota desde mi local
+DATABASE_URL = config('DATABASE_URL', None)
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL)
+    }
 
 CORS_ALLOW_HEADERS = [
     'store-id',

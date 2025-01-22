@@ -30,6 +30,12 @@ class SaleViewSet(viewsets.ModelViewSet):
         store_products_data = self.request.data.get("store_products")
         payments_data = self.request.data.get("payments")
 
+        if not store_products_data or not payments_data:
+            return Response(
+                {"detail": "store_products and payments are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    
         # List to hold the StoreProduct instances that need to be updated
         updated_store_products = []
 
@@ -305,7 +311,10 @@ class CancelSale(APIView):
         try:
             sale = Sale.objects.get(id=sale_id)
         except Sale.DoesNotExist:
-            raise NotFound("Sale not found.")
+            return Response(
+                {"detail": "No sale found to cancel."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         products_sale_to_cancel = ProductSale.objects.filter(
             id__in=products_sale_to_cancel_ids
