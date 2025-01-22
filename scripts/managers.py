@@ -43,9 +43,6 @@ class ProductManager:
         code = str(row_values[0])
         name = (
             row_values[1]
-            .replace("anven", "")
-            .replace("wahl", "")
-            .replace("obelli", "")
             .lower()
             .strip()
         )
@@ -71,7 +68,7 @@ class ProductManager:
         )
         if len(brand_name) <= 2:
             brand_name = brand_name.upper()
-        name = name.replace(brand_name.lower(), "").strip().capitalize()
+        name = name.strip().capitalize()
         # Crear objetos relacionados
         brand, _ = Brand.objects.get_or_create(name=brand_name, tenant=self.tenant)
 
@@ -86,7 +83,7 @@ class ProductManager:
         }
 
         # Crear el producto
-        product, _ = Product.objects.get_or_create(
+        Product.objects.get_or_create(
             code=code, defaults={**product_data, "brand": brand}
         )
 

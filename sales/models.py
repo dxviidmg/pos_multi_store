@@ -37,7 +37,7 @@ class ProductSale(models.Model):
 class Payment(models.Model):
     PAYMENT_METHOD_CHOICES = (
         ("EF", "Efectivo"),
-        ("PT", "Pago con tarjeta"),
+        ("TA", "Tarjeta"),
         ("TR", "Transferencia"),
     )
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="payments")

@@ -20,7 +20,7 @@ admin.site.register(Brand)
 @admin.register(Store)
 class StoreProdutAdmin(admin.ModelAdmin):
     search_fields = ['name']
-    list_display = ['name', 'store_type', 'tenant']
+    list_display = ['id', 'name', 'store_type', 'tenant']
     list_filter = ['tenant', 'store_type']
 
 

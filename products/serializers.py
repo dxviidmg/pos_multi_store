@@ -77,7 +77,7 @@ class TransferSerializer(serializers.ModelSerializer):
 		return obj.product.get_description()
 
 	def get_description(self, obj):
-		store = Store.objects.get(manager=self.context["request"].user)
+		store = self.context["request"].store
 		if store == obj.origin_store:
 			return "Le proveere este producto a " + obj.destination_store.__str__()
 		elif store == obj.destination_store:
