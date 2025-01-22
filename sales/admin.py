@@ -4,9 +4,13 @@ from .models import Sale, Payment, ProductSale
 
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
-    list_display = ['created_at', 'saler']
+    list_display = ['id', 'created_at', 'saler']
 
-admin.site.register(ProductSale)
+
+@admin.register(ProductSale)
+class ProductSaleAdmin(admin.ModelAdmin):
+    list_display = ['id', 'sale_id', 'product_id']
+
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):

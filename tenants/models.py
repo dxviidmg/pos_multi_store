@@ -28,7 +28,7 @@ class Tenant(TimeStampedModel):
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos
             # Crear un username y nombre para el propietario
-            username = f"{self.short_name}.owner"
+            username = f"{self.short_name}.propietario"
             first_name = username.replace(".", " ").title()
 
             # Crear o recuperar al usuario propietario

@@ -34,7 +34,7 @@ class Store(Base):
     
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos
-            username = (f"{self.tenant.short_name}.manager.{self.get_store_type_display().lower()}.{self.name.replace(' ', '_').lower()}")
+            username = (f"{self.tenant.short_name}.admin.{self.get_store_type_display().lower()}.{self.name.replace(' ', '_').lower()}")
             first_name = username.replace(".", " ").title()
 
             # Crear o recuperar al usuario propietario

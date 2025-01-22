@@ -12,15 +12,15 @@ def run():
     }
 
     data_stores = [
-        {"name": "Almacen", "store_type": "A"},
         {"name": "Principal", "store_type": "T"},
         {"name": "Secundaria", "store_type": "T"},
+        {"name": "Almacen", "store_type": "A"},
     ]
 
     data_products = [
         {
             "brand": "Aguas Inc",
-            "code": "AE1L",
+            "code": "1",
             "name": "Agua embotellada (1 L)",
             "purchase_price": 5.00,
             "unit_sale_price": 10.00,
@@ -29,8 +29,8 @@ def run():
             "apply_wholesale_price_on_client_discount": False,
         },
         {
-            "brand": "Aguas embotelladas",
-            "code": "AE2L",
+            "brand": "Aguas Inc",
+            "code": "2",
             "name": "Agua embotellada (2 L)",
             "purchase_price": 8.00,
             "unit_sale_price": 15.00,
@@ -40,8 +40,8 @@ def run():
         },
         {
             "brand": "Refrescos Inc",
-            "code": "RC1L",
-            "name": "Refresco cola (1 L)",
+            "code": "3",
+            "name": "Refresco cola (1L)",
             "purchase_price": 10.00,
             "unit_sale_price": 15.50,
             "wholesale_sale_price": None,
@@ -50,10 +50,30 @@ def run():
         },
         {
             "brand": "Refrescos Inc",
-            "code": "RC2L",
-            "name": "Refresco cola (2 L)",
+            "code": "4",
+            "name": "Refresco cola (2L)",
             "purchase_price": 15.00,
             "unit_sale_price": 20.00,
+            "wholesale_sale_price": None,
+            "min_wholesale_quantity": None,
+            "apply_wholesale_price_on_client_discount": False,
+        },
+        {
+            "brand": "Jugos Inc",
+            "code": "5",
+            "name": "Jugo naranza (500ml)",
+            "purchase_price": 12.00,
+            "unit_sale_price": 16,
+            "wholesale_sale_price": None,
+            "min_wholesale_quantity": None,
+            "apply_wholesale_price_on_client_discount": False,
+        },
+        {
+            "brand": "Jugos Inc",
+            "code": "6",
+            "name": "Jugo naranza (1L)",
+            "purchase_price": 20.00,
+            "unit_sale_price": 25.00,
             "wholesale_sale_price": None,
             "min_wholesale_quantity": None,
             "apply_wholesale_price_on_client_discount": False,
@@ -69,12 +89,12 @@ def run():
         }
     ]
 
-    tenant = TenantManager(data_tenant)
-    tenant_instance = tenant.create_tenant()
+    tenant_manager = TenantManager(data_tenant)
+    tenant = tenant_manager.create_tenant()
 
-    store_manager = StoreManager(tenant_instance)
-    product_manager = ProductManager(tenant_instance)
-    client_manager = ClientManager(tenant_instance)
+    store_manager = StoreManager(tenant)
+    product_manager = ProductManager(tenant)
+    client_manager = ClientManager(tenant)
 
     # Ejecutar la creación de tiendas y productos
     store_manager.create_stores(data_stores)

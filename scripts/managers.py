@@ -36,9 +36,35 @@ class ProductManager:
     def __init__(self, tenant):
         self.tenant = tenant
 
+    #Commons
+    def read_excel_file(self, file_path):
+        workbook = xlrd.open_workbook(file_path)
+        return workbook.sheet_by_index(0)
+    
     def clean_price(self, value):
         return Decimal(value.replace("$", "").replace(",", ""))
 
+    #Demo
+    def create_demo_product(self, demo_product):
+        # Procesar marca
+        code = demo_product.pop("code")
+        brand_name = demo_product.pop("brand")
+        # Crear objetos relacionados
+        brand, _ = Brand.objects.get_or_create(name=brand_name, tenant=self.tenant)
+        # Crear el producto
+        product, _ = Product.objects.get_or_create(
+            code=code, defaults={**demo_product, "brand": brand}
+        )
+
+        StoreProduct.objects.filter(product=product).update(stock=10)
+
+    def create_demo_products(self, demo_products):
+        for demo_product in tqdm(
+            demo_products, desc="Creating Products", unit="product"
+        ):
+            self.create_demo_product(demo_product)
+
+    #Eleventa
     def create_product_from_eleventa(self, row_values):
         code = str(row_values[0])
         name = (
@@ -68,7 +94,6 @@ class ProductManager:
         )
         if len(brand_name) <= 2:
             brand_name = brand_name.upper()
-        name = name.strip().capitalize()
         # Crear objetos relacionados
         brand, _ = Brand.objects.get_or_create(name=brand_name, tenant=self.tenant)
 
@@ -87,36 +112,48 @@ class ProductManager:
             code=code, defaults={**product_data, "brand": brand}
         )
 
-    def read_file_from_eleventa(self, file_path):
-        workbook = xlrd.open_workbook(file_path)
-        return workbook.sheet_by_index(0)
 
     def create_products_from_eleventa(self, file_path):
-        file = self.read_file_from_eleventa(file_path)
+        file = self.read_excel_file(file_path)
         for row_idx in tqdm(
             range(1, file.nrows), desc="Creating Products", unit="product"
         ):
             row_values = file.row_values(row_idx)
             self.create_product_from_eleventa(row_values)
 
-    def create_demo_product(self, demo_product):
-        # Procesar marca
-        code = demo_product.pop("code")
-        brand_name = demo_product.pop("brand")
-        # Crear objetos relacionados
-        brand, _ = Brand.objects.get_or_create(name=brand_name, tenant=self.tenant)
-        # Crear el producto
-        product, _ = Product.objects.get_or_create(
-            code=code, defaults={**demo_product, "brand": brand}
-        )
-
-        StoreProduct.objects.filter(product=product).update(stock=10)
-
-    def create_demo_products(self, demo_products):
-        for demo_product in tqdm(
-            demo_products, desc="Creating Products", unit="product"
+    def update_stock_by_store(self, file_path, tenant, store_data):
+        file = self.read_excel_file(file_path)
+        store = Store.objects.get(tenant=tenant, **store_data)
+        for row_idx in tqdm(
+            range(1, file.nrows), desc="Updating prices", unit="product"
         ):
-            self.create_demo_product(demo_product)
+            row_values = file.row_values(row_idx)
+            stock = row_values[2]
+            if stock == 0:
+                continue
+
+            try:
+                product = Product.objects.get(code=row_values[0], brand__tenant=tenant)
+            except Product.DoesNotExist:
+                code = row_values[0]
+                brand_name = row_values[1].split()[0].capitalize()
+
+                brand = Brand.objects.get(name=brand_name, tenant=tenant)
+                name = " ".join(row_values[1][1:])      
+                purchase_price = 0
+                unit_sale_price = 0
+                data = {'code': code, 'brand': brand, 'name': name, 'purchase_price': purchase_price, 'unit_sale_price': unit_sale_price}      
+                product = Product.objects.create(**data)
+
+            store_product =StoreProduct.objects.get(product=product, store=store)
+    
+            store_product.stock = stock
+            store_product.save()
+
+
+
+
+
 
 
 class ClientManager:
