@@ -26,9 +26,6 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
 	def get_serializer_class(self):
 		# Obtener el parámetro 'q' de la solicitud
-
-		current_time = datetime.now()
-		print("Current Time:", current_time.strftime("%H:%M:%S"))
 		q = self.request.GET.get("q", "")
 		code = self.request.GET.get("code", "")
 		
@@ -71,7 +68,8 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 		# Obtener productos y filtrar `StoreProduct` según la tienda
 			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")[:50]
 		else:	
-			product_queryset = Product.objects.filter(brand__tenant=tenant).select_related("brand")
+			brands = Brand.objects.filter(tenant=tenant)
+			product_queryset = Product.objects.filter(brand__in=brands).select_related("brand")[:2803]
 
 
 		return StoreProduct.objects.filter(
