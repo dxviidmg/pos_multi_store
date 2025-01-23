@@ -69,7 +69,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")[:50]
 		else:	
 			brands = Brand.objects.filter(tenant=tenant)
-			product_queryset = Product.objects.filter(brand__in=brands).select_related("brand")[:4210]#[:4204]
+			product_queryset = Product.objects.filter(brand__in=brands).select_related("brand")
 
 
 		return StoreProduct.objects.filter(
@@ -311,7 +311,7 @@ class StoreProductReport(APIView):
 		)
 
 		# Encabezados del archivo Excel
-		sheet.append(['Codigo', 'Marca', 'Nombre', 'Precio unitario', 'Stock'])
+		sheet.append(['Codigo', 'Marca', 'Nombre', 'Precio unitario', 'Stock total'])
 
 		# Agregar datos al archivo Excel
 		for store_product in store_products:
@@ -321,10 +321,12 @@ class StoreProductReport(APIView):
 				product.brand.name,
 				product.name,
 				product.unit_sale_price,
-				store_product.stock
+				store_product.stock,
+#				store_product.calculate_available_stock(),
+#				store_product.calculate_reserved_stock()
 			]
 			sheet.append(row)
-
+			print(row)
 		response = HttpResponse(
 			content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 		)
