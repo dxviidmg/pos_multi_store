@@ -19,6 +19,8 @@ class Base(models.Model):
 class Brand(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
 
+    def get_product_count(self):
+        return self.products.count()
 
 class Store(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
@@ -50,7 +52,7 @@ class Store(Base):
 
 
 class Product(Base):
-    brand = models.ForeignKey(Brand, on_delete=models.CASCADE)
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name='products')
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)

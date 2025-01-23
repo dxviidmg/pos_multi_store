@@ -4,6 +4,10 @@ from django.core.exceptions import ValidationError
 
 
 class BrandSerializer(serializers.ModelSerializer):
+	product_count = serializers.SerializerMethodField()
+
+	def get_product_count(self, obj):
+		return obj.get_product_count()
 
 	class Meta:
 		model = Brand
@@ -11,58 +15,71 @@ class BrandSerializer(serializers.ModelSerializer):
 
 
 class StoreProductBaseSerializer(serializers.ModelSerializer):
-    product_code = serializers.SerializerMethodField()
-    description = serializers.SerializerMethodField()
-    available_stock = serializers.SerializerMethodField()
-    reserved_stock = serializers.SerializerMethodField()
+	product_code = serializers.SerializerMethodField()
+	product_brand = serializers.SerializerMethodField()
+	product_name = serializers.SerializerMethodField()
 
-    def get_product_code(self, obj):
-        return obj.product.code
+	def get_product_code(self, obj):
+		return obj.product.code
 
-    def get_description(self, obj):
-        return obj.product.get_description()
+	def get_product_brand(self, obj):
+		return obj.product.brand.name
+	
+	def get_product_name(self, obj):
+		return obj.product.name
+		
 
-    def get_available_stock(self, obj):
-        return obj.calculate_available_stock()
 
-    def get_reserved_stock(self, obj):
-        return obj.calculate_reserved_stock()
-
-    class Meta:
-        model = StoreProduct
-        fields = "__all__"
+	class Meta:
+		model = StoreProduct
+		fields = "__all__"
 
 
 
 class StoreProductSerializer(StoreProductBaseSerializer):
-    product_id = serializers.SerializerMethodField()
-    prices = serializers.SerializerMethodField()
-    stock_in_other_stores = serializers.SerializerMethodField()
+	product_id = serializers.SerializerMethodField()
+	product_description = serializers.SerializerMethodField()
+	available_stock = serializers.SerializerMethodField()
+	reserved_stock = serializers.SerializerMethodField()
 
-    def get_product_id(self, obj):
-        return obj.product.id
+	prices = serializers.SerializerMethodField()
+	stock_in_other_stores = serializers.SerializerMethodField()
 
-    def get_prices(self, obj):
-        return {
-            "unit_sale_price": obj.product.unit_sale_price,
-            "wholesale_sale_price": obj.product.wholesale_sale_price,
-            "min_wholesale_quantity": obj.product.min_wholesale_quantity,
-            "apply_wholesale": obj.product.apply_wholesale(),
-            "apply_wholesale_price_on_client_discount": obj.product.apply_wholesale_price_on_client_discount, 
+	def get_product_id(self, obj):
+		return obj.product.id
+
+
+	def get_product_description(self, obj):
+		return obj.product.get_description()
+
+	def get_available_stock(self, obj):
+		return obj.calculate_available_stock()
+
+	def get_reserved_stock(self, obj):
+		return obj.calculate_reserved_stock()
+	
+
+	def get_prices(self, obj):
+		return {
+			"unit_sale_price": obj.product.unit_sale_price,
+			"wholesale_sale_price": obj.product.wholesale_sale_price,
+			"min_wholesale_quantity": obj.product.min_wholesale_quantity,
+			"apply_wholesale": obj.product.apply_wholesale(),
+			"apply_wholesale_price_on_client_discount": obj.product.apply_wholesale_price_on_client_discount, 
 		
-        }
+		}
 
-    def get_stock_in_other_stores(self, obj):
-        # Optimize by pre-filtering and reducing unnecessary calculations
-        return [
-            {
-                "store_id": str(sp.store.id),
-                "store_name": str(sp.store),
-                "available_stock": sp.calculate_available_stock(),
-            }
-            for sp in StoreProduct.objects.filter(product=obj.product).exclude(id=obj.id).exclude(stock=0)
-            if sp.calculate_available_stock() > 0
-        ]
+	def get_stock_in_other_stores(self, obj):
+		# Optimize by pre-filtering and reducing unnecessary calculations
+		return [
+			{
+				"store_id": str(sp.store.id),
+				"store_name": str(sp.store),
+				"available_stock": sp.calculate_available_stock(),
+			}
+			for sp in StoreProduct.objects.filter(product=obj.product).exclude(id=obj.id).exclude(stock=0)
+			if sp.calculate_available_stock() > 0
+		]
 
 
 class TransferSerializer(serializers.ModelSerializer):
