@@ -9,6 +9,7 @@ class CustomAuthToken(ObtainAuthToken):
         user = serializer.validated_data['user']
         token, created = Token.objects.get_or_create(user=user)
 
+        store = user.get_store()
         return Response({
             'user_id': user.pk,
             'token': token.key,
@@ -17,7 +18,9 @@ class CustomAuthToken(ObtainAuthToken):
             'full_name': user.get_full_name(),
             'email': user.email,
             'tenant_name': user.get_tenant().name,
-            'store_id': user.get_store().id if user.get_store() else None,
-            'store_type': user.get_store().store_type if user.get_store() else None,
+            'store_id': store.id if store else None,
+            'store_name': store.name if store else None,
+            'store_type': store.store_type if store else None,
+            'store_type_display': store.get_store_type_display() if store else None,
             'is_owner': user.is_owner()
-            })
+        })
