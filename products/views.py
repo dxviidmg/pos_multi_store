@@ -294,7 +294,7 @@ class StoreProductReport(APIView):
 		# Intentar obtener la tienda, retornar un queryset vacío si no existe
 		store = self.request.store
 		tenant = self.request.user.get_tenant()
-		product_queryset = Product.objects.filter(brand__tenant=tenant).select_related("brand")[:100]
+		product_queryset = Product.objects.filter(brand__tenant=tenant).select_related("brand")[:1000]
 
 		store_products = StoreProduct.objects.filter(
 			product__in=product_queryset, store=store
