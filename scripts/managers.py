@@ -139,7 +139,7 @@ class ProductManager:
                 brand_name = row_values[1].split()[0].capitalize()
 
                 brand = Brand.objects.get(name=brand_name, tenant=tenant)
-                name = " ".join(row_values[1][1:])      
+                name = " ".join(row_values[1].split()[1:])      
                 purchase_price = 0
                 unit_sale_price = 0
                 data = {'code': code, 'brand': brand, 'name': name, 'purchase_price': purchase_price, 'unit_sale_price': unit_sale_price}      
