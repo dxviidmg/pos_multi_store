@@ -29,11 +29,11 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
 		current_time = datetime.now()
 		print("Current Time:", current_time.strftime("%H:%M:%S"))
-		query_param = self.request.GET.get("q", "")
+		q = self.request.GET.get("q", "")
 		code = self.request.GET.get("code", "")
 		
 		# Condición para cambiar de serializador
-		if not query_param and not code:
+		if not q and not code:
 			return self.alternate_serializer_class  # Cambiar al serializador alternativo
 		
 		return super().get_serializer_class()
@@ -58,8 +58,10 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 			)
 
 		# Construir la consulta de búsqueda en `Product` si se proporciona `q`
-		filters = Q()
+
 		if q:
+			filters = Q()
+			
 			filters |= (
 				Q(brand__name__icontains=q)
 				| Q(code__icontains=q)
@@ -67,11 +69,10 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 			)
 
 		# Obtener productos y filtrar `StoreProduct` según la tienda
-
-		if not q:
-			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")
-		else:
 			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")[:50]
+		else:	
+			product_queryset = Product.objects.filter(brand__tenant=tenant).select_related("brand")
+
 
 		return StoreProduct.objects.filter(
 			product__in=product_queryset, store=store
@@ -289,32 +290,43 @@ class StoreProductReport(APIView):
 		# Crear un archivo Excel
 		workbook = Workbook()
 		sheet = workbook.active
-		sheet.title = "Data"		
+		sheet.title = "Data"
 
-		# Intentar obtener la tienda, retornar un queryset vacío si no existe
-		store = self.request.store
-		tenant = self.request.user.get_tenant()
-		product_queryset = Product.objects.filter(brand__tenant=tenant).select_related("brand")
+		# Obtener la tienda y el tenant del usuario
+		store = request.store
+		tenant = request.user.get_tenant()
+
+		# Optimizar las consultas a la base de datos
+		product_queryset = Product.objects.filter(
+			brand__tenant=tenant
+		).select_related("brand")
 
 		store_products = StoreProduct.objects.filter(
-			product__in=product_queryset, store=store
-		).prefetch_related("product")
+			product__in=product_queryset, 
+			store=store
+		).select_related("product__brand").only(
+			"product__code", 
+			"product__name", 
+			"product__unit_sale_price", 
+			"product__brand__name", 
+			"stock"
+		)
 
-		sheet.append(['Codigo', 'Marca', 'Nombre', 'Stock'])
+		# Encabezados del archivo Excel
+		sheet.append(['Codigo', 'Marca', 'Nombre', 'Precio unitario', 'Stock'])
+
+		# Agregar datos al archivo Excel
 		for store_product in store_products:
-			row = [store_product.product.code, store_product.product.brand.name, store_product.product.name, store_product.stock]
-#			print(row)
+			product = store_product.product
+			row = [
+				product.code,
+				product.brand.name,
+				product.name,
+				product.unit_sale_price,
+				store_product.stock
+			]
 			sheet.append(row)
-		# Agregar datos
-#		sheet.append(["ID", "Name", "Email"])  # Encabezados
-#		data = [
-#			[1, "John Doe", "john.doe@example.com"],
-#			[2, "Jane Smith", "jane.smith@example.com"],
-#		]
-#		for row in data:
-#			sheet.append(row)
 
-		# Preparar respuesta
 		response = HttpResponse(
 			content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 		)
@@ -322,3 +334,45 @@ class StoreProductReport(APIView):
 		workbook.save(response)
 		print(response)
 		return response
+
+
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
+
+# Configuración personalizada de la paginación
+class Pagination(PageNumberPagination):
+	page_size = 10  # Elementos por página
+	page_size_query_param = 'pageSize'  # Permite cambiar el tamaño desde la URL
+	max_page_size = 100  # Máximo de elementos por página
+
+@method_decorator(get_store(), name="dispatch")
+class StoreProductListView(ListAPIView):
+	serializer_class = StoreProductSerializer
+	pagination_class = Pagination
+
+
+	def get_queryset(self):
+		store = self.request.store
+		tenant = self.request.user.get_tenant()
+
+		q = self.request.GET.get("q", None)
+
+		if q:
+			filters = Q()
+			filters |= (
+				Q(brand__name__icontains=q)
+				| Q(code__icontains=q)
+				| Q(name__icontains=q)
+			)
+
+			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")[:50]
+		else:
+			product_queryset = Product.objects.filter(brand__tenant=tenant).select_related("brand")
+
+
+		store_products = StoreProduct.objects.filter(
+			product__in=product_queryset, 
+			store=store)
+		
+
+		return store_products
