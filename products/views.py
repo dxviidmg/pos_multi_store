@@ -69,7 +69,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 			product_queryset = Product.objects.filter(filters, brand__tenant=tenant).select_related("brand")[:50]
 		else:	
 			brands = Brand.objects.filter(tenant=tenant)
-			product_queryset = Product.objects.filter(brand__in=brands).select_related("brand")[:4379]#[:4204]
+			product_queryset = Product.objects.filter(brand__in=brands).select_related("brand")[:4291]#[:4204]
 
 
 		return StoreProduct.objects.filter(
