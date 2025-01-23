@@ -16,6 +16,8 @@ from datetime import datetime
 from django.db import transaction
 from products.decorators import get_store
 from django.utils.decorators import method_decorator
+from datetime import datetime
+
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
@@ -24,6 +26,9 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
 	def get_serializer_class(self):
 		# Obtener el parámetro 'q' de la solicitud
+
+		current_time = datetime.now()
+		print("Current Time:", current_time.strftime("%H:%M:%S"))
 		query_param = self.request.GET.get("q", "")
 		code = self.request.GET.get("code", "")
 		
@@ -269,3 +274,51 @@ class AddProductsView(APIView):
 		return Response(
 			{"status": "Stock increment confirmed"}, status=status.HTTP_200_OK
 		)
+
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.http import HttpResponse
+from openpyxl import Workbook
+
+@method_decorator(get_store(), name="dispatch")
+class StoreProductReport(APIView):
+	def get(self, request, *args, **kwargs):
+		# Crear un archivo Excel
+		workbook = Workbook()
+		sheet = workbook.active
+		sheet.title = "Data"		
+
+		# Intentar obtener la tienda, retornar un queryset vacío si no existe
+		store = self.request.store
+		tenant = self.request.user.get_tenant()
+		product_queryset = Product.objects.filter(brand__tenant=tenant).select_related("brand")[:10]
+
+		store_products = StoreProduct.objects.filter(
+			product__in=product_queryset, store=store
+		).prefetch_related("product")
+
+		sheet.append(['Codigo', 'Marca', 'Nombre', 'Stock'])
+		for store_product in store_products:
+			row = [store_product.product.code, store_product.product.brand.name, store_product.product.name, store_product.stock]
+#			print(row)
+			sheet.append(row)
+		# Agregar datos
+#		sheet.append(["ID", "Name", "Email"])  # Encabezados
+#		data = [
+#			[1, "John Doe", "john.doe@example.com"],
+#			[2, "Jane Smith", "jane.smith@example.com"],
+#		]
+#		for row in data:
+#			sheet.append(row)
+
+		# Preparar respuesta
+		response = HttpResponse(
+			content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		)
+		response["Content-Disposition"] = 'attachment; filename="data.xlsx"'
+		workbook.save(response)
+		print(response)
+		return response
