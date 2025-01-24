@@ -21,7 +21,7 @@ def run():
         {
             "brand": "Aguas Inc",
             "code": "1",
-            "name": "Agua embotellada (1 L)",
+            "name": "Agua embotellada (1L)",
             "purchase_price": 5.00,
             "unit_sale_price": 10.00,
             "wholesale_sale_price": 8.00,
@@ -31,7 +31,7 @@ def run():
         {
             "brand": "Aguas Inc",
             "code": "2",
-            "name": "Agua embotellada (2 L)",
+            "name": "Agua embotellada (2L)",
             "purchase_price": 8.00,
             "unit_sale_price": 15.00,
             "wholesale_sale_price": 12.00,
