@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, StoreProduct, Transfer, Store, Brand
+from .models import Product, StoreProduct, Transfer, Store, Brand, StoreProductLog
 from django.core.exceptions import ValidationError
 
 
@@ -80,6 +80,27 @@ class StoreProductSerializer(StoreProductBaseSerializer):
 			for sp in StoreProduct.objects.filter(product=obj.product).exclude(id=obj.id).exclude(stock=0)
 			if sp.calculate_available_stock() > 0
 		]
+	
+
+
+class StoreProductLogSerializer(serializers.ModelSerializer):
+
+	description = serializers.SerializerMethodField()
+	difference = serializers.SerializerMethodField()
+	user_username = serializers.SerializerMethodField()
+
+	def get_description(self, obj):
+		return obj.get_description()
+
+	def get_difference(self, obj):
+		return obj.calculate_difference()
+	
+	def get_user_username(self, obj):
+		return obj.user.username
+
+	class Meta:
+		model = StoreProductLog
+		fields = "__all__"
 
 
 class TransferSerializer(serializers.ModelSerializer):

@@ -1,9 +1,8 @@
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
 from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product
+from products.models import StoreProduct, Product, StoreProductLog
 from django.db import transaction
-from datetime import date
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -25,7 +24,6 @@ class SaleViewSet(viewsets.ModelViewSet):
         date = self.request.GET.get("date")
         store = self.request.store
         return Sale.objects.filter(store=store, created_at__date=date)
-
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
         payments_data = self.request.data.get("payments")
@@ -35,44 +33,66 @@ class SaleViewSet(viewsets.ModelViewSet):
                 {"detail": "store_products and payments are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-    
-        # List to hold the StoreProduct instances that need to be updated
-        updated_store_products = []
 
-        # Using a transaction to ensure all updates are executed together
-        with transaction.atomic():
-            for product_data in store_products_data:
-                product_store = StoreProduct.objects.get(id=product_data["id"])
-                product_store.stock -= product_data["quantity"]
-                updated_store_products.append(product_store)
-
-            # Perform a bulk update on the stock of StoreProduct instances
-            StoreProduct.objects.bulk_update(updated_store_products, ["stock"])
+        updated_store_products = []  # Lista para almacenar instancias de StoreProduct
+        logs = []  # Lista para almacenar logs de StoreProductLog
 
         store = self.request.store
         saler = self.request.user
-        # Save the sale and associate it with the current user
-        sale_instance = serializer.save(store=store, saler=saler)
 
-        for product_data in store_products_data:
-            product_store = StoreProduct.objects.get(id=product_data["id"])
-            product = product_store.product
+        # Usar una transacción para asegurar la atomicidad
+        with transaction.atomic():
+            for product_data in store_products_data:
+                product_store = StoreProduct.objects.get(id=product_data["id"])
+                previous_stock = product_store.stock
+                updated_stock = previous_stock - product_data["quantity"]
 
-            data = {
-                "sale": sale_instance,
-                "product": product,
-                "quantity": product_data["quantity"],
-                "price": product_data["price"],
-            }
-            ProductSale.objects.create(**data)
+                # Actualizar el stock del producto
+                product_store.stock = updated_stock
+                updated_store_products.append(product_store)
 
-        for payment_data in payments_data:
-            data = {
-                "sale": sale_instance,
-                "payment_method": payment_data["payment_method"],
-                "amount": payment_data["amount"],
-            }
-            Payment.objects.create(**data)
+                # Crear el log correspondiente
+                logs.append(
+                    StoreProductLog(
+                        store_product=product_store,
+                        user=saler,
+                        previous_stock=previous_stock,
+                        updated_stock=updated_stock,
+                        action="S",  # Acción: Salida
+                        movement="V",  # Movimiento: Venta
+                    )
+                )
+
+            # Actualizar los stocks de los productos en una sola operación
+            StoreProduct.objects.bulk_update(updated_store_products, ["stock"])
+
+            # Guardar los logs en la base de datos
+            StoreProductLog.objects.bulk_create(logs)
+
+            # Guardar la venta y asociarla al usuario actual
+            sale_instance = serializer.save(store=store, saler=saler)
+
+            # Crear las relaciones de ProductSale
+            for product_data in store_products_data:
+                product_store = StoreProduct.objects.get(id=product_data["id"])
+                product = product_store.product
+
+                data = {
+                    "sale": sale_instance,
+                    "product": product,
+                    "quantity": product_data["quantity"],
+                    "price": product_data["price"],
+                }
+                ProductSale.objects.create(**data)
+
+            # Crear las relaciones de Payment
+            for payment_data in payments_data:
+                data = {
+                    "sale": sale_instance,
+                    "payment_method": payment_data["payment_method"],
+                    "amount": payment_data["amount"],
+                }
+                Payment.objects.create(**data)
 
         return sale_instance
 
@@ -250,24 +270,48 @@ class ImportSales(APIView):
             self.validate_columns(df)
             df = self.rename_columns(df)
 
-            for _, row in df.iterrows():
+            logs = []  # Lista para almacenar registros de StoreProductLog
 
+            for _, row in df.iterrows():
                 code = row["code"]
                 quantity = row["quantity"]
 
-                # Intentar obtener el producto
+                # Obtener el producto y la relación StoreProduct
                 product = Product.objects.get(code=code, brand__tenant=tenant)
                 store_product = StoreProduct.objects.get(product=product, store=store)
 
-                store_product.stock -= quantity
+                previous_stock = store_product.stock
+                updated_stock = previous_stock - quantity
+
+                # Validar que el stock no sea negativo
+                if updated_stock < 0:
+                    raise ValueError(
+                        f"Insufficient stock for product {product.name} (Code: {code})."
+                    )
+
+                # Actualizar el stock del producto
+                store_product.stock = updated_stock
                 store_product.save()
 
-                # Save the sale and associate it with the current user
+                # Crear el log correspondiente
+                logs.append(
+                    StoreProductLog(
+                        store_product=store_product,
+                        user=saler,
+                        previous_stock=previous_stock,
+                        updated_stock=updated_stock,
+                        action="S",  # Acción: Salida
+                        movement="V",  # Movimiento: Venta
+                    )
+                )
+
+                # Calcular el total de la venta y registrar la venta
                 total = product.unit_sale_price * quantity
                 sale_instance = Sale.objects.create(
                     store=store, total=total, saler=saler
                 )
 
+                # Crear la relación ProductSale
                 data = {
                     "sale": sale_instance,
                     "product": product,
@@ -276,12 +320,16 @@ class ImportSales(APIView):
                 }
                 ProductSale.objects.create(**data)
 
+                # Crear la relación Payment
                 data = {
                     "sale": sale_instance,
-                    "payment_method": "EF",
+                    "payment_method": "EF",  # Método de pago por defecto
                     "amount": total,
                 }
                 Payment.objects.create(**data)
+
+            # Guardar los logs en la base de datos
+            StoreProductLog.objects.bulk_create(logs)
 
             return Response({}, status=status.HTTP_200_OK)
 
@@ -294,6 +342,7 @@ class ImportSales(APIView):
                 {"error": f"Unexpected error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -327,6 +376,7 @@ class CancelSale(APIView):
             )
 
         cash_back = 0
+        logs = []  # Lista para almacenar registros de StoreProductLog
 
         # Use a transaction to ensure atomicity
         with transaction.atomic():
@@ -336,8 +386,24 @@ class CancelSale(APIView):
                 ).first()
 
                 if store_product:
-                    store_product.stock += product_sale.quantity
+                    previous_stock = store_product.stock
+                    updated_stock = previous_stock + product_sale.quantity
+
+                    # Actualizar el stock del producto
+                    store_product.stock = updated_stock
                     store_product.save()
+
+                    # Crear un log para esta operación
+                    logs.append(
+                        StoreProductLog(
+                            store_product=store_product,
+                            user=request.user,
+                            previous_stock=previous_stock,
+                            updated_stock=updated_stock,
+                            action="E",  # Acción: Entrada
+                            movement="C",  # Movimiento: Cancelación de compra
+                        )
+                    )
 
                 cash_back += product_sale.get_total()
                 product_sale.delete()
@@ -345,12 +411,20 @@ class CancelSale(APIView):
             # Recalculate the sale total
             remaining_products = sale.products_sale.all()
             if remaining_products.exists():
-                sale.total = sum(
+                total = sum(
                     product.get_total() for product in remaining_products
                 )
+                sale.total = total
                 sale.save()
-                serializer = SaleSerializer(sale)
 
+                payment = Payment.objects.get(sale=sale)
+                payment.amount = total
+                payment.save()
+
+                # Guardar los logs en la base de datos
+                StoreProductLog.objects.bulk_create(logs)
+
+                serializer = SaleSerializer(sale)
                 return Response(
                     {"sale": serializer.data, "cash_back": cash_back},
                     status=status.HTTP_200_OK,
@@ -359,5 +433,8 @@ class CancelSale(APIView):
             # If no products remain, delete the sale
             cash_back = sale.total
             sale.delete()
+
+        # Guardar los logs en caso de que la venta se haya eliminado completamente
+        StoreProductLog.objects.bulk_create(logs)
 
         return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)

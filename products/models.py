@@ -127,9 +127,9 @@ class StoreProductLog(TimeStampedModel):
     ]
 
     MOVEMENT_CHOICES = [
-        ('D', 'Distribucion'),
+        ('D', 'Distribución'),
         ('T', 'Transferencia'),
-        ('C', 'Cancelación de compra'),
+        ('C', 'Devolucíon'), #Cancelación de compra
         ('V', 'Venta')
     ]
 
@@ -137,9 +137,20 @@ class StoreProductLog(TimeStampedModel):
     #SD, ST, SV
     #A
         
-    store_product = models.ForeignKey(StoreProduct, on_delete=models.CASCADE)
+    store_product = models.ForeignKey(StoreProduct, on_delete=models.CASCADE, related_name='store_product_logs')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    previous_quantity = models.IntegerField()
-    updated_quantity = models.IntegerField()
+    previous_stock = models.IntegerField()
+    updated_stock = models.IntegerField()
     action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
     movement = models.CharField(max_length=1, choices=MOVEMENT_CHOICES, null=True, blank=True)
+
+
+    def __str__(self):
+        return "{} {} {} {} {}".format(self.store_product, self.action, self.movement, self.previous_stock, self.updated_stock)
+    
+
+    def get_description(self):
+        return "{} {}".format(self.get_action_display(), self.get_movement_display() if self.movement else '')
+    
+    def calculate_difference(self):
+        return self.updated_stock - self.previous_stock
