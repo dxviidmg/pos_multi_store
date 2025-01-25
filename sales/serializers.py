@@ -24,7 +24,7 @@ class SaleSerializer(serializers.ModelSerializer):
 
 
     def get_saler_username(self, obj):
-        return obj.saler.username if obj.saler else None
+        return obj.saler.username
 
     def get_is_cancelable(self, obj):
         return obj.is_cancelable()  

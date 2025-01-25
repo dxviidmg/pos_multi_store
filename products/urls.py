@@ -17,4 +17,5 @@ urlpatterns += [
     path('confirm-transfers/', views.ConfirmProductTransfersView.as_view(), name='confirm-transfers'),
     path('confirm-distribution/', views.ConfirmDistributionView.as_view(), name='confirm-distribution'),
     path('add-products/', views.AddProductsView.as_view(), name='add-products'),
+    path('store-product-logs/<int:pk>/', views.StoreProductLogsView.as_view(), name='store-product-logs'),
 ]
