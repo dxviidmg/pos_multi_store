@@ -5,6 +5,9 @@ from tqdm import tqdm
 from decimal import Decimal
 from tenants.models import Tenant
 from clients.models import Discount, Client
+from openpyxl import Workbook
+from django.conf import settings
+import os
 
 
 class TenantManager:
@@ -36,15 +39,15 @@ class ProductManager:
     def __init__(self, tenant):
         self.tenant = tenant
 
-    #Commons
+    # Commons
     def read_excel_file(self, file_path):
         workbook = xlrd.open_workbook(file_path)
         return workbook.sheet_by_index(0)
-    
+
     def clean_price(self, value):
         return Decimal(value.replace("$", "").replace(",", ""))
 
-    #Demo
+    # Demo
     def create_demo_product(self, demo_product):
         # Procesar marca
         code = demo_product.pop("code")
@@ -64,14 +67,10 @@ class ProductManager:
         ):
             self.create_demo_product(demo_product)
 
-    #Eleventa
+    # Eleventa
     def create_product_from_eleventa(self, row_values):
         code = str(row_values[0])
-        name = (
-            row_values[1]
-            .lower()
-            .strip()
-        )
+        name = row_values[1].lower().strip()
 
         purchase_price = self.clean_price(row_values[2])
         unit_sale_price = self.clean_price(row_values[3])
@@ -112,6 +111,8 @@ class ProductManager:
             code=code, defaults={**product_data, "brand": brand}
         )
 
+    def is_product_in_tenant(self, code):
+        return Product.objects.filter(code=code, brand__tenant=self.tenant).exists()
 
     def create_products_from_eleventa(self, file_path):
         file = self.read_excel_file(file_path)
@@ -121,7 +122,72 @@ class ProductManager:
             row_values = file.row_values(row_idx)
             self.create_product_from_eleventa(row_values)
 
-    def update_stock_by_store(self, file_path, tenant, store_data):
+    def validate_products_in_tenant_from_eleventa(self, file_path):
+        """Valida productos de un archivo Excel y guarda los inexistentes en un nuevo archivo."""
+        # Leer el archivo de entrada con xlrd
+        file = self.read_excel_file(file_path)
+
+        # Crear un nuevo archivo Excel para productos inexistentes
+        wb = Workbook()
+        ws = wb.active  # Hoja activa
+        ws.title = "Productos Inexistentes"
+
+        # Escribir los nombres de las columnas (headers)
+        headers = file.row_values(0)  # Primera fila como headers
+        for col_index, header in enumerate(headers, start=1):
+            ws.cell(row=1, column=col_index, value=header)
+
+        # Inicializar el índice de fila para los datos (empezando después del header)
+        row_index = 2
+
+        # Iterar sobre las filas del archivo de entrada
+        for row_idx in tqdm(
+            range(1, file.nrows), desc="Checking Products", unit="product"
+        ):
+            row_values = file.row_values(row_idx)
+
+            # Si el producto no está en el tenant, lo escribimos en el nuevo archivo
+            if not self.is_product_in_tenant(row_values[0]):
+                print(row_values)  # Opcional: Verificar en consola
+                for col_index, value in enumerate(row_values, start=1):
+                    ws.cell(row=row_index, column=col_index, value=value)
+                row_index += 1
+
+        # Guardar el nuevo archivo en la carpeta scripts
+        output_file_path = os.path.join(
+            settings.BASE_DIR,
+            "scripts",
+            f"Productos inexistentes en {self.tenant.name}.xlsx",
+        )
+        os.makedirs(
+            os.path.dirname(output_file_path), exist_ok=True
+        )  # Crear la carpeta si no existe
+        wb.save(output_file_path)
+
+        print(f"Archivo XLSX creado exitosamente en: {output_file_path}")
+
+    def update_stock_by_store_from_eleventa(self, file_path, tenant, store_data):
+        file = self.read_excel_file(file_path)
+        store = Store.objects.get(tenant=tenant, **store_data)
+        for row_idx in tqdm(
+            range(1, file.nrows), desc="Updating prices", unit="product"
+        ):
+            row_values = file.row_values(row_idx)
+            stock = self.clean_price(row_values[5])
+
+            if stock == 0:
+                continue
+
+            code = row_values[0]
+
+            product = Product.objects.get(code=code, brand__tenant=tenant)
+
+            store_product = StoreProduct.objects.get(product=product, store=store)
+
+            store_product.stock = stock
+            store_product.save()
+
+    def update_stock_by_store_from_smartventa(self, file_path, tenant, store_data):
         file = self.read_excel_file(file_path)
         store = Store.objects.get(tenant=tenant, **store_data)
         for row_idx in tqdm(
@@ -139,21 +205,22 @@ class ProductManager:
                 brand_name = row_values[1].split()[0].capitalize()
 
                 brand = Brand.objects.get(name=brand_name, tenant=tenant)
-                name = " ".join(row_values[1].split()[1:])      
+                name = " ".join(row_values[1].split()[1:])
                 purchase_price = 0
                 unit_sale_price = 0
-                data = {'code': code, 'brand': brand, 'name': name, 'purchase_price': purchase_price, 'unit_sale_price': unit_sale_price}      
+                data = {
+                    "code": code,
+                    "brand": brand,
+                    "name": name,
+                    "purchase_price": purchase_price,
+                    "unit_sale_price": unit_sale_price,
+                }
                 product = Product.objects.create(**data)
 
-            store_product =StoreProduct.objects.get(product=product, store=store)
-    
+            store_product = StoreProduct.objects.get(product=product, store=store)
+
             store_product.stock = stock
             store_product.save()
-
-
-
-
-
 
 
 class ClientManager:

@@ -11,10 +11,10 @@ def run():
     }
 
     data_stores = [
-        {"name": "Zaragoza", "store_type": "T"}
+        {"name": "Maquinas", "store_type": "T"}
     ]
 
-    products_file_path = "scripts/data/pdbj/inventario.xls"
+    products_file_path = "scripts/data/pdbj/invmaquinas.xls"
 
     tenant_manager = TenantManager(data_tenant)
     tenant = tenant_manager.create_tenant()
@@ -25,7 +25,6 @@ def run():
 
     # Ejecutar la creación de tiendas y productos
     store_manager.create_stores(data_stores)
+#    product_manager.validate_products_in_tenant_from_eleventa(products_file_path)
     product_manager.create_products_from_eleventa(products_file_path)
-
-    stock_file_path = "scripts/data/pdbj/Inventario 2025_01_22.xls"
-    product_manager.update_stock_by_store(stock_file_path, tenant, data_stores[0])
+    product_manager.update_stock_by_store_from_eleventa(products_file_path, tenant, data_stores[0])

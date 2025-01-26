@@ -59,7 +59,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                         previous_stock=previous_stock,
                         updated_stock=updated_stock,
                         action="S",  # Acción: Salida
-                        movement="V",  # Movimiento: Venta
+                        movement="VE",  # Movimiento: Venta
                     )
                 )
 
@@ -301,7 +301,7 @@ class ImportSales(APIView):
                         previous_stock=previous_stock,
                         updated_stock=updated_stock,
                         action="S",  # Acción: Salida
-                        movement="V",  # Movimiento: Venta
+                        movement="VE",  # Movimiento: Venta
                     )
                 )
 
@@ -401,7 +401,7 @@ class CancelSale(APIView):
                             previous_stock=previous_stock,
                             updated_stock=updated_stock,
                             action="E",  # Acción: Entrada
-                            movement="C",  # Movimiento: Cancelación de compra
+                            movement="DE",  # Movimiento: Cancelación de compra
                         )
                     )
 

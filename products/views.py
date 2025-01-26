@@ -210,7 +210,7 @@ class ConfirmProductTransfersView(APIView):
                         previous_stock=previous_dest_stock,
                         updated_stock=destination_store_product.stock,
                         action="E",  # Acción: Entrada
-                        movement="T",  # Movimiento: Transferencia recibida
+                        movement="TR",  # Movimiento: Transferencia recibida
                     )
                 )
 
@@ -228,7 +228,7 @@ class ConfirmProductTransfersView(APIView):
                         previous_stock=previous_origin_stock,
                         updated_stock=origin_store_product.stock,
                         action="S",  # Acción: Salida
-                        movement="T",  # Movimiento: Transferencia enviada
+                        movement="TR",  # Movimiento: Transferencia enviada
                     )
                 )
 
@@ -286,7 +286,7 @@ class ConfirmDistributionView(APIView):
                         previous_stock=previous_dest_stock,
                         updated_stock=destination_store_product.stock,
                         action="E",  # Acción: Entrada
-                        movement="D",  # Movimiento: Distribución recibida
+                        movement="DI",  # Movimiento: Distribución recibida
                     )
                 )
 
@@ -311,7 +311,7 @@ class ConfirmDistributionView(APIView):
                         previous_stock=previous_origin_stock,
                         updated_stock=origin_store_product.stock,
                         action="S",  # Acción: Salida
-                        movement="D",  # Movimiento: Distribución enviada
+                        movement="DI",  # Movimiento: Distribución enviada
                     )
                 )
 
@@ -377,7 +377,6 @@ class AddProductsView(APIView):
                         previous_stock=previous_stock,
                         updated_stock=updated_stock,
                         action="E",  # Acción: Entrada
-                        movement=None,  # Movimiento: Distribución (ajústalo según contexto)
                     )
                 )
 

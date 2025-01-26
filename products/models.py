@@ -127,10 +127,11 @@ class StoreProductLog(TimeStampedModel):
     ]
 
     MOVEMENT_CHOICES = [
-        ('D', 'Distribución'),
-        ('T', 'Transferencia'),
-        ('C', 'Devolucíon'), #Cancelación de compra
-        ('V', 'Venta')
+        ('DI', 'Distribución'),
+        ('TR', 'Transferencia'),
+        ('DE', 'Devolucíon'), #Cancelación de compra
+        ('VE', 'Venta'),
+        ('MA', 'Manual')
     ]
 
     #E, ED, ET, EC, 
@@ -142,7 +143,7 @@ class StoreProductLog(TimeStampedModel):
     previous_stock = models.IntegerField()
     updated_stock = models.IntegerField()
     action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
-    movement = models.CharField(max_length=1, choices=MOVEMENT_CHOICES, null=True, blank=True)
+    movement = models.CharField(max_length=2, choices=MOVEMENT_CHOICES, default='MA')
 
 
     def __str__(self):
@@ -150,7 +151,8 @@ class StoreProductLog(TimeStampedModel):
     
 
     def get_description(self):
-        return "{} {}".format(self.get_action_display(), self.get_movement_display() if self.movement else '')
+        return "{} {}".format(self.get_action_display(), self.get_movement_display())
     
     def calculate_difference(self):
-        return self.updated_stock - self.previous_stock
+        difference = self.updated_stock - self.previous_stock
+        return f"+{difference}" if difference > 0 else str(difference)
