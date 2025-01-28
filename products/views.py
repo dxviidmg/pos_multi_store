@@ -403,3 +403,22 @@ class StoreProductLogsView(APIView):
             serializer.data,
             status=status.HTTP_200_OK,
         )
+
+
+#@method_decorator(get_store(), name="dispatch")
+class StoreInvestmentView(APIView):
+    def get(self, request, pk):
+        store_products = StoreProduct.objects.filter(store__id=pk)
+
+        store_investment = 0
+        for store_product in store_products:
+            if store_product.stock == 0:
+                continue
+
+            store_investment_by_product = store_product.stock * store_product.product.purchase_price
+
+            store_investment += store_investment_by_product
+        return Response(
+            store_investment,
+            status=status.HTTP_200_OK,
+        )

@@ -133,10 +133,6 @@ class StoreProductLog(TimeStampedModel):
         ('VE', 'Venta'),
         ('MA', 'Manual')
     ]
-
-    #E, ED, ET, EC, 
-    #SD, ST, SV
-    #A
         
     store_product = models.ForeignKey(StoreProduct, on_delete=models.CASCADE, related_name='store_product_logs')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
