@@ -415,7 +415,7 @@ class StoreInvestmentView(APIView):
             if store_product.stock == 0:
                 continue
 
-            store_investment_by_product = store_product.stock * store_product.product.purchase_price
+            store_investment_by_product = store_product.stock * store_product.product.cost
 
             store_investment += store_investment_by_product
         return Response(

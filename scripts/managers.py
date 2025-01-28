@@ -72,15 +72,15 @@ class ProductManager:
         code = str(row_values[0])
         name = row_values[1].lower().strip()
 
-        purchase_price = self.clean_price(row_values[2])
-        unit_sale_price = self.clean_price(row_values[3])
-        wholesale_sale_price = (
+        cost = self.clean_price(row_values[2])
+        unit_price = self.clean_price(row_values[3])
+        wholesale_price = (
             self.clean_price(row_values[4]) if row_values[4] else None
         )
-        wholesale_sale_price = (
-            wholesale_sale_price if unit_sale_price != wholesale_sale_price else None
+        wholesale_price = (
+            wholesale_price if unit_price != wholesale_price else None
         )
-        min_wholesale_quantity = 3 if wholesale_sale_price else None
+        min_wholesale_quantity = 3 if wholesale_price else None
 
         # Procesar marca
         brand_name = (
@@ -100,9 +100,9 @@ class ProductManager:
         product_data = {
             "code": code,
             "name": name,
-            "purchase_price": purchase_price,
-            "unit_sale_price": unit_sale_price,
-            "wholesale_sale_price": wholesale_sale_price,
+            "cost": cost,
+            "unit_price": unit_price,
+            "wholesale_price": wholesale_price,
             "min_wholesale_quantity": min_wholesale_quantity,
         }
 
@@ -206,14 +206,14 @@ class ProductManager:
 
                 brand = Brand.objects.get(name=brand_name, tenant=tenant)
                 name = " ".join(row_values[1].split()[1:])
-                purchase_price = 0
-                unit_sale_price = 0
+                cost = 0
+                unit_price = 0
                 data = {
                     "code": code,
                     "brand": brand,
                     "name": name,
-                    "purchase_price": purchase_price,
-                    "unit_sale_price": unit_sale_price,
+                    "cost": cost,
+                    "unit_price": unit_price,
                 }
                 product = Product.objects.create(**data)
 

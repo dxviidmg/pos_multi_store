@@ -55,13 +55,13 @@ class Product(Base):
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name='products')
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
-    purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
-    unit_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
-    wholesale_sale_price = models.DecimalField(
+    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    wholesale_price = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
     min_wholesale_quantity = models.IntegerField(null=True, blank=True)
-    apply_wholesale_price_on_client_discount = models.BooleanField(default=False)
+    wholesale_price_on_client_discount = models.BooleanField(default=False)
 
     def clean(self):
         if (
@@ -79,7 +79,7 @@ class Product(Base):
 
     def apply_wholesale(self):
         return (
-            self.wholesale_sale_price is not None
+            self.wholesale_price is not None
             and self.min_wholesale_quantity is not None
         )
 

@@ -306,7 +306,7 @@ class ImportSales(APIView):
                 )
 
                 # Calcular el total de la venta y registrar la venta
-                total = product.unit_sale_price * quantity
+                total = product.unit_price * quantity
                 sale_instance = Sale.objects.create(
                     store=store, total=total, saler=saler
                 )
@@ -316,7 +316,7 @@ class ImportSales(APIView):
                     "sale": sale_instance,
                     "product": product,
                     "quantity": quantity,
-                    "price": product.unit_sale_price,
+                    "price": product.unit_price,
                 }
                 ProductSale.objects.create(**data)
 

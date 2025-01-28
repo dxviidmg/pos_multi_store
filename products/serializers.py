@@ -61,11 +61,11 @@ class StoreProductSerializer(StoreProductBaseSerializer):
 
 	def get_prices(self, obj):
 		return {
-			"unit_sale_price": obj.product.unit_sale_price,
-			"wholesale_sale_price": obj.product.wholesale_sale_price,
+			"unit_price": obj.product.unit_price,
+			"wholesale_price": obj.product.wholesale_price,
 			"min_wholesale_quantity": obj.product.min_wholesale_quantity,
 			"apply_wholesale": obj.product.apply_wholesale(),
-			"apply_wholesale_price_on_client_discount": obj.product.apply_wholesale_price_on_client_discount, 
+			"wholesale_price_on_client_discount": obj.product.wholesale_price_on_client_discount, 
 		
 		}
 
