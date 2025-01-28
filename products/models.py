@@ -36,7 +36,7 @@ class Store(Base):
     
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos
-            username = (f"{self.tenant.short_name}.admin.{self.get_store_type_display().lower()}.{self.name.replace(' ', '_').lower()}")
+            username = (f"{self.tenant.short_name}.{self.get_store_type_display().lower()}.{self.name.replace(' ', '_').lower()}")
             first_name = username.replace(".", " ").title()
 
             # Crear o recuperar al usuario propietario
@@ -55,13 +55,13 @@ class Product(Base):
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name='products')
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
-    purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
-    unit_sale_price = models.DecimalField(max_digits=10, decimal_places=2)
-    wholesale_sale_price = models.DecimalField(
+    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    wholesale_price = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
     min_wholesale_quantity = models.IntegerField(null=True, blank=True)
-    apply_wholesale_price_on_client_discount = models.BooleanField(default=False)
+    wholesale_price_on_client_discount = models.BooleanField(default=False)
 
     def clean(self):
         if (
@@ -79,7 +79,7 @@ class Product(Base):
 
     def apply_wholesale(self):
         return (
-            self.wholesale_sale_price is not None
+            self.wholesale_price is not None
             and self.min_wholesale_quantity is not None
         )
 
@@ -127,22 +127,19 @@ class StoreProductLog(TimeStampedModel):
     ]
 
     MOVEMENT_CHOICES = [
-        ('D', 'Distribución'),
-        ('T', 'Transferencia'),
-        ('C', 'Devolucíon'), #Cancelación de compra
-        ('V', 'Venta')
+        ('DI', 'Distribución'),
+        ('TR', 'Transferencia'),
+        ('DE', 'Devolucíon'), #Cancelación de compra
+        ('VE', 'Venta'),
+        ('MA', 'Manual')
     ]
-
-    #E, ED, ET, EC, 
-    #SD, ST, SV
-    #A
         
     store_product = models.ForeignKey(StoreProduct, on_delete=models.CASCADE, related_name='store_product_logs')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     previous_stock = models.IntegerField()
     updated_stock = models.IntegerField()
     action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
-    movement = models.CharField(max_length=1, choices=MOVEMENT_CHOICES, null=True, blank=True)
+    movement = models.CharField(max_length=2, choices=MOVEMENT_CHOICES, default='MA')
 
 
     def __str__(self):
@@ -150,7 +147,8 @@ class StoreProductLog(TimeStampedModel):
     
 
     def get_description(self):
-        return "{} {}".format(self.get_action_display(), self.get_movement_display() if self.movement else '')
+        return "{} {}".format(self.get_action_display(), self.get_movement_display())
     
     def calculate_difference(self):
-        return self.updated_stock - self.previous_stock
+        difference = self.updated_stock - self.previous_stock
+        return f"+{difference}" if difference > 0 else str(difference)

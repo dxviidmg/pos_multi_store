@@ -59,7 +59,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                         previous_stock=previous_stock,
                         updated_stock=updated_stock,
                         action="S",  # Acción: Salida
-                        movement="V",  # Movimiento: Venta
+                        movement="VE",  # Movimiento: Venta
                     )
                 )
 
@@ -301,12 +301,12 @@ class ImportSales(APIView):
                         previous_stock=previous_stock,
                         updated_stock=updated_stock,
                         action="S",  # Acción: Salida
-                        movement="V",  # Movimiento: Venta
+                        movement="VE",  # Movimiento: Venta
                     )
                 )
 
                 # Calcular el total de la venta y registrar la venta
-                total = product.unit_sale_price * quantity
+                total = product.unit_price * quantity
                 sale_instance = Sale.objects.create(
                     store=store, total=total, saler=saler
                 )
@@ -316,7 +316,7 @@ class ImportSales(APIView):
                     "sale": sale_instance,
                     "product": product,
                     "quantity": quantity,
-                    "price": product.unit_sale_price,
+                    "price": product.unit_price,
                 }
                 ProductSale.objects.create(**data)
 
@@ -401,7 +401,7 @@ class CancelSale(APIView):
                             previous_stock=previous_stock,
                             updated_stock=updated_stock,
                             action="E",  # Acción: Entrada
-                            movement="C",  # Movimiento: Cancelación de compra
+                            movement="DE",  # Movimiento: Cancelación de compra
                         )
                     )
 
