@@ -19,4 +19,6 @@ urlpatterns += [
     path('add-products/', views.AddProductsView.as_view(), name='add-products'),
     path('store-product/logs/<int:pk>/', views.StoreProductLogsView.as_view(), name='store-product-logs'),
     path('store/investments/<int:pk>/', views.StoreInvestmentView.as_view(), name='store-investments'),
+    path('products/import-validation/', views.ProductImportValidation.as_view(), name='product-import-validation'),
+    path('products/import/', views.ProductImport.as_view(), name='product-import'),
 ]
