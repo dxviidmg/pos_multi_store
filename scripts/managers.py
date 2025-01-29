@@ -2,7 +2,6 @@ from products.models import Store, Product, Brand, StoreProduct
 import xlrd
 from decimal import Decimal
 from tqdm import tqdm
-from decimal import Decimal
 from tenants.models import Tenant
 from clients.models import Discount, Client
 from openpyxl import Workbook
