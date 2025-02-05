@@ -169,7 +169,7 @@ class ProductManager:
         file = self.read_excel_file(file_path)
         store = Store.objects.get(tenant=tenant, **store_data)
         for row_idx in tqdm(
-            range(1, file.nrows), desc="Updating prices", unit="product"
+            range(1, file.nrows), desc="Updating stock", unit="product"
         ):
             row_values = file.row_values(row_idx)
             stock = self.clean_price(row_values[5])

@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
 from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product, StoreProductLog
+from products.models import StoreProduct, Product, StoreProductLog, Printer
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -438,3 +438,24 @@ class CancelSale(APIView):
         StoreProductLog.objects.bulk_create(logs)
 
         return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)
+
+
+
+from escpos.printer import Network
+
+@method_decorator(get_store(), name="dispatch")
+class PrintTicketView(APIView):
+    def post(self, request, *args, **kwargs):
+        store = self.request.store
+
+        try:
+
+            printer = Printer.objects.get(store=store)
+            # Obtener datos del ticket, por ejemplo desde request.data
+            ticket_data = request.data.get("text", "Ticket sin contenido")
+            printer.send_print(ticket_data)
+
+            return Response({"message": "Ticket enviado a la impresora"})
+        except Exception as e:
+            print(e)
+            return Response({"error": str(e)}, status=400)
