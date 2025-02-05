@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Store, Product, StoreProduct, Brand, Transfer, StoreProductLog
+from .models import Store, Product, StoreProduct, Brand, Transfer, StoreProductLog, Printer
 
 
 @admin.register(Product)
@@ -35,3 +35,6 @@ class StoreProductLogAdmin(admin.ModelAdmin):
     search_fields = ['id']
 #    list_display = ['id', 'product__id', 'product__name', 'store__id', 'product__code', 'store__name', 'stock']
 #    list_filter = ['store__tenant', 'store']
+
+
+admin.site.register(Printer)

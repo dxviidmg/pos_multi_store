@@ -3,6 +3,12 @@ from django.contrib.auth.models import User
 from tenants.models import Tenant, TimeStampedModel
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
+import socket
+from django.core.validators import MinValueValidator, MaxValueValidator
+from escpos.printer import Network
+from socket import AF_INET, SOCK_STREAM
+
+
 
 
 class Base(models.Model):
@@ -22,11 +28,17 @@ class Brand(Base):
     def get_product_count(self):
         return self.products.count()
 
+
+
+    
+
+
 class Store(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
     store_type = models.CharField(max_length=1, choices=STORE_TYPE_CHOICES)
     manager = models.OneToOneField(User, on_delete=models.CASCADE)
+
 
     def get_full_name(self):
         return "{} {}".format(self.get_store_type_display(), self.name)
@@ -50,6 +62,50 @@ class Store(Base):
 
         super().save(*args, **kwargs)
 
+class Printer(models.Model):
+
+    CONNECTION_TYPE_CHOICES = [
+        ('USB', 'USB'),
+        ('WIFI', 'WIFI')
+    ]
+    
+    store = models.OneToOneField(Store, on_delete=models.CASCADE)
+    connection_type = models.CharField(max_length=4, choices=CONNECTION_TYPE_CHOICES)
+    ip = models.GenericIPAddressField(protocol='ipv4')  # Solo para direcciones IPv4
+    port = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(65535)])  # Validación para el puerto
+
+
+    # USB
+    def send_print_via_intermediary(self, content):        
+        with socket.socket(AF_INET, SOCK_STREAM) as printer_socket:
+            printer_socket.connect((self.ip, self.port))
+            printer_socket.sendall(content.encode('utf-8'))
+            response = printer_socket.recv(1024)
+
+        return response.decode('utf-8')
+    
+    # WIFI
+    def send_print_via_wifi(self, content):        
+        printer = Network(self.ip, self.port)
+
+        # Enviar datos a la impresora
+        printer.text(content)
+        printer.cut()  # Descomentar si se requiere cortar después de imprimir
+        return "Ticket enviado a la impresora exitosamente"
+    
+    
+
+    def send_print(self, content):
+        """
+        Método polimórfico para enviar impresión según el tipo de conexión.
+        """
+        if self.connection_type == 'USB':
+            return self.send_print_via_intermediary(content)
+        elif self.connection_type == 'WIFI':
+            return self.send_print_via_wifi(content)
+        else:
+            raise ValueError("Tipo de conexión inválido")
+        
 
 class Product(Base):
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name='products')
