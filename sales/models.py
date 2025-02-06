@@ -9,7 +9,6 @@ class Sale(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='sales')
-    #Despues de prod quitar el null y blank
     saler = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -43,3 +42,8 @@ class Payment(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="payments")
     payment_method = models.CharField(max_length=2, choices=PAYMENT_METHOD_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+
+
+
+

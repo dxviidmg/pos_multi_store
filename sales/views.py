@@ -24,6 +24,8 @@ class SaleViewSet(viewsets.ModelViewSet):
         date = self.request.GET.get("date")
         store = self.request.store
         return Sale.objects.filter(store=store, created_at__date=date)
+    
+    
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
         payments_data = self.request.data.get("payments")
