@@ -7,8 +7,9 @@ from .serializers import (
     BrandSerializer,
     StoreProductBaseSerializer,
     StoreProductLogSerializer,
+    CashFlowSerializer
 )
-from .models import StoreProduct, Product, Store, Transfer, Brand, StoreProductLog
+from .models import StoreProduct, Product, Store, Transfer, Brand, StoreProductLog, CashFlow
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -461,54 +462,64 @@ class ProductImportValidation(APIView):
     def post(self, request):
         file_obj = request.FILES.get("file")
         if not file_obj:
-            return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         tenant = request.user.get_tenant()
         try:
             df = pd.read_excel(file_obj).replace({np.nan: None})
             self.validate_columns(df)
             df = self.rename_columns(df)
-            
+
             data, codes = [], set()
-            
+
             for _, row in df.iterrows():
                 aux = row.to_dict()
                 aux["status"] = "Exitoso"
                 code = row["code"]
-                
+
                 if Product.objects.filter(code=code, brand__tenant=tenant).exists():
                     aux["status"] = "Código encontrado"
                 elif code in codes:
                     aux["status"] = "Código añadido en el archivo"
                 else:
                     codes.add(code)
-                    
-                    v1, v2 = aux.get("wholesale_price"), aux.get("min_wholesale_quantity")
+
+                    v1, v2 = aux.get("wholesale_price"), aux.get(
+                        "min_wholesale_quantity"
+                    )
                     if (v1 is None) ^ (v2 is None):
-                        aux["status"] = "Si existe mayoreo debe ingresar el precio mayoreo y la cantidad mínima"
+                        aux["status"] = (
+                            "Si existe mayoreo debe ingresar el precio mayoreo y la cantidad mínima"
+                        )
                     else:
                         prices = [aux.get("cost"), aux.get("unit_price")]
                         if v1 is not None and v2 is not None:
                             prices.extend([v1, v2])
-                        
+
                         try:
-                            prices = [float(price) for price in prices if price is not None]
+                            prices = [
+                                float(price) for price in prices if price is not None
+                            ]
                             if not all(price > 0 for price in prices):
-                                aux["status"] = "Al menos uno de los valores no es mayor a 0"
+                                aux["status"] = (
+                                    "Al menos uno de los valores no es mayor a 0"
+                                )
                         except ValueError:
                             aux["status"] = "Valores inválidos"
-                
+
                 data.append(aux)
-            
+
             return Response(data, status=status.HTTP_200_OK)
-        
+
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": f"Unexpected error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
+            return Response(
+                {"error": f"Unexpected error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class ProductImport(APIView):
@@ -558,24 +569,24 @@ class ProductImport(APIView):
             self.validate_columns(df)
             df = self.rename_columns(df)
 
-
             brand_cache = {}
 
             products = []
-            for data_row in df.to_dict(orient='records'):
-                brand_name = data_row['brand']
+            for data_row in df.to_dict(orient="records"):
+                brand_name = data_row["brand"]
                 if brand_name not in brand_cache:
-                    brand_cache[brand_name], _ = Brand.objects.get_or_create(name=brand_name, tenant=tenant)
-                
-                data_row['brand'] = brand_cache[brand_name]
-                data_row['wholesale_price_on_client_discount'] = bool(data_row['wholesale_price_on_client_discount'])
+                    brand_cache[brand_name], _ = Brand.objects.get_or_create(
+                        name=brand_name, tenant=tenant
+                    )
+
+                data_row["brand"] = brand_cache[brand_name]
+                data_row["wholesale_price_on_client_discount"] = bool(
+                    data_row["wholesale_price_on_client_discount"]
+                )
 
                 products.append(Product(**data_row))
 
             Product.objects.bulk_create(products)
-
-
-
 
             return Response({}, status=status.HTTP_200_OK)
 
@@ -588,3 +599,15 @@ class ProductImport(APIView):
                 {"error": f"Unexpected error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+
+@method_decorator(get_store(), name="dispatch")
+class CashFlowViewSet(viewsets.ModelViewSet):
+    serializer_class = CashFlowSerializer
+
+
+    def get_queryset(self):
+        store = self.request.store
+        date = self.request.GET.get("date")
+        return CashFlow.objects.filter(store=store, created_at__date=date)

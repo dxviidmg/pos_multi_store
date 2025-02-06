@@ -9,8 +9,9 @@ router.register('store', views.StoreViewSet, basename='store')
 router.register('brand', views.BrandViewSet, basename='brand')
 router.register('product', views.ProductViewSet, basename='product')
 router.register('store-product', views.StoreProductViewSet, basename='store-product')
-
 router.register('transfer', views.TransferViewSet, basename='transfer')
+router.register('cash-flow', views.CashFlowViewSet, basename='cash-flow')
+
 urlpatterns = router.urls
 
 urlpatterns += [

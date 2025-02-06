@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, StoreProduct, Transfer, Store, Brand, StoreProductLog
+from .models import Product, StoreProduct, Transfer, Store, Brand, StoreProductLog, CashFlow
 from django.core.exceptions import ValidationError
 
 
@@ -170,3 +170,19 @@ class ProductSerializer(serializers.ModelSerializer):
 				)
 
 		return data
+
+
+class CashFlowSerializer(serializers.ModelSerializer):
+	transaction_type_display = serializers.SerializerMethodField()
+	user_username = serializers.SerializerMethodField()
+
+	def get_transaction_type_display(self, obj):
+		return obj.get_transaction_type_display()
+
+	def get_user_username(self, obj):
+		return obj.user.username
+
+
+	class Meta:
+		model = CashFlow
+		fields = "__all__"
