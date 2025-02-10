@@ -10,7 +10,7 @@ router.register('sale', views.SaleViewSet, basename='sale')
 urlpatterns = router.urls
 
 urlpatterns += [
-    path('daily-earnings/', views.DailyEarnings.as_view(), name='daily-earnings'),
+    path('cash-summary/', views.CashSummary.as_view(), name='cash-summary'),
     path('import-sales-validation/', views.ImportSalesValidation.as_view(), name='import-sales-validation'),
     path('import-sales/', views.ImportSales.as_view(), name='import-sales'),
     path('cancel-sale/', views.CancelSale.as_view(), name='cancel-sale'),
