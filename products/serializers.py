@@ -186,3 +186,9 @@ class CashFlowSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = CashFlow
 		fields = "__all__"
+
+
+class CashFlowCreateSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = CashFlow
+		fields = ["concept", "amount", "transaction_type"]

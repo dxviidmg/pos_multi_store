@@ -205,14 +205,14 @@ class StoreProductLog(TimeStampedModel):
 
 
 class CashFlow(TimeStampedModel):
-    TRANSACTION_TYPES = [
+    TRANSACTION_TYPES_CHOICES = [
         ('E', 'Entrada'),  # Entrada de dinero
         ('S', 'Salida')  # Salida de dinero
     ]
 
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     concept = models.CharField(max_length=50)
-    transaction_type = models.CharField(max_length=1, choices=TRANSACTION_TYPES)
+    transaction_type = models.CharField(max_length=1, choices=TRANSACTION_TYPES_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
