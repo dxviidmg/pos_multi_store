@@ -178,7 +178,15 @@ class CashSummary(APIView):
                     "sales_data": True,
                 },
                 {"name": "Entradas", "amount": total_income, "cashflow_data": True},
-                {"name": "Salidas", "amount": "-"  + str(total_expenses), "cashflow_data": True},
+                {
+                    "name": "Salidas",
+                    "amount": (
+                        f"-{total_expenses}"
+                        if total_expenses != 0
+                        else str(total_expenses)
+                    ),
+                    "cashflow_data": True,
+                },
                 {
                     "name": "Total de E/S",
                     "amount": net_cash_flow,

@@ -7,7 +7,8 @@ from .serializers import (
     BrandSerializer,
     StoreProductBaseSerializer,
     StoreProductLogSerializer,
-    CashFlowSerializer
+    CashFlowSerializer,
+    CashFlowCreateSerializer
 )
 from .models import StoreProduct, Product, Store, Transfer, Brand, StoreProductLog, CashFlow
 from django.db.models import Q
@@ -25,9 +26,6 @@ import numpy as np
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
-    serializer_class = StoreProductSerializer
-    alternate_serializer_class = StoreProductBaseSerializer
-
     def get_serializer_class(self):
         q = self.request.GET.get("q", "")
         code = self.request.GET.get("code", "")
@@ -601,13 +599,31 @@ class ProductImport(APIView):
             )
 
 
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import viewsets
+
 
 @method_decorator(get_store(), name="dispatch")
 class CashFlowViewSet(viewsets.ModelViewSet):
-    serializer_class = CashFlowSerializer
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return CashFlowCreateSerializer
+        return CashFlowSerializer
 
 
     def get_queryset(self):
         store = self.request.store
         date = self.request.GET.get("date")
         return CashFlow.objects.filter(store=store, created_at__date=date)
+    
+
+    @action(detail=False, methods=['get'])
+    def choices(self, request):
+        choices = [{'value': key, 'label': label} for key, label in CashFlow.TRANSACTION_TYPES_CHOICES]
+        return Response(choices)
+    
+    def perform_create(self, serializer):
+        store = self.request.store
+        sale_instance = serializer.save(store=store, user=self.request.user)
+        return sale_instance
