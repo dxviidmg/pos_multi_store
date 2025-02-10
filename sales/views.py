@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
 from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product, StoreProductLog, Printer
+from products.models import StoreProduct, Product, StoreProductLog, Printer, CashFlow
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -10,6 +10,7 @@ from django.db.models import Sum
 import pandas as pd
 from products.decorators import get_store
 from django.utils.decorators import method_decorator
+from collections import defaultdict
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -24,8 +25,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         date = self.request.GET.get("date")
         store = self.request.store
         return Sale.objects.filter(store=store, created_at__date=date)
-    
-    
+
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
         payments_data = self.request.data.get("payments")
@@ -100,49 +100,100 @@ class SaleViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(get_store(), name="dispatch")
-class DailyEarnings(APIView):
+class CashSummary(APIView):
     def get(self, request):
         date = request.GET.get("date")
         store = request.store
-        user_sales = Sale.objects.filter(store=store, created_at__date=date)
-        total_sales_sum = user_sales.aggregate(total=Sum("total"))["total"] or 0
-        related_payments = Payment.objects.filter(sale__in=user_sales)
-        payments_by_method = related_payments.values("payment_method").annotate(
+
+        # Obtener totales de CashFlow agrupados por tipo de transacción
+        cash_flow_totals_by_type = (
+            CashFlow.objects.filter(store=store, created_at__date=date)
+            .values("transaction_type")
+            .annotate(total=Sum("amount"))
+        )
+
+        # Mapear los totales en un defaultdict para evitar valores None
+        transaction_sums = defaultdict(
+            int,
+            {
+                entry["transaction_type"]: entry["total"]
+                for entry in cash_flow_totals_by_type
+            },
+        )
+        total_income = transaction_sums["E"]
+        total_expenses = transaction_sums["S"]
+        net_cash_flow = total_income - total_expenses
+
+        # Obtener total de ventas
+        total_sales = (
+            Sale.objects.filter(store=store, created_at__date=date).aggregate(
+                total=Sum("total")
+            )["total"]
+            or 0
+        )
+
+        # Obtener pagos relacionados con esas ventas
+        related_payments = Payment.objects.filter(
+            sale__store=store, sale__created_at__date=date
+        )
+        payments_grouped_by_method = related_payments.values("payment_method").annotate(
             total_amount=Sum("amount")
         )
-        total_payments_sum = (
+        total_received_payments = (
             related_payments.aggregate(total=Sum("amount"))["total"] or 0
         )
 
-        # Obtener significados de métodos de pago
-        payment_methods_meaning = dict(Payment.PAYMENT_METHOD_CHOICES)
-        payments_by_method = [
+        # Mapeo de métodos de pago
+        payment_method_labels = dict(Payment.PAYMENT_METHOD_CHOICES)
+
+        # Construcción de la respuesta
+        response_data = [
             {
-                "payment_method": payment_methods_meaning.get(
+                "name": payment_method_labels.get(
                     payment["payment_method"], payment["payment_method"]
                 ),
-                "total_amount": payment["total_amount"],
+                "amount": payment["total_amount"],
+                "payment_method_data": True,
             }
-            for payment in payments_by_method
+            for payment in payments_grouped_by_method
         ]
 
-        payments_by_method.extend(
+        response_data.extend(
             [
-                {"payment_method": "Total en ventas", "total_amount": total_sales_sum},
                 {
-                    "payment_method": "Total en pagos",
-                    "total_amount": total_payments_sum,
+                    "name": "Total en ventas",
+                    "amount": total_sales,
+                    "sales_data": True,
+                    "total_data": True,
                 },
                 {
-                    "payment_method": "Balanceado",
-                    "total_amount": (
-                        "Si" if total_sales_sum == total_payments_sum else "No"
-                    ),
+                    "name": "Total en pagos",
+                    "amount": total_received_payments,
+                    "payment_method_data": True,
+                    "sales_data": True,
+                },
+                {
+                    "name": "Balanceado",
+                    "amount": "Si" if total_sales == total_received_payments else "No",
+                    "sales_data": True,
+                },
+                {"name": "Entradas", "amount": total_income, "cashflow_data": True},
+                {"name": "Salidas", "amount": "-"  + str(total_expenses), "cashflow_data": True},
+                {
+                    "name": "Total de E/S",
+                    "amount": net_cash_flow,
+                    "cashflow_data": True,
+                    "total_data": True,
+                },
+                {
+                    "name": "Total",
+                    "amount": total_sales + net_cash_flow,
+                    "total_data": True,
                 },
             ]
         )
 
-        return Response(payments_by_method)
+        return Response(response_data)
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -346,7 +397,6 @@ class ImportSales(APIView):
             )
 
 
-
 @method_decorator(get_store(), name="dispatch")
 class CancelSale(APIView):
     def post(self, request):
@@ -413,9 +463,7 @@ class CancelSale(APIView):
             # Recalculate the sale total
             remaining_products = sale.products_sale.all()
             if remaining_products.exists():
-                total = sum(
-                    product.get_total() for product in remaining_products
-                )
+                total = sum(product.get_total() for product in remaining_products)
                 sale.total = total
                 sale.save()
 
@@ -441,9 +489,6 @@ class CancelSale(APIView):
 
         return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)
 
-
-
-from escpos.printer import Network
 
 @method_decorator(get_store(), name="dispatch")
 class PrintTicketView(APIView):
