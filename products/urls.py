@@ -19,7 +19,7 @@ urlpatterns += [
     path('store-product/distribution/confirm/', views.ConfirmDistributionView.as_view(), name='confirm-distribution'),
     path('store-product/logs/<int:pk>/', views.StoreProductLogsView.as_view(), name='store-product-logs'),
     path('store/investments/<int:pk>/', views.StoreInvestmentView.as_view(), name='store-investments'),
-    path('products/add', views.AddProductsView.as_view(), name='add-products'),
+    path('products/add/', views.AddProductsView.as_view(), name='add-products'),
     path('products/import-validation/', views.ProductImportValidation.as_view(), name='product-import-validation'),
     path('products/import/', views.ProductImport.as_view(), name='product-import'),
 ]
