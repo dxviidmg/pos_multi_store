@@ -158,6 +158,14 @@ class CashSummary(APIView):
             for payment in payments_grouped_by_method
         ]
 
+        net_cash = (
+            next(
+                (item for item in response_data if item["name"] == "Efectivo"),
+                {"amount": 0},
+            )["amount"]
+            - total_expenses
+        )
+
         response_data.extend(
             [
                 {
@@ -191,6 +199,11 @@ class CashSummary(APIView):
                     "name": "Total de E/S",
                     "amount": net_cash_flow,
                     "cashflow_data": True,
+                    "total_data": True,
+                },
+                {
+                    "name": "Total en efectivo",
+                    "amount": net_cash,
                     "total_data": True,
                 },
                 {
