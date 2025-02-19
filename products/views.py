@@ -75,7 +75,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         return StoreProduct.objects.filter(
             product__in=product_queryset, store=store
-        ).prefetch_related("product")
+        ).prefetch_related("product").order_by('product__brand__name', 'product__name', )
 
     def perform_update(self, serializer):
         instance = (
