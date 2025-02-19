@@ -59,14 +59,13 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
             filters |= (
                 Q(brand__name__icontains=q)
-                | Q(code__icontains=q)
                 | Q(name__icontains=q)
             )
 
             # Obtener productos y filtrar `StoreProduct` según la tienda
             product_queryset = Product.objects.filter(
                 filters, brand__tenant=tenant
-            ).select_related("brand")[:50]
+            ).select_related("brand")[:200]
         else:
             brands = Brand.objects.filter(tenant=tenant)
             product_queryset = Product.objects.filter(brand__in=brands).select_related(
