@@ -8,9 +8,17 @@ from .serializers import (
     StoreProductBaseSerializer,
     StoreProductLogSerializer,
     CashFlowSerializer,
-    CashFlowCreateSerializer
+    CashFlowCreateSerializer,
 )
-from .models import StoreProduct, Product, Store, Transfer, Brand, StoreProductLog, CashFlow
+from .models import (
+    StoreProduct,
+    Product,
+    Store,
+    Transfer,
+    Brand,
+    StoreProductLog,
+    CashFlow,
+)
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -57,10 +65,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         if q:
             filters = Q()
 
-            filters |= (
-                Q(brand__name__icontains=q)
-                | Q(name__icontains=q)
-            )
+            filters |= Q(brand__name__icontains=q) | Q(name__icontains=q)
 
             # Obtener productos y filtrar `StoreProduct` según la tienda
             product_queryset = Product.objects.filter(
@@ -72,9 +77,14 @@ class StoreProductViewSet(viewsets.ModelViewSet):
                 "brand"
             )
 
-        return StoreProduct.objects.filter(
-            product__in=product_queryset, store=store
-        ).prefetch_related("product").order_by('product__brand__name', 'product__name', )
+        return (
+            StoreProduct.objects.filter(product__in=product_queryset, store=store)
+            .prefetch_related("product")
+            .order_by(
+                "product__brand__name",
+                "product__name",
+            )
+        )
 
     def perform_update(self, serializer):
         instance = (
@@ -127,11 +137,14 @@ class StoreViewSet(viewsets.ModelViewSet):
         tenant = self.request.user.get_tenant()
         store = self.request.store
 
+        queryset = Store.objects.filter(tenant=tenant)
+
         if store:
-            return Store.objects.filter(store_type="T", tenant=tenant).exclude(
-                id=store.id
-            )
-        return Store.objects.filter(tenant=tenant)
+            queryset = queryset.exclude(id=store.id)
+            if store.store_type == "T":
+                queryset = queryset.filter(store_type="T")
+
+        return queryset
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -610,18 +623,19 @@ class CashFlowViewSet(viewsets.ModelViewSet):
             return CashFlowCreateSerializer
         return CashFlowSerializer
 
-
     def get_queryset(self):
         store = self.request.store
         date = self.request.GET.get("date")
         return CashFlow.objects.filter(store=store, created_at__date=date)
-    
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def choices(self, request):
-        choices = [{'value': key, 'label': label} for key, label in CashFlow.TRANSACTION_TYPES_CHOICES]
+        choices = [
+            {"value": key, "label": label}
+            for key, label in CashFlow.TRANSACTION_TYPES_CHOICES
+        ]
         return Response(choices)
-    
+
     def perform_create(self, serializer):
         store = self.request.store
         sale_instance = serializer.save(store=store, user=self.request.user)
