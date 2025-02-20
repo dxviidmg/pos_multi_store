@@ -57,7 +57,7 @@ class Store(Base):
 
 
     def get_investment(self):
-        store_products = StoreProduct.objects.filter(store=self)
+        store_products = self.store_products.all()
         store_investment = 0
         for store_product in store_products:
             if store_product.stock == 0:
@@ -146,8 +146,8 @@ class Product(Base):
 
 
 class StoreProduct(models.Model):
-    store = models.ForeignKey(Store, on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="store_products")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="product_stores")
     stock = models.IntegerField(default=0)
 
     def __str__(self):

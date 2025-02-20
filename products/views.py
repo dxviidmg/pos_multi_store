@@ -44,9 +44,11 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         return StoreProductSerializer
 
     def get_queryset(self):
+
+        print(self.request.GET)
         q = self.request.GET.get("q", None)
         code = self.request.GET.get("code", None)
-
+        brand_id = self.request.GET.get("brand_id", None)
         # Intentar obtener la tienda, retornar un queryset vacío si no existe
         store = self.request.store
         tenant = self.request.user.get_tenant()
@@ -71,6 +73,10 @@ class StoreProductViewSet(viewsets.ModelViewSet):
             product_queryset = Product.objects.filter(
                 filters, brand__tenant=tenant
             ).select_related("brand")[:200]
+        elif brand_id:
+            print('estoy en brand')
+            product_queryset = Product.objects.filter(brand__id=brand_id
+            ).select_related("brand")
         else:
             brands = Brand.objects.filter(tenant=tenant)
             product_queryset = Product.objects.filter(brand__in=brands).select_related(
@@ -126,7 +132,10 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return Product.objects.filter(brand__tenant=tenant)
+        brand_id = self.request.GET.get("brand_id", None)
+        if brand_id:
+            return Product.objects.filter(brand__id=brand_id).order_by('name')            
+        return Product.objects.filter(brand__tenant=tenant).order_by('brand__name', 'name')
 
 
 @method_decorator(get_store(), name="dispatch")
