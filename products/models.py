@@ -56,6 +56,22 @@ class Store(Base):
         super().save(*args, **kwargs)
 
 
+    def get_investment(self):
+        store_products = StoreProduct.objects.filter(store=self)
+        store_investment = 0
+        for store_product in store_products:
+            if store_product.stock == 0:
+                continue
+
+            store_investment_by_product = (
+                store_product.stock * store_product.product.cost
+            )
+
+            store_investment += store_investment_by_product
+
+        return store_investment
+
+
 class Printer(models.Model):
 
     CONNECTION_TYPE_CHOICES = [("USB", "USB"), ("WIFI", "WIFI")]

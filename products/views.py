@@ -421,20 +421,11 @@ class StoreProductLogsView(APIView):
 # @method_decorator(get_store(), name="dispatch")
 class StoreInvestmentView(APIView):
     def get(self, request, pk):
-        store_products = StoreProduct.objects.filter(store__id=pk)
 
-        store_investment = 0
-        for store_product in store_products:
-            if store_product.stock == 0:
-                continue
+        store = Store.objects.get(id=pk)
 
-            store_investment_by_product = (
-                store_product.stock * store_product.product.cost
-            )
-
-            store_investment += store_investment_by_product
         return Response(
-            store_investment,
+            store.get_investment(),
             status=status.HTTP_200_OK,
         )
 

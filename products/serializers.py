@@ -130,6 +130,8 @@ class TransferSerializer(serializers.ModelSerializer):
 class StoreSerializer(serializers.ModelSerializer):
 	full_name = serializers.SerializerMethodField()
 	store_type_display = serializers.SerializerMethodField()
+	investment = serializers.SerializerMethodField()
+
 
 	def get_full_name(self, obj):
 		return obj.get_full_name()
@@ -137,6 +139,9 @@ class StoreSerializer(serializers.ModelSerializer):
 	def get_store_type_display(self, obj):
 		return obj.get_store_type_display()
 
+	def get_investment(self, obj):
+		return obj.get_investment()
+	
 	class Meta:
 		model = Store
 		fields = "__all__"
