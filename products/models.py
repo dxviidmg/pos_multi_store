@@ -7,7 +7,7 @@ import socket
 from django.core.validators import MinValueValidator, MaxValueValidator
 from escpos.printer import Network
 from socket import AF_INET, SOCK_STREAM
-
+from datetime import date
 
 class Base(models.Model):
     name = models.CharField(max_length=30)
@@ -70,6 +70,17 @@ class Store(Base):
             store_investment += store_investment_by_product
 
         return store_investment
+    
+    def get_profit_today(self):
+        today = date.today() 
+        sales = self.sales.filter(created_at__date=today)
+        profit = 0
+        for sale in sales:
+
+
+            profit += sale.get_profit()
+
+        return profit
 
 
 class Printer(models.Model):

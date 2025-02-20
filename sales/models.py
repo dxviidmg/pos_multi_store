@@ -21,7 +21,12 @@ class Sale(models.Model):
     def get_payments_methods_display(self):
         return [payment.get_payment_method_display() for payment in self.payments.all()]
 
+    def get_profit(self):
+        profit = 0
+        for product_sale in self.products_sale.all():
+            profit = profit + product_sale.get_profit()
 
+        return profit
 class ProductSale(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='product_sales')
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='products_sale')
@@ -31,7 +36,8 @@ class ProductSale(models.Model):
     def get_total(self):
         return self.quantity * self.price
 
-
+    def get_profit(self):
+        return (self.price - self.product.cost) * self.quantity
 
 class Payment(models.Model):
     PAYMENT_METHOD_CHOICES = (
