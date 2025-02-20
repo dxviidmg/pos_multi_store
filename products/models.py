@@ -7,7 +7,7 @@ import socket
 from django.core.validators import MinValueValidator, MaxValueValidator
 from escpos.printer import Network
 from socket import AF_INET, SOCK_STREAM
-
+from datetime import date
 
 class Base(models.Model):
     name = models.CharField(max_length=30)
@@ -57,7 +57,7 @@ class Store(Base):
 
 
     def get_investment(self):
-        store_products = StoreProduct.objects.filter(store=self)
+        store_products = self.store_products.all()
         store_investment = 0
         for store_product in store_products:
             if store_product.stock == 0:
@@ -70,6 +70,17 @@ class Store(Base):
             store_investment += store_investment_by_product
 
         return store_investment
+    
+    def get_profit_today(self):
+        today = date.today() 
+        sales = self.sales.filter(created_at__date=today)
+        profit = 0
+        for sale in sales:
+
+
+            profit += sale.get_profit()
+
+        return profit
 
 
 class Printer(models.Model):
@@ -146,8 +157,8 @@ class Product(Base):
 
 
 class StoreProduct(models.Model):
-    store = models.ForeignKey(Store, on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="store_products")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="product_stores")
     stock = models.IntegerField(default=0)
 
     def __str__(self):

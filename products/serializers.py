@@ -131,7 +131,7 @@ class StoreSerializer(serializers.ModelSerializer):
 	full_name = serializers.SerializerMethodField()
 	store_type_display = serializers.SerializerMethodField()
 	investment = serializers.SerializerMethodField()
-
+	profit_today = serializers.SerializerMethodField()
 
 	def get_full_name(self, obj):
 		return obj.get_full_name()
@@ -141,6 +141,10 @@ class StoreSerializer(serializers.ModelSerializer):
 
 	def get_investment(self, obj):
 		return obj.get_investment()
+	
+	def get_profit_today(self, obj):
+		return obj.get_profit_today()
+	
 	
 	class Meta:
 		model = Store
