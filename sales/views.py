@@ -11,7 +11,7 @@ import pandas as pd
 from products.decorators import get_store
 from django.utils.decorators import method_decorator
 from collections import defaultdict
-
+from .cash_summary_utils import calculate_cash_summary
 
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.
@@ -105,114 +105,7 @@ class CashSummary(APIView):
         date = request.GET.get("date")
         store = request.store
 
-        # Obtener totales de CashFlow agrupados por tipo de transacción
-        cash_flow_totals_by_type = (
-            CashFlow.objects.filter(store=store, created_at__date=date)
-            .values("transaction_type")
-            .annotate(total=Sum("amount"))
-        )
-
-        # Mapear los totales en un defaultdict para evitar valores None
-        transaction_sums = defaultdict(
-            int,
-            {
-                entry["transaction_type"]: entry["total"]
-                for entry in cash_flow_totals_by_type
-            },
-        )
-        total_income = transaction_sums["E"]
-        total_expenses = transaction_sums["S"]
-        net_cash_flow = total_income - total_expenses
-
-        # Obtener total de ventas
-        total_sales = (
-            Sale.objects.filter(store=store, created_at__date=date).aggregate(
-                total=Sum("total")
-            )["total"]
-            or 0
-        )
-
-        # Obtener pagos relacionados con esas ventas
-        related_payments = Payment.objects.filter(
-            sale__store=store, sale__created_at__date=date
-        )
-        payments_grouped_by_method = related_payments.values("payment_method").annotate(
-            total_amount=Sum("amount")
-        )
-        total_received_payments = (
-            related_payments.aggregate(total=Sum("amount"))["total"] or 0
-        )
-
-        # Mapeo de métodos de pago
-        payment_method_labels = dict(Payment.PAYMENT_METHOD_CHOICES)
-
-        # Construcción de la respuesta
-        response_data = [
-            {
-                "name": payment_method_labels.get(
-                    payment["payment_method"], payment["payment_method"]
-                ),
-                "amount": payment["total_amount"],
-                "payment_method_data": True,
-            }
-            for payment in payments_grouped_by_method
-        ]
-
-        net_cash = (
-            next(
-                (item for item in response_data if item["name"] == "Efectivo"),
-                {"amount": 0},
-            )["amount"]
-            - total_expenses
-        )
-
-        response_data.extend(
-            [
-                {
-                    "name": "Total en ventas",
-                    "amount": total_sales,
-                    "sales_data": True,
-                    "total_data": True,
-                },
-                {
-                    "name": "Total en pagos",
-                    "amount": total_received_payments,
-                    "payment_method_data": True,
-                    "sales_data": True,
-                },
-                {
-                    "name": "Balanceado",
-                    "amount": "Si" if total_sales == total_received_payments else "No",
-                    "sales_data": True,
-                },
-                {"name": "Entradas", "amount": total_income, "cashflow_data": True},
-                {
-                    "name": "Salidas",
-                    "amount": (
-                        f"-{total_expenses}"
-                        if total_expenses != 0
-                        else str(total_expenses)
-                    ),
-                    "cashflow_data": True,
-                },
-                {
-                    "name": "Total de E/S",
-                    "amount": net_cash_flow,
-                    "cashflow_data": True,
-                    "total_data": True,
-                },
-                {
-                    "name": "Total en efectivo",
-                    "amount": net_cash,
-                    "total_data": True,
-                },
-                {
-                    "name": "Total",
-                    "amount": total_sales + net_cash_flow,
-                    "total_data": True,
-                },
-            ]
-        )
+        response_data = calculate_cash_summary(store, date)
 
         return Response(response_data)
 

@@ -426,8 +426,6 @@ class StoreProductLogsView(APIView):
             serializer = StoreProductLogSerializer(store_product_logs, many=True)
         else:
             store = self.request.store
-            print('*******************', store)
-
             today = date.today() 
             
             store_product_logs = StoreProductLog.objects.filter(
