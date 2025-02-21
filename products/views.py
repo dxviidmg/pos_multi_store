@@ -9,6 +9,7 @@ from .serializers import (
     StoreProductLogSerializer,
     CashFlowSerializer,
     CashFlowCreateSerializer,
+    StoreProductLogSerializer2
 )
 from .models import (
     StoreProduct,
@@ -30,7 +31,7 @@ from django.utils.decorators import method_decorator
 from datetime import datetime
 import pandas as pd
 import numpy as np
-
+from datetime import date
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
@@ -416,11 +417,23 @@ class AddProductsView(APIView):
 @method_decorator(get_store(), name="dispatch")
 class StoreProductLogsView(APIView):
     @transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
-    def get(self, request, pk):
-        store_product_logs = StoreProductLog.objects.filter(
-            store_product__id=pk
-        ).order_by("-id")
-        serializer = StoreProductLogSerializer(store_product_logs, many=True)
+    def get(self, request):
+        store_product_id = self.request.GET.get("store-product-id", None)
+        if store_product_id:
+            store_product_logs = StoreProductLog.objects.filter(
+                store_product__id=store_product_id
+            ).order_by("-id")
+            serializer = StoreProductLogSerializer(store_product_logs, many=True)
+        else:
+            store = self.request.store
+            print('*******************', store)
+
+            today = date.today() 
+            
+            store_product_logs = StoreProductLog.objects.filter(
+                store_product__store=store, created_at__date=today
+            ).order_by("-id")
+            serializer = StoreProductLogSerializer2(store_product_logs, many=True)
         return Response(
             serializer.data,
             status=status.HTTP_200_OK,
