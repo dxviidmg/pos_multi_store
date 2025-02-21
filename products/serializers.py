@@ -103,6 +103,18 @@ class StoreProductLogSerializer(serializers.ModelSerializer):
 		fields = "__all__"
 
 
+class StoreProductLogSerializer2(StoreProductLogSerializer):
+
+	product_brand = serializers.SerializerMethodField()
+	product_name = serializers.SerializerMethodField()
+
+	def get_product_brand(self, obj):
+		return obj.store_product.product.brand.name
+
+	def get_product_name(self, obj):
+		return obj.store_product.product.name
+	
+
 class TransferSerializer(serializers.ModelSerializer):
 	product_code = serializers.SerializerMethodField()
 	product_description = serializers.SerializerMethodField()
