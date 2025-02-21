@@ -173,12 +173,16 @@ class ProductSerializer(serializers.ModelSerializer):
 
     brand_name = serializers.SerializerMethodField()
     apply_wholesale = serializers.SerializerMethodField()
+    stock = serializers.SerializerMethodField()
 
     def get_brand_name(self, obj):
         return obj.brand.name
 
     def get_apply_wholesale(self, obj):
         return obj.apply_wholesale()
+    
+    def get_stock(self, obj):
+        return obj.get_stock()
 
     class Meta:
         model = Product

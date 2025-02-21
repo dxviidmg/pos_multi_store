@@ -8,6 +8,8 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from escpos.printer import Network
 from socket import AF_INET, SOCK_STREAM
 from datetime import date
+from django.db.models import Sum
+
 
 class Base(models.Model):
     name = models.CharField(max_length=30)
@@ -260,6 +262,9 @@ class Product(Base):
             self.wholesale_price is not None and self.min_wholesale_quantity is not None
         )
 
+    def get_stock(self):
+        return self.product_stores.aggregate(total_stock=Sum('stock'))['total_stock'] or 0
+    
 
 class StoreProduct(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="store_products")
