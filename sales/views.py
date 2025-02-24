@@ -1,16 +1,14 @@
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
-from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product, StoreProductLog, Printer, CashFlow
+from .models import Sale, ProductSale, Payment, Printer
+from products.models import StoreProduct, Product, StoreProductLog
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Sum
 import pandas as pd
 from products.decorators import get_store
 from django.utils.decorators import method_decorator
-from collections import defaultdict
 from .cash_summary_utils import calculate_cash_summary
 
 @method_decorator(get_store(), name="dispatch")
