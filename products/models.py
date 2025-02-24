@@ -34,6 +34,7 @@ class Store(Base):
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
     store_type = models.CharField(max_length=1, choices=STORE_TYPE_CHOICES)
     manager = models.OneToOneField(User, on_delete=models.CASCADE)
+    has_printer_installed = models.BooleanField(default=False)
 
     def get_full_name(self):
         return "{} {}".format(self.get_store_type_display(), self.name)
@@ -56,6 +57,11 @@ class Store(Base):
             )
 
         super().save(*args, **kwargs)
+
+    def get_url_printer(self):
+        if self.has_printer_installed:
+            return "http://127.0.0.1:5000/"
+        return False
 
 
     def get_investment(self):

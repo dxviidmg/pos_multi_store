@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Sale, Payment, ProductSale, Printer
+from .models import Sale, Payment, ProductSale
 
 
 @admin.register(Sale)
@@ -15,5 +15,3 @@ class ProductSaleAdmin(admin.ModelAdmin):
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
     list_display = ['sale__id', 'sale__created_at']
-
-admin.site.register(Printer)
