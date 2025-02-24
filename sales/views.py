@@ -1,6 +1,6 @@
 from rest_framework import viewsets
-from .serializers import SaleSerializer, SaleCreateSerializer, PrinterSerializer
-from .models import Sale, ProductSale, Payment, Printer
+from .serializers import SaleSerializer, SaleCreateSerializer
+from .models import Sale, ProductSale, Payment
 from products.models import StoreProduct, Product, StoreProductLog
 from django.db import transaction
 from rest_framework.views import APIView
@@ -400,21 +400,3 @@ class CancelSale(APIView):
         StoreProductLog.objects.bulk_create(logs)
 
         return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)
-
-
-@method_decorator(get_store(), name="dispatch")
-class GetPrinterView(APIView):
-    def post(self, request, *args, **kwargs):
-        store = self.request.store
-
-        try:
-
-            printer = Printer.objects.get(store=store)
-            # Obtener datos del ticket, por ejemplo desde request.data
-            ticket_data = request.data.get("text", "Ticket sin contenido")
-            print('ticket_data', ticket_data)
-#            printer.send_print(ticket_data)
-            return Response({'url': printer.get_url()})
-        except Exception as e:
-            print('e', e)
-            return Response({"error": str(e)}, status=400)
