@@ -412,9 +412,10 @@ class PrintTicketView(APIView):
             printer = Printer.objects.get(store=store)
             # Obtener datos del ticket, por ejemplo desde request.data
             ticket_data = request.data.get("text", "Ticket sin contenido")
+            print('ticket_data', ticket_data)
             printer.send_print(ticket_data)
 
             return Response({"message": "Ticket enviado a la impresora"})
         except Exception as e:
-            print(e)
+            print('e', e)
             return Response({"error": str(e)}, status=400)

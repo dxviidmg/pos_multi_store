@@ -72,11 +72,14 @@ class Printer(models.Model):
 
     # USB
     def send_print_via_intermediary(self, content):
+        print(socket.AF_INET, socket.SOCK_STREAM)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as printer_socket:
+            print(self.ip, self.port)
             printer_socket.connect((self.ip, self.port))
+            print('printer_socket', printer_socket)
             printer_socket.sendall(content.encode("utf-8"))
             response = printer_socket.recv(1024)
-
+        print('response', response)
         return response.decode("utf-8")
 
     # WIFI
