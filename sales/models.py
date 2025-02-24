@@ -103,4 +103,4 @@ class Printer(models.Model):
             raise ValueError("Tipo de conexión inválido")
 
     def get_url(self):
-        return self.ip + ':' + str(self.port)
+        return "http://" + self.ip + ':' + str(self.port)
