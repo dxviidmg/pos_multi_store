@@ -14,5 +14,5 @@ urlpatterns += [
     path('sales/import-validation/', views.ImportSalesValidation.as_view(), name='import-sales-validation'),
     path('sales/import/', views.ImportSales.as_view(), name='import-sales'),
     path('sales/cancel/', views.CancelSale.as_view(), name='cancel-sale'),
-    path('ticket/print/', views.PrintTicketView.as_view(), name='print-ticket'),
+    path('printer/', views.GetPrinterView.as_view(), name='printer'),
 ]

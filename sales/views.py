@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .serializers import SaleSerializer, SaleCreateSerializer
+from .serializers import SaleSerializer, SaleCreateSerializer, PrinterSerializer
 from .models import Sale, ProductSale, Payment, Printer
 from products.models import StoreProduct, Product, StoreProductLog
 from django.db import transaction
@@ -403,7 +403,7 @@ class CancelSale(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class PrintTicketView(APIView):
+class GetPrinterView(APIView):
     def post(self, request, *args, **kwargs):
         store = self.request.store
 
@@ -413,9 +413,8 @@ class PrintTicketView(APIView):
             # Obtener datos del ticket, por ejemplo desde request.data
             ticket_data = request.data.get("text", "Ticket sin contenido")
             print('ticket_data', ticket_data)
-            printer.send_print(ticket_data)
-
-            return Response({"message": "Ticket enviado a la impresora"})
+#            printer.send_print(ticket_data)
+            return Response({'url': printer.get_url()})
         except Exception as e:
             print('e', e)
             return Response({"error": str(e)}, status=400)

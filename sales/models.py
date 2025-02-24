@@ -101,3 +101,6 @@ class Printer(models.Model):
             return self.send_print_via_wifi(content)
         else:
             raise ValueError("Tipo de conexión inválido")
+
+    def get_url(self):
+        return self.ip + ':' + str(self.port)
