@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Sale, ProductSale
+from .models import Sale, ProductSale, Printer
 from clients.serializers import ClientSerializer
 
 
@@ -42,3 +42,7 @@ class SaleCreateSerializer(serializers.ModelSerializer):
         model = Sale
         fields = ["total", "client"]
 
+class PrinterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Printer
+        fields = "__all__"
