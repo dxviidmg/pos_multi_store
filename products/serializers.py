@@ -148,7 +148,6 @@ class TransferSerializer(serializers.ModelSerializer):
 class StoreSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     store_type_display = serializers.SerializerMethodField()
-    investment = serializers.SerializerMethodField()
     url_printer = serializers.SerializerMethodField()
 
     def get_full_name(self, obj):
@@ -156,9 +155,6 @@ class StoreSerializer(serializers.ModelSerializer):
 
     def get_store_type_display(self, obj):
         return obj.get_store_type_display()
-
-    def get_investment(self, obj):
-        return obj.get_investment()
 
     def get_url_printer(self, obj):
         return obj.get_url_printer()
