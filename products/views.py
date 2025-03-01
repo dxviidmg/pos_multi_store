@@ -9,7 +9,8 @@ from .serializers import (
     StoreProductLogSerializer,
     CashFlowSerializer,
     CashFlowCreateSerializer,
-    StoreProductLogSerializer2
+    StoreProductLogSerializer2,
+    StoreCashSummarySerializer,
 )
 from .models import (
     StoreProduct,
@@ -32,6 +33,7 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from datetime import date
+
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
@@ -75,8 +77,9 @@ class StoreProductViewSet(viewsets.ModelViewSet):
                 filters, brand__tenant=tenant
             ).select_related("brand")[:200]
         elif brand_id:
-            print('estoy en brand')
-            product_queryset = Product.objects.filter(brand__id=brand_id
+            print("estoy en brand")
+            product_queryset = Product.objects.filter(
+                brand__id=brand_id
             ).select_related("brand")
         else:
             brands = Brand.objects.filter(tenant=tenant)
@@ -135,13 +138,24 @@ class ProductViewSet(viewsets.ModelViewSet):
         tenant = self.request.user.get_tenant()
         brand_id = self.request.GET.get("brand_id", None)
         if brand_id:
-            return Product.objects.filter(brand__id=brand_id).order_by('name')            
-        return Product.objects.filter(brand__tenant=tenant).order_by('brand__name', 'name')
+            return Product.objects.filter(brand__id=brand_id).order_by("name")
+        return Product.objects.filter(brand__tenant=tenant).order_by(
+            "brand__name", "name"
+        )
 
 
 @method_decorator(get_store(), name="dispatch")
 class StoreViewSet(viewsets.ModelViewSet):
-    serializer_class = StoreSerializer
+
+    def get_serializer_class(self):
+        print(self.request.GET.get("showCashSUmmary", None))
+        show_cash_summary = self.request.GET.get("showCashSUmmary", "").lower() == "true"
+        return StoreCashSummarySerializer if show_cash_summary else StoreSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        print('1 self.request.GET', self.request.GET.get("date", None))
+        kwargs.setdefault("context", {}).update({"date": self.request.GET.get("date", None)})
+        return super().get_serializer(*args, **kwargs)
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
@@ -426,8 +440,8 @@ class StoreProductLogsView(APIView):
             serializer = StoreProductLogSerializer(store_product_logs, many=True)
         else:
             store = self.request.store
-            today = date.today() 
-            
+            today = date.today()
+
             store_product_logs = StoreProductLog.objects.filter(
                 store_product__store=store, created_at__date=today
             ).order_by("-id")

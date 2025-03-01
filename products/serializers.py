@@ -10,7 +10,7 @@ from .models import (
 )
 from django.core.exceptions import ValidationError
 from sales.cash_summary_utils import calculate_cash_summary
-from datetime import date
+from datetime import datetime, date
 
 
 
@@ -150,8 +150,6 @@ class StoreSerializer(serializers.ModelSerializer):
     store_type_display = serializers.SerializerMethodField()
     investment = serializers.SerializerMethodField()
     url_printer = serializers.SerializerMethodField()
-    cash_summary = serializers.SerializerMethodField()
-
 
     def get_full_name(self, obj):
         return obj.get_full_name()
@@ -164,15 +162,19 @@ class StoreSerializer(serializers.ModelSerializer):
 
     def get_url_printer(self, obj):
         return obj.get_url_printer()
-    
-    def get_cash_summary(self, obj):
-        today = date.today() 
-        return calculate_cash_summary(obj, today)
 
     class Meta:
         model = Store
         fields = "__all__"
 
+
+class StoreCashSummarySerializer(StoreSerializer):
+    cash_summary = serializers.SerializerMethodField()    
+
+    def get_cash_summary(self, obj):
+        today_str = self.context.get("date")
+        today = datetime.strptime(today_str, "%Y-%m-%d").date() if today_str else date.today()
+        return calculate_cash_summary(obj, today)
 
 class ProductSerializer(serializers.ModelSerializer):
 
