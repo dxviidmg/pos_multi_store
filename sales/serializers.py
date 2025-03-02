@@ -20,7 +20,7 @@ class SaleSerializer(serializers.ModelSerializer):
     payments_methods = serializers.SerializerMethodField()
     client = ClientSerializer()
     products_sale = ProductSaleSerializer(many=True)
-    is_duplicade = serializers.SerializerMethodField()
+    is_duplicate = serializers.SerializerMethodField()
 
     def get_saler_username(self, obj):
         return obj.saler.username
@@ -31,11 +31,11 @@ class SaleSerializer(serializers.ModelSerializer):
     def get_payments_methods(self, obj):
         return obj.get_payments_methods_display()
 
-    def get_is_duplicade(self, obj):
+    def get_is_duplicate(self, obj):
         previous_obj = Sale.objects.filter(pk__lt=obj.pk, store=obj.store).order_by('-pk').first()
         diff = obj.created_at - previous_obj.created_at
         return diff.total_seconds() < 1
-
+    
     class Meta:
         model = Sale
         fields = "__all__"
