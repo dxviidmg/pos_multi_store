@@ -431,19 +431,27 @@ class StoreProductLogsView(APIView):
     @transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
     def get(self, request):
         store_product_id = self.request.GET.get("store-product-id", None)
+        date = self.request.GET.get("date", None)
+        store = self.request.store
+
         if store_product_id:
             store_product_logs = StoreProductLog.objects.filter(
                 store_product__id=store_product_id
             ).order_by("-id")
             serializer = StoreProductLogSerializer(store_product_logs, many=True)
-        else:
-            store = self.request.store
-            today = date.today()
 
+
+        elif date:
             store_product_logs = StoreProductLog.objects.filter(
-                store_product__store=store, created_at__date=today
+                created_at__date=date, store_product__store=store,
             ).order_by("-id")
             serializer = StoreProductLogSerializer2(store_product_logs, many=True)
+        else:
+            store_product_logs = StoreProductLog.objects.filter(
+                store_product__store=store,
+            ).order_by("-id")
+            serializer = StoreProductLogSerializer2(store_product_logs, many=True)
+
         return Response(
             serializer.data,
             status=status.HTTP_200_OK,
