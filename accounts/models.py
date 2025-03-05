@@ -1,4 +1,3 @@
-from django.db import models
 from django.contrib.auth.models import User
 from tenants.models import Tenant
 from products.models import Store
