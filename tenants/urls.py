@@ -8,3 +8,7 @@ app_name = 'tenants'
 router = DefaultRouter() 
 router.register('payment', views.PaymentViewSet, basename='payment')
 urlpatterns = router.urls
+
+urlpatterns += [
+    path('tenant-notices/', views.TenantNoticesView.as_view(), name='tenant-notices'),
+]

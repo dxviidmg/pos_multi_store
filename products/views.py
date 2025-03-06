@@ -2,7 +2,6 @@ from rest_framework import viewsets
 from .serializers import (
     StoreProductSerializer,
     TransferSerializer,
-    StoreSerializer,
     ProductSerializer,
     BrandSerializer,
     StoreProductBaseSerializer,

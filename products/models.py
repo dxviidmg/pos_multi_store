@@ -3,10 +3,6 @@ from django.contrib.auth.models import User
 from tenants.models import Tenant, TimeStampedModel
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
-import socket
-from django.core.validators import MinValueValidator, MaxValueValidator
-from escpos.printer import Network
-from socket import AF_INET, SOCK_STREAM
 from datetime import date
 from django.db.models import Sum
 
