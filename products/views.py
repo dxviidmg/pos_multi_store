@@ -2,7 +2,6 @@ from rest_framework import viewsets
 from .serializers import (
     StoreProductSerializer,
     TransferSerializer,
-    StoreSerializer,
     ProductSerializer,
     BrandSerializer,
     StoreProductBaseSerializer,
@@ -148,8 +147,8 @@ class ProductViewSet(viewsets.ModelViewSet):
 class StoreViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
-        show_cash_summary = self.request.GET.get("showCashSUmmary", "").lower() == "true"
-        return StoreCashSummarySerializer if show_cash_summary else StoreSerializer
+#        show_cash_summary = self.request.GET.get("showCashSUmmary", "").lower() == "true"
+        return StoreCashSummarySerializer #if show_cash_summary else StoreSerializer
 
     def get_serializer(self, *args, **kwargs):
         kwargs.setdefault("context", {}).update({"date": self.request.GET.get("date", None)})

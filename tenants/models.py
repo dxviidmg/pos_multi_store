@@ -42,6 +42,7 @@ class Tenant(TimeStampedModel):
 
         super().save(*args, **kwargs)
 
+
 class Payment(TimeStampedModel):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     months = models.IntegerField(default=1)
