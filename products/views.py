@@ -32,6 +32,7 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from datetime import date
+from django.db.models import Sum
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -86,6 +87,16 @@ class StoreProductViewSet(viewsets.ModelViewSet):
                 "brand"
             )
 
+        max_stock = self.request.GET.get("max_stock", None)
+        if max_stock:
+            return (
+            StoreProduct.objects.filter(product__in=product_queryset, store=store, stock__lte=max_stock)
+            .prefetch_related("product")
+            .order_by(
+                "product__brand__name",
+                "product__name",
+            )
+        )
         return (
             StoreProduct.objects.filter(product__in=product_queryset, store=store)
             .prefetch_related("product")
@@ -136,7 +147,15 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
         brand_id = self.request.GET.get("brand_id", None)
+        max_stock = self.request.GET.get("max_stock", None)
         if brand_id:
+            if max_stock:
+                return Product.objects.annotate(
+                    total_stock=Sum("product_stores__stock")
+                ).filter(
+                    brand__id=brand_id,
+                    total_stock__lte=max_stock  # Ahora se puede filtrar por stock
+                ).order_by("name") 
             return Product.objects.filter(brand__id=brand_id).order_by("name")
         return Product.objects.filter(brand__tenant=tenant).order_by(
             "brand__name", "name"
