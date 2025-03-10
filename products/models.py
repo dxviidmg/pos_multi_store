@@ -194,6 +194,13 @@ class Store(Base):
 
 
 class Product(Base):
+
+    def path(self, filename):
+        return "{0}/products/{1}".format(
+            self.brand.tenant.short_name,
+            filename,
+        )
+        
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="products")
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
@@ -204,6 +211,7 @@ class Product(Base):
     )
     min_wholesale_quantity = models.IntegerField(null=True, blank=True)
     wholesale_price_on_client_discount = models.BooleanField(default=False)
+    image = models.ImageField(upload_to=path, null=True, blank=True)
 
     def clean(self):
         if (
