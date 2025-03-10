@@ -25,19 +25,62 @@ class BrandSerializer(serializers.ModelSerializer):
         exclude = ["tenant"]
 
 
+
+class ProductSearchSerializer(serializers.ModelSerializer):
+    brand_name = serializers.SerializerMethodField()
+    prices = serializers.SerializerMethodField()
+
+    def get_brand_name(self, obj):
+        return obj.brand.name
+    
+    def get_prices(self, obj):
+        return {
+            "unit_price": obj.unit_price,
+            "wholesale_price": obj.wholesale_price,
+            "min_wholesale_quantity": obj.min_wholesale_quantity,
+            "apply_wholesale": obj.apply_wholesale(),
+            "wholesale_price_on_client_discount": obj.wholesale_price_on_client_discount,
+        }
+    
+    class Meta:
+        model = Product
+        fields = ["id", "code", "brand_name", "name", "prices", "image"]    
+
+
+class ProductSerializer(serializers.ModelSerializer):
+    brand_name = serializers.SerializerMethodField()
+    apply_wholesale = serializers.SerializerMethodField()
+    stock = serializers.SerializerMethodField()
+
+    def get_brand_name(self, obj):
+        return obj.brand.name
+
+    def get_apply_wholesale(self, obj):
+        return obj.apply_wholesale()
+    
+    def get_stock(self, obj):
+        return obj.get_stock()
+
+    class Meta:
+        model = Product
+        fields = "__all__"
+
+    def validate(self, data):
+        request = self.context.get("request")
+        method = request.method if request else None
+
+        if method == "POST":
+            if Product.objects.filter(
+                code=data["code"], brand__tenant=data["brand"].tenant
+            ).exists():
+                raise ValidationError(
+                    {"code": "product with this code already exists."}
+                )
+
+        return data
+    
 class StoreProductBaseSerializer(serializers.ModelSerializer):
-    product_code = serializers.SerializerMethodField()
-    product_brand = serializers.SerializerMethodField()
-    product_name = serializers.SerializerMethodField()
-
-    def get_product_code(self, obj):
-        return obj.product.code
-
-    def get_product_brand(self, obj):
-        return obj.product.brand.name
-
-    def get_product_name(self, obj):
-        return obj.product.name
+    product =  ProductSearchSerializer(read_only=True)
 
     class Meta:
         model = StoreProduct
@@ -45,16 +88,9 @@ class StoreProductBaseSerializer(serializers.ModelSerializer):
 
 
 class StoreProductSerializer(StoreProductBaseSerializer):
-    product_id = serializers.SerializerMethodField()
-    product_description = serializers.SerializerMethodField()
     available_stock = serializers.SerializerMethodField()
     reserved_stock = serializers.SerializerMethodField()
-
-    prices = serializers.SerializerMethodField()
     stock_in_other_stores = serializers.SerializerMethodField()
-
-    def get_product_id(self, obj):
-        return obj.product.id
 
     def get_product_description(self, obj):
         return obj.product.get_description()
@@ -65,14 +101,7 @@ class StoreProductSerializer(StoreProductBaseSerializer):
     def get_reserved_stock(self, obj):
         return obj.calculate_reserved_stock()
 
-    def get_prices(self, obj):
-        return {
-            "unit_price": obj.product.unit_price,
-            "wholesale_price": obj.product.wholesale_price,
-            "min_wholesale_quantity": obj.product.min_wholesale_quantity,
-            "apply_wholesale": obj.product.apply_wholesale(),
-            "wholesale_price_on_client_discount": obj.product.wholesale_price_on_client_discount,
-        }
+
 
     def get_stock_in_other_stores(self, obj):
         # Optimize by pre-filtering and reducing unnecessary calculations
@@ -172,38 +201,7 @@ class StoreCashSummarySerializer(StoreSerializer):
         today = datetime.strptime(today_str, "%Y-%m-%d").date() if today_str else date.today()
         return calculate_cash_summary(obj, today)
 
-class ProductSerializer(serializers.ModelSerializer):
 
-    brand_name = serializers.SerializerMethodField()
-    apply_wholesale = serializers.SerializerMethodField()
-    stock = serializers.SerializerMethodField()
-
-    def get_brand_name(self, obj):
-        return obj.brand.name
-
-    def get_apply_wholesale(self, obj):
-        return obj.apply_wholesale()
-    
-    def get_stock(self, obj):
-        return obj.get_stock()
-
-    class Meta:
-        model = Product
-        fields = "__all__"
-
-    def validate(self, data):
-        request = self.context.get("request")
-        method = request.method if request else None
-
-        if method == "POST":
-            if Product.objects.filter(
-                code=data["code"], brand__tenant=data["brand"].tenant
-            ).exists():
-                raise ValidationError(
-                    {"code": "product with this code already exists."}
-                )
-
-        return data
 
 
 class CashFlowSerializer(serializers.ModelSerializer):
