@@ -176,8 +176,13 @@ class StoreViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
         store = self.request.store
+        store_type = self.request.GET.get("store_type", None)
+        
 
         queryset = Store.objects.filter(tenant=tenant)
+
+        if store_type:
+            queryset = queryset.filter(store_type=store_type)
 
         if store:
             queryset = queryset.exclude(id=store.id)
