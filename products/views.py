@@ -176,8 +176,13 @@ class StoreViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
         store = self.request.store
+        store_type = self.request.GET.get("store_type", None)
+        
 
         queryset = Store.objects.filter(tenant=tenant)
+
+        if store_type:
+            queryset = queryset.filter(store_type=store_type)
 
         if store:
             queryset = queryset.exclude(id=store.id)
@@ -397,52 +402,33 @@ class BrandViewSet(viewsets.ModelViewSet):
 class AddProductsView(APIView):
     @transaction.atomic
     def post(self, request):
-        product_list = request.data.get("products")
-        store = self.request.store
+        store_products_data = request.data.get("store_products", [])
         user = request.user  # Asumiendo que el usuario está autenticado
 
-        product_ids = [product_data["id"] for product_data in product_list]
-        store_products = StoreProduct.objects.filter(
-            product__in=product_ids, store=store
-        )
+        store_products = []
+        logs = []
 
-        store_product_dict = {
-            store_product.product_id: store_product for store_product in store_products
-        }
+        for store_product_data in store_products_data:
+            store_product = StoreProduct.objects.get(id=store_product_data['id'])
+            previous_stock = store_product.stock
+            store_product.stock += store_product_data['quantity']
 
-        logs = []  # Lista para almacenar los logs
-
-        for product_data in product_list:
-            product_id = product_data["id"]
-            if product_id in store_product_dict:
-                store_product = store_product_dict[product_id]
-                previous_stock = store_product.stock
-                updated_stock = previous_stock + product_data["quantity"]
-
-                # Actualizar el stock del producto
-                store_product.stock = updated_stock
-
-                # Crear el log correspondiente
-                logs.append(
-                    StoreProductLog(
-                        store_product=store_product,
-                        user=user,
-                        previous_stock=previous_stock,
-                        updated_stock=updated_stock,
-                        action="E",  # Acción: Entrada
-                    )
+            store_products.append(store_product)
+            logs.append(
+                StoreProductLog(
+                    store_product=store_product,
+                    user=user,
+                    previous_stock=previous_stock,
+                    updated_stock=store_product.stock,
+                    action="E",  # Acción: Entrada
                 )
+            )
 
-        # Guardar los productos actualizados en la base de datos
-        StoreProduct.objects.bulk_update(store_products, ["stock"])
-
-        # Guardar los logs en la base de datos
-        StoreProductLog.objects.bulk_create(logs)
-
-        return Response(
-            {"status": "success", "message": "Productos agregados correctamente"}
-        )
-
+        # Operaciones en una transacción para mayor seguridad
+        with transaction.atomic():
+            StoreProduct.objects.bulk_update(store_products, ["stock"])
+            StoreProductLog.objects.bulk_create(logs)
+        return Response({"status": "success", "message": "Productos agregados correctamente"})
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductLogsView(APIView):
