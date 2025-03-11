@@ -403,7 +403,7 @@ class AddProductsView(APIView):
     @transaction.atomic
     def post(self, request):
         store_products_data = request.data.get("store_products", [])
-        user = request.user  # Asumiendo que el usuario está autenticado
+        user = request.user
 
         store_products = []
         logs = []
@@ -478,6 +478,19 @@ class StoreInvestmentView(APIView):
 
         return Response(
             store.get_investment(),
+            status=status.HTTP_200_OK,
+        )
+    
+class InvestmentsView(APIView):
+    def get(self, request):
+        user = request.user
+        tenant = user.get_tenant()
+        stores = Store.objects.filter(tenant=tenant)
+
+        data = [{'id':store.id, 'investment':store.get_investment()} for store in stores]
+
+        return Response(
+            data,
             status=status.HTTP_200_OK,
         )
 
