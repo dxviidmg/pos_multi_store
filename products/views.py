@@ -401,7 +401,7 @@ class AddProductsView(APIView):
         store = self.request.store
         user = request.user  # Asumiendo que el usuario está autenticado
 
-        product_ids = [product_data["product_id"] for product_data in product_list]
+        product_ids = [product_data["id"] for product_data in product_list]
         store_products = StoreProduct.objects.filter(
             product__in=product_ids, store=store
         )
@@ -413,7 +413,7 @@ class AddProductsView(APIView):
         logs = []  # Lista para almacenar los logs
 
         for product_data in product_list:
-            product_id = product_data["product_id"]
+            product_id = product_data["id"]
             if product_id in store_product_dict:
                 store_product = store_product_dict[product_id]
                 previous_stock = store_product.stock
