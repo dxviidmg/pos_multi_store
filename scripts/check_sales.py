@@ -13,14 +13,13 @@ def run():
     for sale in sales:
         products_sales = ProductSale.objects.filter(sale=sale)
         for product_sale in products_sales:
-            if product_sale.price != product_sale.product.unit_price:
-                sp = StoreProduct.objects.filter(product=product_sale.product)
+            sp = StoreProduct.objects.filter(product=product_sale.product)
 #                print('sp.pk', sp)
-                sp1 = list(sp.values_list('id', flat=True))
-                ids += sp1
-                sp2 = StoreProduct.objects.filter(store=sale.store, product__id__in=sp)
-                sp2 = list(sp2.values_list('id', flat=True))
-                ids += sp2
+            sp1 = list(sp.values_list('id', flat=True))
+            ids += sp1
+            sp2 = StoreProduct.objects.filter(store=sale.store, product__id__in=sp)
+            sp2 = list(sp2.values_list('id', flat=True))
+            ids += sp2
 
     ids = set(ids)
     print(ids)
