@@ -9,8 +9,7 @@ def run():
         products_sales = ProductSale.objects.filter(sale=sale)
         for product_sale in products_sales:
             if product_sale.price != product_sale.product.unit_price:
-                print(sale.pk, sale.store)
-                break
+                print(sale.pk, sale.created_at.strftime('%H:%M:%S'), sale.store, 'precio real', product_sale.price, 'precio puesto', product_sale.product.unit_price)
 
             
 
