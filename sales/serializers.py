@@ -4,14 +4,9 @@ from clients.serializers import ClientSerializer
 
 
 class ProductSaleSerializer(serializers.ModelSerializer):
-    description = serializers.SerializerMethodField()
-
-    def get_description(self, obj):
-        return obj.product.get_description()
-
     class Meta:
         model = ProductSale
-        exclude = ["product", "sale"]
+        fields = ["name"]
 
 
 class SaleSerializer(serializers.ModelSerializer):
