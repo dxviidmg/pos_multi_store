@@ -3,11 +3,7 @@
 Pendientes: 
 
 #Said
-
 1 Borrar producto 2
-3 Ver inversión 1 (me falta la api, el front ya esta)
-4 Modificar ticket 3
-5 Imprimir ticket desde lista de ventas 4
 
 #Marlen
 1 Añadir vendedores 5

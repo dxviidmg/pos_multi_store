@@ -4,10 +4,10 @@ from clients.serializers import ClientSerializer
 
 
 class ProductSaleSerializer(serializers.ModelSerializer):
-    description = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
 
-    def get_description(self, obj):
-        return obj.product.get_description()
+    def get_name(self, obj):
+        return obj.product.name
 
     class Meta:
         model = ProductSale
