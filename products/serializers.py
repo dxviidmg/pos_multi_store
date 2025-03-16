@@ -13,7 +13,6 @@ from sales.cash_summary_utils import calculate_cash_summary
 from datetime import datetime, date
 
 
-
 class BrandSerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()
 
@@ -139,15 +138,10 @@ class StoreProductLogSerializer(serializers.ModelSerializer):
 
 
 class StoreProductLogSerializer2(StoreProductLogSerializer):
+    product = serializers.SerializerMethodField()
 
-    product_brand = serializers.SerializerMethodField()
-    product_name = serializers.SerializerMethodField()
-
-    def get_product_brand(self, obj):
-        return obj.store_product.product.brand.name
-
-    def get_product_name(self, obj):
-        return obj.store_product.product.name
+    def get_product(self, obj):
+        return ProductSerializer(obj.store_product.product).data
 
 
 class TransferSerializer(serializers.ModelSerializer):
