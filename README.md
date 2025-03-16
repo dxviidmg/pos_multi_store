@@ -1,9 +1,7 @@
 # pos_multi_store
 
 Pendientes: 
-
-#Said
-1 Borrar producto 2
+1 Mejorar presentación de list store
 
 #Marlen
 1 Añadir vendedores 5
