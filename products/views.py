@@ -33,6 +33,10 @@ import pandas as pd
 import numpy as np
 from datetime import date
 from django.db.models import Sum
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import viewsets
+
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -456,6 +460,7 @@ class StoreProductLogsView(APIView):
                 q["action"] = action
 
             store_product_logs = StoreProductLog.objects.filter(**q).order_by("-id")
+            print(store_product_logs)
             serializer_class = StoreProductLogSerializer2
 
         serializer = serializer_class(store_product_logs, many=True)
@@ -667,9 +672,7 @@ class ProductImport(APIView):
             )
 
 
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework import viewsets
+
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -696,3 +699,12 @@ class CashFlowViewSet(viewsets.ModelViewSet):
         store = self.request.store
         sale_instance = serializer.save(store=store, user=self.request.user)
         return sale_instance
+
+
+class DeleteProductsView(APIView):
+    @transaction.atomic
+    def post(self, request):
+        ids = request.data
+        print(ids)
+        Product.objects.filter(id__in=ids).delete()
+        return Response({"status": "success", "message": "Productos borrados correctamente"})

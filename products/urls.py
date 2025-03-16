@@ -24,4 +24,5 @@ urlpatterns += [
     path('products/add/', views.AddProductsView.as_view(), name='add-products'),
     path('products/import-validation/', views.ProductImportValidation.as_view(), name='product-import-validation'),
     path('products/import/', views.ProductImport.as_view(), name='product-import'),
+    path('products/delete/', views.DeleteProductsView.as_view(), name='products-delete'),
 ]
