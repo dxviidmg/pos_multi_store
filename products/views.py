@@ -214,7 +214,7 @@ class ConfirmProductTransfersView(APIView):
         logs = []  # Lista para almacenar los logs de StoreProductLog
 
         for transfer_item in transfer_list:
-            product_id = transfer_item["product_id"]
+            product_id = transfer_item['product']["id"]
             quantity = transfer_item["quantity"]
 
             transfer_filter = {
