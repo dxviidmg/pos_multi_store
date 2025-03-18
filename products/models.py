@@ -59,7 +59,6 @@ class Store(Base):
             return "http://127.0.0.1:5000/"
         return False
 
-
     def get_investment(self):
         store_products = self.store_products.all()
         store_investment = 0
@@ -74,123 +73,9 @@ class Store(Base):
             store_investment += store_investment_by_product
 
         return store_investment
-    
-    def get_profit_today(self):
-        today = date.today() 
-        sales = self.sales.filter(created_at__date=today)
-        profit = 0
-        for sale in sales:
-            profit += sale.get_profit()
 
-        return profit
-        cash_flow_totals_by_type = (
-            CashFlow.objects.filter(store=store, created_at__date=date)
-            .values("transaction_type")
-            .annotate(total=Sum("amount"))
-        )
-
-        # Mapear los totales en un defaultdict para evitar valores None
-        transaction_sums = defaultdict(
-            int,
-            {
-                entry["transaction_type"]: entry["total"]
-                for entry in cash_flow_totals_by_type
-            },
-        )
-        total_income = transaction_sums["E"]
-        total_expenses = transaction_sums["S"]
-        net_cash_flow = total_income - total_expenses
-
-        # Obtener total de ventas
-        total_sales = (
-            Sale.objects.filter(store=store, created_at__date=date).aggregate(
-                total=Sum("total")
-            )["total"]
-            or 0
-        )
-
-        # Obtener pagos relacionados con esas ventas
-        related_payments = Payment.objects.filter(
-            sale__store=store, sale__created_at__date=date
-        )
-        payments_grouped_by_method = related_payments.values("payment_method").annotate(
-            total_amount=Sum("amount")
-        )
-        total_received_payments = (
-            related_payments.aggregate(total=Sum("amount"))["total"] or 0
-        )
-
-        # Mapeo de métodos de pago
-        payment_method_labels = dict(Payment.PAYMENT_METHOD_CHOICES)
-
-        # Construcción de la respuesta
-        response_data = [
-            {
-                "name": payment_method_labels.get(
-                    payment["payment_method"], payment["payment_method"]
-                ),
-                "amount": payment["total_amount"],
-                "payment_method_data": True,
-            }
-            for payment in payments_grouped_by_method
-        ]
-
-        net_cash = (
-            next(
-                (item for item in response_data if item["name"] == "Efectivo"),
-                {"amount": 0},
-            )["amount"]
-            - total_expenses
-        )
-
-        response_data.extend(
-            [
-                {
-                    "name": "Total en ventas",
-                    "amount": total_sales,
-                    "sales_data": True,
-                    "total_data": True,
-                },
-                {
-                    "name": "Total en pagos",
-                    "amount": total_received_payments,
-                    "payment_method_data": True,
-                    "sales_data": True,
-                },
-                {
-                    "name": "Balanceado",
-                    "amount": "Si" if total_sales == total_received_payments else "No",
-                    "sales_data": True,
-                },
-                {"name": "Entradas", "amount": total_income, "cashflow_data": True},
-                {
-                    "name": "Salidas",
-                    "amount": (
-                        f"-{total_expenses}"
-                        if total_expenses != 0
-                        else str(total_expenses)
-                    ),
-                    "cashflow_data": True,
-                },
-                {
-                    "name": "Total de E/S",
-                    "amount": net_cash_flow,
-                    "cashflow_data": True,
-                    "total_data": True,
-                },
-                {
-                    "name": "Total en caja",
-                    "amount": net_cash,
-                    "total_data": True,
-                },
-                {
-                    "name": "Total",
-                    "amount": total_sales + net_cash_flow,
-                    "total_data": True,
-                },
-            ]
-        )
-        return response_data
+    def count_products(self):
+        return self.store_products.all().count()
 
 
 class Product(Base):
@@ -200,7 +85,7 @@ class Product(Base):
             self.brand.tenant.short_name,
             filename,
         )
-        
+
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="products")
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
@@ -233,12 +118,18 @@ class Product(Base):
         )
 
     def get_stock(self):
-        return self.product_stores.aggregate(total_stock=Sum('stock'))['total_stock'] or 0
-    
+        return (
+            self.product_stores.aggregate(total_stock=Sum("stock"))["total_stock"] or 0
+        )
+
 
 class StoreProduct(models.Model):
-    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="store_products")
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="product_stores")
+    store = models.ForeignKey(
+        Store, on_delete=models.CASCADE, related_name="store_products"
+    )
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="product_stores"
+    )
     stock = models.IntegerField(default=0)
 
     def __str__(self):
@@ -307,10 +198,11 @@ class StoreProductLog(TimeStampedModel):
         difference = self.updated_stock - self.previous_stock
         return f"+{difference}" if difference > 0 else str(difference)
 
+
 class CashFlow(TimeStampedModel):
     TRANSACTION_TYPES_CHOICES = [
-        ('E', 'Entrada'),  # Entrada de dinero
-        ('S', 'Salida')  # Salida de dinero
+        ("E", "Entrada"),  # Entrada de dinero
+        ("S", "Salida"),  # Salida de dinero
     ]
 
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
