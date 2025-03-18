@@ -21,7 +21,7 @@ class Base(models.Model):
 class Brand(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
 
-    def get_product_count(self):
+    def count_products(self):
         return self.products.count()
 
 

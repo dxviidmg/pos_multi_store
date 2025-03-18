@@ -42,6 +42,8 @@ class Tenant(TimeStampedModel):
 
         super().save(*args, **kwargs)
 
+    def count_products(self):
+        return sum([brand.count_products() for brand in self.brand_set.all()])
 
 class Payment(TimeStampedModel):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)

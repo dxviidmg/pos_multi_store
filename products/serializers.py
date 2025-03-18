@@ -17,7 +17,7 @@ class BrandSerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()
 
     def get_product_count(self, obj):
-        return obj.get_product_count()
+        return obj.count_products()
 
     class Meta:
         model = Brand

@@ -642,7 +642,6 @@ class ProductImport(APIView):
 
             brand_cache = {}
 
-            products = []
             for data_row in df.to_dict(orient="records"):
                 brand_name = data_row["brand"]
                 if brand_name not in brand_cache:
@@ -655,9 +654,9 @@ class ProductImport(APIView):
                     data_row["wholesale_price_on_client_discount"]
                 )
 
-                products.append(Product(**data_row))
 
-            Product.objects.bulk_create(products)
+                product = Product(**data_row)
+                product.save()  # D
 
             return Response({}, status=status.HTTP_200_OK)
 
