@@ -10,5 +10,5 @@ router.register('payment', views.PaymentViewSet, basename='payment')
 urlpatterns = router.urls
 
 urlpatterns += [
-    path('tenant-notices/', views.TenantNoticesView.as_view(), name='tenant-notices'),
+    path('tenant-info/', views.TenantInfoView.as_view(), name='tenant-info'),
 ]

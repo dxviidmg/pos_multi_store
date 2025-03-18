@@ -16,22 +16,25 @@ class PaymentViewSet(viewsets.ModelViewSet):
     
 
 
-class TenantNoticesView(APIView):
+class TenantInfoView(APIView):
     def get(self, request):
         tenant = request.user.get_tenant()
+        print(tenant.count_products())
         today = date.today()
 
         payment = Payment.objects.filter(tenant=tenant).last()
-        data = ["Soy un demo"] if tenant.is_sandbox else []
+        notices = ["Soy una cuenta de demostración"] if tenant.is_sandbox else []
 
         if not tenant.is_sandbox:
             if not payment:
-                data.append("No existe ningún pago")
+                notices.append("No existe ningún pago, favor de pagar")
             else:
                 days_diff = (payment.end_of_validity - today).days
                 if days_diff < 0:
-                    data.append(f"Tiene un adeudo de {abs(days_diff)} días")
+                    notices.append(f"Tiene un adeudo, favor de pagar")
+                if days_diff == 0:
+                    notices.append(f"Ultimo dia de pago, favor de pagar")
                 elif days_diff <= 7:
-                    data.append(f"Próximo pago en {days_diff} días")
+                    notices.append(f"Próximo pago en {days_diff} días")
 
-        return Response(data, status=status.HTTP_200_OK)
+        return Response({'notices': notices, 'product_count': tenant.count_products()}, status=status.HTTP_200_OK)
