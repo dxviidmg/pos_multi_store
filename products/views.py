@@ -711,6 +711,12 @@ class DeleteProductsView(APIView):
     @transaction.atomic
     def post(self, request):
         ids = request.data
-        print(ids)
         Product.objects.filter(id__in=ids).delete()
         return Response({"status": "success", "message": "Productos borrados correctamente"})
+    
+class DeleteBrandsView(APIView):
+    @transaction.atomic
+    def post(self, request):
+        ids = request.data
+        Brand.objects.filter(id__in=ids).delete()
+        return Response({"status": "success", "message": "Marcas borrados correctamente"})
