@@ -172,6 +172,7 @@ class StoreSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     store_type_display = serializers.SerializerMethodField()
     url_printer = serializers.SerializerMethodField()
+    products_count = serializers.IntegerField(source='count_products', read_only=True)
 
     def get_full_name(self, obj):
         return obj.get_full_name()
@@ -181,7 +182,7 @@ class StoreSerializer(serializers.ModelSerializer):
 
     def get_url_printer(self, obj):
         return obj.get_url_printer()
-
+    
     class Meta:
         model = Store
         fields = "__all__"
