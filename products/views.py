@@ -214,7 +214,7 @@ class ConfirmProductTransfersView(APIView):
         logs = []  # Lista para almacenar los logs de StoreProductLog
 
         for transfer_item in transfer_list:
-            product_id = transfer_item["product_id"]
+            product_id = transfer_item['product']["id"]
             quantity = transfer_item["quantity"]
 
             transfer_filter = {
@@ -536,7 +536,8 @@ class ProductImportValidation(APIView):
             return Response(
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
-
+        
+        create_brands = request.data.get("create_brands")
         tenant = request.user.get_tenant()
         try:
             df = pd.read_excel(file_obj).replace({np.nan: None})
@@ -579,6 +580,12 @@ class ProductImportValidation(APIView):
                                 )
                         except ValueError:
                             aux["status"] = "Valores inválidos"
+
+                    if create_brands == "N":
+                        try:
+                            Brand.objects.get(name=row["brand"])
+                        except Brand.DoesNotExist:
+                            aux["status"] = "Marca inexistente"
 
                 data.append(aux)
 
