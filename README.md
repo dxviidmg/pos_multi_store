@@ -2,7 +2,6 @@
 
 Pendientes: 
 2 Arreglar impresora *
-4 Agregar referencia en pago con tarjeta
 6 alternativa de agregar producto con boton
 7 Agregar producto durante la compra
 

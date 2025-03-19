@@ -6,7 +6,7 @@ from dateutil.relativedelta import relativedelta
 
 MONTHY_PRICE_BY_STORE = 500
 
-class TimeStampedModel(models.Model):
+class CreatedAtModel(models.Model):
     """Abstract base class that adds created_at and updated_at fields to models."""
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -15,7 +15,7 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
-class Tenant(TimeStampedModel):
+class Tenant(CreatedAtModel):
     name = models.CharField(max_length=100)
     short_name = models.CharField(max_length=5, unique=True)
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -45,7 +45,7 @@ class Tenant(TimeStampedModel):
     def count_products(self):
         return sum([brand.count_products() for brand in self.brand_set.all()])
 
-class Payment(TimeStampedModel):
+class Payment(CreatedAtModel):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     months = models.IntegerField(default=1)
     total = models.DecimalField(decimal_places=2, max_digits=7, default=0)
