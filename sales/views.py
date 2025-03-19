@@ -27,6 +27,7 @@ class SaleViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
         payments_data = self.request.data.get("payments")
+        reference_payment = self.request.data.get("reference_payment")
 
         if not store_products_data or not payments_data:
             return Response(
@@ -91,6 +92,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                     "sale": sale_instance,
                     "payment_method": payment_data["payment_method"],
                     "amount": payment_data["amount"],
+                    "reference": reference_payment if payment_data["payment_method"] != "EF" else None
                 }
                 Payment.objects.create(**data)
 

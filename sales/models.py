@@ -2,10 +2,9 @@ from django.db import models
 from clients.models import Client
 from products.models import Product, Store
 from django.contrib.auth.models import User
+from tenants.models import CreatedAtModel
 
-
-class Sale(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
+class Sale(CreatedAtModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
@@ -20,6 +19,9 @@ class Sale(models.Model):
 
     def get_payments_methods_display(self):
         return [payment.get_payment_method_display() for payment in self.payments.all()]
+    
+    def get_reference(self):
+        return [payment.reference for payment in self.payments.all()][0]
 
     def get_profit(self):
         profit = 0
@@ -55,3 +57,4 @@ class Payment(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="payments")
     payment_method = models.CharField(max_length=2, choices=PAYMENT_METHOD_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reference = models.CharField(max_length=100, blank=True, null=True)

@@ -21,6 +21,7 @@ class SaleSerializer(serializers.ModelSerializer):
     client = ClientSerializer()
     products_sale = ProductSaleSerializer(many=True)
     is_duplicate = serializers.SerializerMethodField()
+    reference = serializers.SerializerMethodField()
 
     def get_saler_username(self, obj):
         return obj.saler.username
@@ -35,6 +36,9 @@ class SaleSerializer(serializers.ModelSerializer):
         previous_obj = Sale.objects.filter(pk__lt=obj.pk, store=obj.store).order_by('-pk').first()
         diff = obj.created_at - previous_obj.created_at
         return diff.total_seconds() < 1
+    
+    def get_reference(self, obj):
+        return obj.get_reference()
     
     class Meta:
         model = Sale

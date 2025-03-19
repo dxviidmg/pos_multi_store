@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from tenants.models import Tenant, TimeStampedModel
+from tenants.models import Tenant, CreatedAtModel
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 from datetime import date
@@ -146,8 +146,7 @@ class StoreProduct(models.Model):
         return self.stock - self.calculate_reserved_stock()
 
 
-class Transfer(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
+class Transfer(CreatedAtModel):
     origin_store = models.ForeignKey(
         Store, related_name="transfers_from", on_delete=models.CASCADE
     )
@@ -162,7 +161,7 @@ class Transfer(models.Model):
         return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"
 
 
-class StoreProductLog(TimeStampedModel):
+class StoreProductLog(CreatedAtModel):
     ACTIONS_CHOICES = [("E", "Entrada"), ("S", "Salida"), ("A", "Ajuste")]
 
     MOVEMENT_CHOICES = [
@@ -199,7 +198,7 @@ class StoreProductLog(TimeStampedModel):
         return f"+{difference}" if difference > 0 else str(difference)
 
 
-class CashFlow(TimeStampedModel):
+class CashFlow(CreatedAtModel):
     TRANSACTION_TYPES_CHOICES = [
         ("E", "Entrada"),  # Entrada de dinero
         ("S", "Salida"),  # Salida de dinero
