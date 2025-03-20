@@ -21,6 +21,8 @@ class Tenant(CreatedAtModel):
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
     stores = models.IntegerField()
     is_sandbox = models.BooleanField(default=False)
+    has_sellers = models.BooleanField(default=False)
+    show_profit_by_brands = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name

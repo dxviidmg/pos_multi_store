@@ -6,14 +6,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from datetime import date
 
+
 # Create your views here.
 class PaymentViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSerializer
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return Payment.objects.filter(tenant=tenant).order_by('id')
-    
+        return Payment.objects.filter(tenant=tenant).order_by("id")
 
 
 class TenantInfoView(APIView):
@@ -36,4 +36,11 @@ class TenantInfoView(APIView):
                 elif days_diff <= 7:
                     notices.append(f"Próximo pago en {days_diff} días")
 
-        return Response({'notices': notices, 'product_count': tenant.count_products()}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "notices": notices,
+                "product_count": tenant.count_products(),
+                "show_profit_by_brands": tenant.show_profit_by_brands,
+            },
+            status=status.HTTP_200_OK,
+        )

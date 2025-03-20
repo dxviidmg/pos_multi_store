@@ -9,7 +9,7 @@ from .models import (
     CashFlow,
 )
 from django.core.exceptions import ValidationError
-from sales.cash_summary_utils import calculate_cash_summary
+from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary2
 from datetime import datetime, date
 
 
@@ -194,8 +194,12 @@ class StoreCashSummarySerializer(StoreSerializer):
     def get_cash_summary(self, obj):
         start_date_str = self.context.get("start_date")
         end_date_str = self.context.get("end_date")
-        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        brand_id = self.context.get("brand_id", None)
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else date.today()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date.today()
+        if brand_id:
+            print('brand id', brand_id)
+            return calculate_cash_summary2(obj, None, start_date, end_date, brand_id)
         return calculate_cash_summary(obj, None, start_date, end_date)
 
 

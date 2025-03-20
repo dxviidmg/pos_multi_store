@@ -167,12 +167,12 @@ class ProductViewSet(viewsets.ModelViewSet):
 class StoreViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
-#        show_cash_summary = self.request.GET.get("showCashSUmmary", "").lower() == "true"
-        return StoreCashSummarySerializer #if show_cash_summary else StoreSerializer
+        return StoreCashSummarySerializer
 
     def get_serializer(self, *args, **kwargs):
         kwargs.setdefault("context", {}).update({"start_date": self.request.GET.get("start_date", None)})
         kwargs.setdefault("context", {}).update({"end_date": self.request.GET.get("end_date", None)})
+        kwargs.setdefault("context", {}).update({"brand_id": self.request.GET.get("brand_id", None)})
         return super().get_serializer(*args, **kwargs)
 
     def get_queryset(self):

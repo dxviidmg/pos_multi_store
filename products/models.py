@@ -209,3 +209,13 @@ class CashFlow(CreatedAtModel):
     transaction_type = models.CharField(max_length=1, choices=TRANSACTION_TYPES_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+
+class StoreWorker(models.Model):
+    ROLE_CHOICES = [
+        ('A', 'Administrador'),
+        ('V', 'Vendedor'),
+    ]
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    role = models.CharField(max_length=1, choices=ROLE_CHOICES)
