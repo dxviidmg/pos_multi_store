@@ -1,7 +1,6 @@
 # pos_multi_store
 
 Pendientes: 
-2 Arreglar impresora *
 6 alternativa de agregar producto con boton
 7 Agregar producto durante la compra
 

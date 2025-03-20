@@ -65,7 +65,7 @@ def calculate_cash_summary(store, date):
             (item for item in cash_summary if item["name"] == "Efectivo"),
             {"amount": 0},
         )["amount"]
-        - total_expenses
+        + net_cash_flow
     )
 
     cash_summary.extend(

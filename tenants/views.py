@@ -19,7 +19,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
 class TenantInfoView(APIView):
     def get(self, request):
         tenant = request.user.get_tenant()
-        print(tenant.count_products())
         today = date.today()
 
         payment = Payment.objects.filter(tenant=tenant).last()

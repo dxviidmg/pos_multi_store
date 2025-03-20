@@ -51,8 +51,6 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         return StoreProductSerializer
 
     def get_queryset(self):
-
-        print(self.request.GET)
         q = self.request.GET.get("q", None)
         code = self.request.GET.get("code", None)
         brand_id = self.request.GET.get("brand_id", None)
@@ -81,7 +79,6 @@ class StoreProductViewSet(viewsets.ModelViewSet):
                 filters, brand__tenant=tenant
             ).select_related("brand")[:200]
         elif brand_id:
-            print("estoy en brand")
             product_queryset = Product.objects.filter(
                 brand__id=brand_id
             ).select_related("brand")
@@ -460,7 +457,6 @@ class StoreProductLogsView(APIView):
                 q["action"] = action
 
             store_product_logs = StoreProductLog.objects.filter(**q).order_by("-id")
-            print(store_product_logs)
             serializer_class = StoreProductLogSerializer2
 
         serializer = serializer_class(store_product_logs, many=True)
