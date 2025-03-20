@@ -192,9 +192,11 @@ class StoreCashSummarySerializer(StoreSerializer):
     cash_summary = serializers.SerializerMethodField()    
 
     def get_cash_summary(self, obj):
-        today_str = self.context.get("date")
-        today = datetime.strptime(today_str, "%Y-%m-%d").date() if today_str else date.today()
-        return calculate_cash_summary(obj, today)
+        start_date_str = self.context.get("start_date")
+        end_date_str = self.context.get("end_date")
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        return calculate_cash_summary(obj, None, start_date, end_date)
 
 
 
