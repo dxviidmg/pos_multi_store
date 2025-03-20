@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Store, Product, StoreProduct, Brand, Transfer, StoreProductLog, CashFlow
+from .models import Store, Product, StoreProduct, Brand, Transfer, StoreProductLog, CashFlow, StoreWorker
 
 
 @admin.register(Product)
@@ -39,3 +39,5 @@ class StoreProductLogAdmin(admin.ModelAdmin):
 
 
 admin.site.register(CashFlow)
+
+admin.site.register(StoreWorker)
