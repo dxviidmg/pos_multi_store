@@ -4,14 +4,22 @@ from collections import defaultdict
 from .models import Sale, Payment
 from products.models import CashFlow
 
-def calculate_cash_summary(store, date):  
+def calculate_cash_summary(store, date, start_date=None, end_date=None):  
     # Obtener totales de CashFlow agrupados por tipo de transacción
-    cash_flow_totals_by_type = (
-        CashFlow.objects.filter(store=store, created_at__date=date)
-        .values("transaction_type")
-        .annotate(total=Sum("amount"))
-    )
 
+    if date:
+        cash_flow_totals_by_type = (
+            CashFlow.objects.filter(store=store, created_at__date=date)
+            .values("transaction_type")
+            .annotate(total=Sum("amount"))
+        )
+    else:
+
+        cash_flow_totals_by_type = (
+            CashFlow.objects.filter(store=store, created_at__date__range=[start_date, end_date])
+            .values("transaction_type")
+            .annotate(total=Sum("amount"))
+        )
     # Mapear los totales en un defaultdict para evitar valores None
     transaction_sums = defaultdict(
         int,
@@ -22,16 +30,24 @@ def calculate_cash_summary(store, date):
     net_cash_flow = total_income - total_expenses
 
     # Obtener total de ventas
-    sales = Sale.objects.filter(store=store, created_at__date=date)
+    if date:
+        sales = Sale.objects.filter(store=store, created_at__date=date)
+    else:
+        sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date])
     total_sales = sales.aggregate(total=Sum("total"))["total"] or 0
 
     # Calcular la ganancia total del día sumando el beneficio de cada venta
     total_profit = sum(sale.get_profit() for sale in sales)
 
     # Obtener pagos relacionados con esas ventas
-    related_payments = Payment.objects.filter(
-        sale__store=store, sale__created_at__date=date
-    )
+    if date:
+        related_payments = Payment.objects.filter(
+            sale__store=store, sale__created_at__date=date
+        )
+    else:
+        related_payments = Payment.objects.filter(
+                    sale__store=store, sale__created_at__date__range=[start_date, end_date]
+                )        
     payments_grouped_by_method = related_payments.values("payment_method").annotate(
         total_amount=Sum("amount")
     )
