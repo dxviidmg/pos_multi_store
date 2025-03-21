@@ -39,7 +39,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         logs = []  # Lista para almacenar logs de StoreProductLog
 
         store = self.request.store
-        saler = self.request.user
+        seller = self.request.user
 
         # Usar una transacción para asegurar la atomicidad
         with transaction.atomic():
@@ -56,7 +56,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                 logs.append(
                     StoreProductLog(
                         store_product=product_store,
-                        user=saler,
+                        user=seller,
                         previous_stock=previous_stock,
                         updated_stock=updated_stock,
                         action="S",  # Acción: Salida
@@ -71,7 +71,7 @@ class SaleViewSet(viewsets.ModelViewSet):
             StoreProductLog.objects.bulk_create(logs)
 
             # Guardar la venta y asociarla al usuario actual
-            sale_instance = serializer.save(store=store, saler=saler)
+            sale_instance = serializer.save(store=store, seller=seller)
 
             # Crear las relaciones de ProductSale
             for product_data in store_products_data:
@@ -230,7 +230,7 @@ class ImportSales(APIView):
 
         tenant = self.request.user.get_tenant()
         store = self.request.store
-        saler = self.request.user
+        seller = self.request.user
 
         try:
             df = pd.read_excel(file_obj)
@@ -264,7 +264,7 @@ class ImportSales(APIView):
                 logs.append(
                     StoreProductLog(
                         store_product=store_product,
-                        user=saler,
+                        user=seller,
                         previous_stock=previous_stock,
                         updated_stock=updated_stock,
                         action="S",  # Acción: Salida
@@ -275,7 +275,7 @@ class ImportSales(APIView):
                 # Calcular el total de la venta y registrar la venta
                 total = product.unit_price * quantity
                 sale_instance = Sale.objects.create(
-                    store=store, total=total, saler=saler
+                    store=store, total=total, seller=seller
                 )
 
                 # Crear la relación ProductSale

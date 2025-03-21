@@ -11,6 +11,7 @@ router.register('product', views.ProductViewSet, basename='product')
 router.register('store-product', views.StoreProductViewSet, basename='store-product')
 router.register('transfer', views.TransferViewSet, basename='transfer')
 router.register('cash-flow', views.CashFlowViewSet, basename='cash-flow')
+router.register('store-worker', views.StoreWorkerViewSet, basename='store-worker')
 
 urlpatterns = router.urls
 
