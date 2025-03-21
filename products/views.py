@@ -10,6 +10,7 @@ from .serializers import (
     CashFlowCreateSerializer,
     StoreProductLogSerializer2,
     StoreCashSummarySerializer,
+    StoreWorkerSerializer
 )
 from .models import (
     StoreProduct,
@@ -19,6 +20,7 @@ from .models import (
     Brand,
     StoreProductLog,
     CashFlow,
+    StoreWorker
 )
 from django.db.models import Q
 from rest_framework.views import APIView
@@ -36,7 +38,6 @@ from django.db.models import Sum
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets
-
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -91,13 +92,15 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         max_stock = self.request.GET.get("max_stock", None)
         if max_stock:
             return (
-            StoreProduct.objects.filter(product__in=product_queryset, store=store, stock__lte=max_stock)
-            .prefetch_related("product")
-            .order_by(
-                "product__brand__name",
-                "product__name",
+                StoreProduct.objects.filter(
+                    product__in=product_queryset, store=store, stock__lte=max_stock
+                )
+                .prefetch_related("product")
+                .order_by(
+                    "product__brand__name",
+                    "product__name",
+                )
             )
-        )
         return (
             StoreProduct.objects.filter(product__in=product_queryset, store=store)
             .prefetch_related("product")
@@ -151,12 +154,14 @@ class ProductViewSet(viewsets.ModelViewSet):
         max_stock = self.request.GET.get("max_stock", None)
         if brand_id:
             if max_stock:
-                return Product.objects.annotate(
-                    total_stock=Sum("product_stores__stock")
-                ).filter(
-                    brand__id=brand_id,
-                    total_stock__lte=max_stock  # Ahora se puede filtrar por stock
-                ).order_by("name") 
+                return (
+                    Product.objects.annotate(total_stock=Sum("product_stores__stock"))
+                    .filter(
+                        brand__id=brand_id,
+                        total_stock__lte=max_stock,  # Ahora se puede filtrar por stock
+                    )
+                    .order_by("name")
+                )
             return Product.objects.filter(brand__id=brand_id).order_by("name")
         return Product.objects.filter(brand__tenant=tenant).order_by(
             "brand__name", "name"
@@ -170,16 +175,21 @@ class StoreViewSet(viewsets.ModelViewSet):
         return StoreCashSummarySerializer
 
     def get_serializer(self, *args, **kwargs):
-        kwargs.setdefault("context", {}).update({"start_date": self.request.GET.get("start_date", None)})
-        kwargs.setdefault("context", {}).update({"end_date": self.request.GET.get("end_date", None)})
-        kwargs.setdefault("context", {}).update({"brand_id": self.request.GET.get("brand_id", None)})
+        kwargs.setdefault("context", {}).update(
+            {"start_date": self.request.GET.get("start_date", None)}
+        )
+        kwargs.setdefault("context", {}).update(
+            {"end_date": self.request.GET.get("end_date", None)}
+        )
+        kwargs.setdefault("context", {}).update(
+            {"brand_id": self.request.GET.get("brand_id", None)}
+        )
         return super().get_serializer(*args, **kwargs)
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
         store = self.request.store
         store_type = self.request.GET.get("store_type", None)
-        
 
         queryset = Store.objects.filter(tenant=tenant)
 
@@ -212,7 +222,7 @@ class ConfirmProductTransfersView(APIView):
         logs = []  # Lista para almacenar los logs de StoreProductLog
 
         for transfer_item in transfer_list:
-            product_id = transfer_item['product']["id"]
+            product_id = transfer_item["product"]["id"]
             quantity = transfer_item["quantity"]
 
             transfer_filter = {
@@ -411,9 +421,9 @@ class AddProductsView(APIView):
         logs = []
 
         for store_product_data in store_products_data:
-            store_product = StoreProduct.objects.get(id=store_product_data['id'])
+            store_product = StoreProduct.objects.get(id=store_product_data["id"])
             previous_stock = store_product.stock
-            store_product.stock += store_product_data['quantity']
+            store_product.stock += store_product_data["quantity"]
 
             store_products.append(store_product)
             logs.append(
@@ -430,7 +440,10 @@ class AddProductsView(APIView):
         with transaction.atomic():
             StoreProduct.objects.bulk_update(store_products, ["stock"])
             StoreProductLog.objects.bulk_create(logs)
-        return Response({"status": "success", "message": "Productos agregados correctamente"})
+        return Response(
+            {"status": "success", "message": "Productos agregados correctamente"}
+        )
+
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductLogsView(APIView):
@@ -470,7 +483,8 @@ class StoreProductLogsChoicesView(APIView):
             {"value": key, "label": label}
             for key, label in StoreProductLog.ACTIONS_CHOICES
         ]
-        return Response(choices)    
+        return Response(choices)
+
 
 # @method_decorator(get_store(), name="dispatch")
 class StoreInvestmentView(APIView):
@@ -482,14 +496,17 @@ class StoreInvestmentView(APIView):
             store.get_investment(),
             status=status.HTTP_200_OK,
         )
-    
+
+
 class InvestmentsView(APIView):
     def get(self, request):
         user = request.user
         tenant = user.get_tenant()
         stores = Store.objects.filter(tenant=tenant)
 
-        data = [{'id':store.id, 'investment':store.get_investment()} for store in stores]
+        data = [
+            {"id": store.id, "investment": store.get_investment()} for store in stores
+        ]
 
         return Response(
             data,
@@ -533,7 +550,7 @@ class ProductImportValidation(APIView):
             return Response(
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         create_brands = request.data.get("create_brands")
         tenant = request.user.get_tenant()
         try:
@@ -658,7 +675,6 @@ class ProductImport(APIView):
                     data_row["wholesale_price_on_client_discount"]
                 )
 
-
                 product = Product(**data_row)
                 product.save()  # D
 
@@ -673,9 +689,6 @@ class ProductImport(APIView):
                 {"error": f"Unexpected error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-
-
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -709,11 +722,31 @@ class DeleteProductsView(APIView):
     def post(self, request):
         ids = request.data
         Product.objects.filter(id__in=ids).delete()
-        return Response({"status": "success", "message": "Productos borrados correctamente"})
-    
+        return Response(
+            {"status": "success", "message": "Productos borrados correctamente"}
+        )
+
+
 class DeleteBrandsView(APIView):
     @transaction.atomic
     def post(self, request):
         ids = request.data
         Brand.objects.filter(id__in=ids).delete()
-        return Response({"status": "success", "message": "Marcas borrados correctamente"})
+        return Response(
+            {"status": "success", "message": "Marcas borrados correctamente"}
+        )
+
+
+@method_decorator(get_store(), name="dispatch")
+class StoreWorkerViewSet(viewsets.ModelViewSet):
+    def get_serializer_class(self):
+        return StoreWorkerSerializer
+
+    def get_queryset(self):
+        q = self.request.GET.get("q", None)
+        code = self.request.GET.get("code", None)
+        brand_id = self.request.GET.get("brand_id", None)
+        # Intentar obtener la tienda, retornar un queryset vacío si no existe
+        store = self.request.store
+        tenant = self.request.user.get_tenant()
+        return StoreWorker.objects.all()

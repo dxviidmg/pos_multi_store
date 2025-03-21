@@ -4,7 +4,7 @@ from .models import Sale, Payment, ProductSale
 
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
-    list_display = ['id', 'created_at', 'saler']
+    list_display = ['id', 'created_at', 'seller']
 
 
 @admin.register(ProductSale)

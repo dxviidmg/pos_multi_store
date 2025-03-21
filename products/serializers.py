@@ -7,10 +7,12 @@ from .models import (
     Brand,
     StoreProductLog,
     CashFlow,
+    StoreWorker
 )
 from django.core.exceptions import ValidationError
-from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary2
+from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary_by_brand, calculate_total_sales_by_seller
 from datetime import datetime, date
+from django.contrib.auth.models import User
 
 
 class BrandSerializer(serializers.ModelSerializer):
@@ -199,7 +201,7 @@ class StoreCashSummarySerializer(StoreSerializer):
         end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date.today()
         if brand_id:
             print('brand id', brand_id)
-            return calculate_cash_summary2(obj, None, start_date, end_date, brand_id)
+            return calculate_cash_summary_by_brand(obj, None, start_date, end_date, brand_id)
         return calculate_cash_summary(obj, None, start_date, end_date)
 
 
@@ -224,3 +226,31 @@ class CashFlowCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CashFlow
         fields = ["concept", "amount", "transaction_type"]
+
+
+class UserSerializer(serializers.ModelSerializer):    
+    class Meta:
+        model = User
+        fields = "__all__"
+
+
+class StoreWorkerSerializer(serializers.ModelSerializer):
+    role_display = serializers.SerializerMethodField()
+    user = UserSerializer()
+    store = StoreSerializer()
+    total_sales = serializers.SerializerMethodField()
+    
+
+    def get_role_display(self, obj):
+        return obj.get_role_display()
+
+    def get_user_username(self, obj):
+        return obj.user.username
+
+    def get_total_sales(self, obj):
+        return calculate_total_sales_by_seller(obj.user)
+
+    class Meta:
+        model = StoreWorker
+        fields = "__all__"
+

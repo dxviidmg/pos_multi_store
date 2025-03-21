@@ -15,7 +15,7 @@ class ProductSaleSerializer(serializers.ModelSerializer):
 
 
 class SaleSerializer(serializers.ModelSerializer):
-    saler_username = serializers.SerializerMethodField()
+    seller_username = serializers.SerializerMethodField()
     is_cancelable = serializers.SerializerMethodField()
     payments_methods = serializers.SerializerMethodField()
     client = ClientSerializer()
@@ -23,8 +23,8 @@ class SaleSerializer(serializers.ModelSerializer):
     is_duplicate = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
 
-    def get_saler_username(self, obj):
-        return obj.saler.username
+    def get_seller_username(self, obj):
+        return obj.seller.username
 
     def get_is_cancelable(self, obj):
         return obj.is_cancelable()

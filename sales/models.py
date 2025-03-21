@@ -8,7 +8,7 @@ class Sale(CreatedAtModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
-    saler = models.ForeignKey(User, on_delete=models.CASCADE)
+    seller = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)
