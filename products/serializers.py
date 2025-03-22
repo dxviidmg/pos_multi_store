@@ -175,6 +175,7 @@ class StoreSerializer(serializers.ModelSerializer):
     store_type_display = serializers.SerializerMethodField()
     url_printer = serializers.SerializerMethodField()
     products_count = serializers.IntegerField(source='count_products', read_only=True)
+    workers_count = serializers.IntegerField(source='count_workers', read_only=True)
 
     def get_full_name(self, obj):
         return obj.get_full_name()
@@ -200,11 +201,8 @@ class StoreCashSummarySerializer(StoreSerializer):
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else date.today()
         end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date.today()
         if brand_id:
-            print('brand id', brand_id)
             return calculate_cash_summary_by_brand(obj, None, start_date, end_date, brand_id)
         return calculate_cash_summary(obj, None, start_date, end_date)
-
-
 
 
 class CashFlowSerializer(serializers.ModelSerializer):
@@ -231,26 +229,25 @@ class CashFlowCreateSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):    
     class Meta:
         model = User
-        fields = "__all__"
-
+#        fields = "__all__"
+        exclude = ['password']
 
 class StoreWorkerSerializer(serializers.ModelSerializer):
-    role_display = serializers.SerializerMethodField()
-    user = UserSerializer()
-    store = StoreSerializer()
-    total_sales = serializers.SerializerMethodField()
+    store = serializers.PrimaryKeyRelatedField(queryset=Store.objects.all(), write_only=True, required=False)
+    store_detail = StoreSerializer(source='store', read_only=True)
+
+    worker = UserSerializer()
+    total_sales = serializers.SerializerMethodField(read_only=True)
     
-
-    def get_role_display(self, obj):
-        return obj.get_role_display()
-
-    def get_user_username(self, obj):
-        return obj.user.username
+#    def get_user_username(self, obj):
+#        return obj.worker.username
 
     def get_total_sales(self, obj):
-        return calculate_total_sales_by_seller(obj.user)
+        if isinstance(obj, dict):
+            user = User.objects.get(username=obj['worker']['username'])
+            return calculate_total_sales_by_seller(user)
+        return calculate_total_sales_by_seller(obj.worker)
 
     class Meta:
         model = StoreWorker
         fields = "__all__"
-

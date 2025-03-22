@@ -10,7 +10,8 @@ from .serializers import (
     CashFlowCreateSerializer,
     StoreProductLogSerializer2,
     StoreCashSummarySerializer,
-    StoreWorkerSerializer
+    StoreWorkerSerializer,
+#    StoreWorkerCreateSerializer
 )
 from .models import (
     StoreProduct,
@@ -38,6 +39,7 @@ from django.db.models import Sum
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets
+from django.contrib.auth.models import User
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -750,3 +752,18 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
         store = self.request.store
         tenant = self.request.user.get_tenant()
         return StoreWorker.objects.all()
+    
+
+    def perform_create(self, serializer):
+        worker_data = self.request.data.pop('worker')
+        worker = User.objects.create(**worker_data)
+        worker.set_password(worker_data['username'])  # Encripta la contraseña
+        worker.save()
+
+        store = Store.objects.get(id=self.request.data['store_id'])        
+        store_worker = StoreWorker.objects.create(worker=worker, store=store)
+        serializer = StoreWorkerSerializer(data=store_worker)
+        if serializer.is_valid():
+            store_worker = serializer.save()
+            return Response(StoreWorkerSerializer(store_worker).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

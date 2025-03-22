@@ -1,4 +1,6 @@
 from sales.models import Sale
+from django.contrib.auth.models import User
+
 
 def run():
     sales = Sale.objects.filter(seller=None)

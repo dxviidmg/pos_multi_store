@@ -77,6 +77,8 @@ class Store(Base):
     def count_products(self):
         return self.store_products.all().count()
 
+    def count_workers(self):
+        return self.workers.all().count()
 
 class Product(Base):
 
@@ -216,6 +218,9 @@ class StoreWorker(models.Model):
         ('A', 'Administrador'),
         ('V', 'Vendedor'),
     ]
-    store = models.ForeignKey(Store, on_delete=models.CASCADE)
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='workers')
+    worker = models.OneToOneField(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=1, choices=ROLE_CHOICES)
+
+    def role_display(self):
+        return self.get_role_display()
