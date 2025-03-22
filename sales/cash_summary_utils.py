@@ -5,9 +5,6 @@ from .models import Sale, Payment, ProductSale
 from products.models import CashFlow
 
 def calculate_cash_summary(store, date, start_date=None, end_date=None):  
-    print('v1')
-    # Obtener totales de CashFlow agrupados por tipo de transacción
-
     if date:
         cash_flow_totals_by_type = (
             CashFlow.objects.filter(store=store, created_at__date=date)

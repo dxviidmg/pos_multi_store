@@ -7,7 +7,7 @@ def get_full_name(self):
     return f"{self.first_name} {self.last_name}"
 
 def get_store(self):
-    return getattr(StoreWorker.objects.filter(user=self).first(), "store", None) or Store.objects.filter(manager=self).first()
+    return getattr(StoreWorker.objects.filter(worker=self).first(), "store", None) or Store.objects.filter(manager=self).first()
     
 
 def get_tenant(self):
