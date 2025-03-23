@@ -102,17 +102,18 @@ class StoreProductSerializer(StoreProductBaseSerializer):
     def get_reserved_stock(self, obj):
         return obj.calculate_reserved_stock()
 
-
-
     def get_stock_in_other_stores(self, obj):
         # Optimize by pre-filtering and reducing unnecessary calculations
+        store_type_filter = {} if obj.store.tenant.show_stock_in_storages else {"store__store_type": "T"}
+        sps = StoreProduct.objects.filter(product=obj.product, **store_type_filter)
+
         return [
             {
                 "store_id": str(sp.store.id),
                 "store_name": str(sp.store),
                 "available_stock": sp.calculate_available_stock(),
             }
-            for sp in StoreProduct.objects.filter(product=obj.product)
+            for sp in sps
             .exclude(id=obj.id)
             .exclude(stock=0)
             if sp.calculate_available_stock() > 0
