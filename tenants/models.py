@@ -61,6 +61,9 @@ class Payment(CreatedAtModel):
             tenant = self.tenant
             self.total = tenant.stores * self.months * MONTHY_PRICE_BY_STORE
 
+            if self.tenant.has_sellers: 
+                self.total += self.months * MONTHY_PRICE_BY_STORE
+
             last_payment = Payment.objects.filter(
                 tenant=tenant
             ).last()  # .end_of_validity

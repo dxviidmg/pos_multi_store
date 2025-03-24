@@ -22,7 +22,10 @@ class SaleViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         date = self.request.GET.get("date")
         store = self.request.store
-        return Sale.objects.filter(store=store, created_at__date=date).order_by('id')
+        query = {'store': store, 'created_at__date':date}
+        if self.request.user.get_role() == 'seller':
+            query['seller'] = self.request.user
+        return Sale.objects.filter(**query).order_by('id')
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")

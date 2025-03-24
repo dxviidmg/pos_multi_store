@@ -25,5 +25,5 @@ class CustomAuthToken(ObtainAuthToken):
             'store_type': store.store_type if store else None,
             'store_type_display': store.get_store_type_display() if store else None,
             'store_url_printer': store.get_url_printer() if store else None,
-            'is_owner': user.is_owner()
+            'role': user.get_role()
         })
