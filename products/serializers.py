@@ -7,7 +7,8 @@ from .models import (
     Brand,
     StoreProductLog,
     CashFlow,
-    StoreWorker
+    StoreWorker,
+    Department
 )
 from django.core.exceptions import ValidationError
 from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary_by_brand, calculate_total_sales_by_seller
@@ -25,6 +26,16 @@ class BrandSerializer(serializers.ModelSerializer):
         model = Brand
         exclude = ["tenant"]
 
+class DepartmentSerializer(serializers.ModelSerializer):
+    product_count = serializers.SerializerMethodField()
+
+    def get_product_count(self, obj):
+        return obj.count_products()
+
+    class Meta:
+        model = Department
+        exclude = ["tenant"]
+
 
 
 class ProductSearchSerializer(serializers.ModelSerializer):
@@ -33,6 +44,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
 
     def get_brand_name(self, obj):
         return obj.brand.name
+
     
     def get_prices(self, obj):
         return {
@@ -50,17 +62,23 @@ class ProductSearchSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     brand_name = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
     apply_wholesale = serializers.SerializerMethodField()
     stock = serializers.SerializerMethodField()
 
     def get_brand_name(self, obj):
         return obj.brand.name
 
+    def get_department_name(self, obj):
+        return obj.department.name if obj.department else ''
+    
     def get_apply_wholesale(self, obj):
         return obj.apply_wholesale()
     
     def get_stock(self, obj):
         return obj.get_stock()
+    
+
 
     class Meta:
         model = Product
@@ -104,7 +122,7 @@ class StoreProductSerializer(StoreProductBaseSerializer):
 
     def get_stock_in_other_stores(self, obj):
         # Optimize by pre-filtering and reducing unnecessary calculations
-        store_type_filter = {} if obj.store.tenant.show_stock_in_storages else {"store__store_type": "T"}
+        store_type_filter = {} if obj.store.tenant.displays_stock_in_storages else {"store__store_type": "T"}
         sps = StoreProduct.objects.filter(product=obj.product, **store_type_filter)
 
         return [

@@ -40,7 +40,7 @@ class TenantInfoView(APIView):
             {
                 "notices": notices,
                 "product_count": tenant.count_products(),
-                "show_profit_by_brands": tenant.show_profit_by_brands,
+                "supports_departments": tenant.supports_departments,
             },
             status=status.HTTP_200_OK,
         )

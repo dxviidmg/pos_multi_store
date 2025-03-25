@@ -24,7 +24,12 @@ class Brand(Base):
     def count_products(self):
         return self.products.count()
 
+class Department(Base):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
 
+    def count_products(self):
+        return self.products.count()
+    
 class Store(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
@@ -80,6 +85,8 @@ class Store(Base):
     def count_workers(self):
         return self.workers.all().count()
 
+
+
 class Product(Base):
 
     def path(self, filename):
@@ -89,6 +96,7 @@ class Product(Base):
         )
 
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="products")
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="products", null=True, blank=True)
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
     cost = models.DecimalField(max_digits=10, decimal_places=2)

@@ -21,9 +21,9 @@ class Tenant(CreatedAtModel):
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
     stores = models.IntegerField()
     is_sandbox = models.BooleanField(default=False)
-    has_sellers = models.BooleanField(default=False)
-    show_profit_by_brands = models.BooleanField(default=False)
-    show_stock_in_storages = models.BooleanField(default=False)
+    sellers = models.IntegerField(default=0)
+    supports_departments = models.BooleanField(default=False)
+    displays_stock_in_storages = models.BooleanField(default=False)
 
     
     def __str__(self):
@@ -61,8 +61,9 @@ class Payment(CreatedAtModel):
             tenant = self.tenant
             self.total = tenant.stores * self.months * MONTHY_PRICE_BY_STORE
 
-            if self.tenant.has_sellers: 
-                self.total += self.months * MONTHY_PRICE_BY_STORE
+            #Analizar la promocion de vendedores
+#            if self.tenant.has_sellers: 
+#                self.total += self.months * MONTHY_PRICE_BY_STORE
 
             last_payment = Payment.objects.filter(
                 tenant=tenant
