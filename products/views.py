@@ -11,7 +11,7 @@ from .serializers import (
     StoreProductLogSerializer2,
     StoreCashSummarySerializer,
     StoreWorkerSerializer,
-#    StoreWorkerCreateSerializer
+    DepartmentSerializer
 )
 from .models import (
     StoreProduct,
@@ -21,7 +21,8 @@ from .models import (
     Brand,
     StoreProductLog,
     CashFlow,
-    StoreWorker
+    StoreWorker,
+    Department
 )
 from django.db.models import Q
 from rest_framework.views import APIView
@@ -410,6 +411,18 @@ class BrandViewSet(viewsets.ModelViewSet):
         tenant = self.request.user.get_tenant()
         sale_instance = serializer.save(tenant=tenant)
         return sale_instance
+    
+class DepartmentViewSet(viewsets.ModelViewSet):
+    serializer_class = DepartmentSerializer
+
+    def get_queryset(self):
+        tenant = self.request.user.get_tenant()
+        return Department.objects.filter(tenant=tenant)
+
+    def perform_create(self, serializer):
+        tenant = self.request.user.get_tenant()
+        sale_instance = serializer.save(tenant=tenant)
+        return sale_instance
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -522,6 +535,7 @@ class ProductImportValidation(APIView):
         expected_columns = [
             "Código",
             "Marca",
+            "Departamento",
             "Nombre",
             "Costo",
             "Precio unitario",
@@ -537,6 +551,7 @@ class ProductImportValidation(APIView):
             columns={
                 "Código": "code",
                 "Marca": "brand",
+                "Departamento": "departament",
                 "Nombre": "name",
                 "Costo": "cost",
                 "Precio unitario": "unit_price",
@@ -554,6 +569,8 @@ class ProductImportValidation(APIView):
             )
 
         create_brands = request.data.get("create_brands")
+        create_departments = request.data.get("create_departments")
+        departments_mandatory = request.data.get("departments_mandatory")
         tenant = request.user.get_tenant()
         try:
             df = pd.read_excel(file_obj).replace({np.nan: None})
@@ -602,6 +619,13 @@ class ProductImportValidation(APIView):
                             Brand.objects.get(name=row["brand"])
                         except Brand.DoesNotExist:
                             aux["status"] = "Marca inexistente"
+
+                    if create_departments == "N":
+                        try:
+                            Department.objects.get(name=row["departament"])
+                        except Department.DoesNotExist:
+                            if departments_mandatory == "Y":
+                                aux["status"] = "Departamento inexistente"
 
                 data.append(aux)
 

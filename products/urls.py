@@ -7,6 +7,7 @@ app_name = 'products'
 router = DefaultRouter() 
 router.register('store', views.StoreViewSet, basename='store')
 router.register('brand', views.BrandViewSet, basename='brand')
+router.register('department', views.DepartmentViewSet, basename='department')
 router.register('product', views.ProductViewSet, basename='product')
 router.register('store-product', views.StoreProductViewSet, basename='store-product')
 router.register('transfer', views.TransferViewSet, basename='transfer')
