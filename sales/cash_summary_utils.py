@@ -128,18 +128,30 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
                 "amount": total_sales + net_cash_flow,
                 "total_data": True,
             },
+            {
+                "name": "Numero de ventas",
+                "amount": sales.count(),
+            },
+            {
+                "name": "Numero de ventas",
+                "amount": sales.count(),
+            },
         ]
     )
 
     return cash_summary
 
 
-def calculate_cash_summary_by_brand(store, date, start_date=None, end_date=None, brand_id=""):  
+def calculate_cash_summary_by_department(store, date, start_date=None, end_date=None, department_id=""):  
     if date:
         sales = Sale.objects.filter(store=store, created_at__date=date)
     else:
         sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date])
-    products_sale = ProductSale.objects.filter(sale__in=sales, product__brand_id=brand_id)
+    
+    if department_id == "0" or department_id == 0:
+        department_id = None
+
+    products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id)
     total_sales = sum(product_sale.get_total() for product_sale in products_sale)
     total_profit = sum(product_sale.get_profit() for product_sale in products_sale)
 
