@@ -577,6 +577,9 @@ class ProductImportValidation(APIView):
             self.validate_columns(df)
             df = self.rename_columns(df)
 
+            if df.empty:
+                raise ValueError("El excel esta vacio")
+
             data, codes = [], set()
 
             for _, row in df.iterrows():
@@ -768,14 +771,19 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         return StoreWorkerSerializer
 
+    def get_serializer(self, *args, **kwargs):
+        print(self.request.GET)
+        kwargs.setdefault("context", {}).update(
+            {"start_date": self.request.GET.get("start_date", None)}
+        )
+        kwargs.setdefault("context", {}).update(
+            {"end_date": self.request.GET.get("end_date", None)}
+        )
+        return super().get_serializer(*args, **kwargs)
+    
     def get_queryset(self):
-        q = self.request.GET.get("q", None)
-        code = self.request.GET.get("code", None)
-        brand_id = self.request.GET.get("brand_id", None)
-        # Intentar obtener la tienda, retornar un queryset vacío si no existe
-        store = self.request.store
         tenant = self.request.user.get_tenant()
-        return StoreWorker.objects.all()
+        return StoreWorker.objects.filter(store__tenant=tenant)
     
 
     def perform_create(self, serializer):

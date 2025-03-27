@@ -21,7 +21,7 @@ class Sale(CreatedAtModel):
         return [payment.get_payment_method_display() for payment in self.payments.all()]
     
     def get_reference(self):
-        return [payment.reference for payment in self.payments.all()][0]
+        return next((payment.reference for payment in self.payments.all() if payment.reference), None)
 
     def get_profit(self):
         profit = 0
