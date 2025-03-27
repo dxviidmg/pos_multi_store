@@ -11,7 +11,7 @@ from .serializers import (
     StoreProductLogSerializer2,
     StoreCashSummarySerializer,
     StoreWorkerSerializer,
-    DepartmentSerializer
+    DepartmentSerializer,
 )
 from .models import (
     StoreProduct,
@@ -22,7 +22,7 @@ from .models import (
     StoreProductLog,
     CashFlow,
     StoreWorker,
-    Department
+    Department,
 )
 from django.db.models import Q
 from rest_framework.views import APIView
@@ -411,7 +411,8 @@ class BrandViewSet(viewsets.ModelViewSet):
         tenant = self.request.user.get_tenant()
         sale_instance = serializer.save(tenant=tenant)
         return sale_instance
-    
+
+
 class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
 
@@ -780,22 +781,189 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
             {"end_date": self.request.GET.get("end_date", None)}
         )
         return super().get_serializer(*args, **kwargs)
-    
+
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
         return StoreWorker.objects.filter(store__tenant=tenant)
-    
 
     def perform_create(self, serializer):
-        worker_data = self.request.data.pop('worker')
+        worker_data = self.request.data.pop("worker")
         worker = User.objects.create(**worker_data)
-        worker.set_password(worker_data['username'])  # Encripta la contraseña
+        worker.set_password(worker_data["username"])  # Encripta la contraseña
         worker.save()
 
-        store = Store.objects.get(id=self.request.data['store_id'])        
+        store = Store.objects.get(id=self.request.data["store_id"])
         store_worker = StoreWorker.objects.create(worker=worker, store=store)
         serializer = StoreWorkerSerializer(data=store_worker)
         if serializer.is_valid():
             store_worker = serializer.save()
-            return Response(StoreWorkerSerializer(store_worker).data, status=status.HTTP_201_CREATED)
+            return Response(
+                StoreWorkerSerializer(store_worker).data, status=status.HTTP_201_CREATED
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@method_decorator(get_store(), name="dispatch")
+class StoreProductImportValidation(APIView):
+
+    def validate_columns(self, df):
+        expected_columns = ["Código", "Cantidad", "Descripción"]
+        if list(df.columns) != expected_columns:
+            raise ValueError("Formato de excel incorrecto")
+
+    def rename_columns(self, df):
+        return df.rename(
+            columns={
+                "Código": "code",
+                "Cantidad": "quantity",
+                "Descripción": "description",
+            }
+        )
+
+    def post(self, request):
+        file_obj = request.FILES.get("file")
+
+        if not file_obj:
+            return Response(
+                {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        store = self.request.store
+        tenant = self.request.user.get_tenant()
+
+        try:
+            df = pd.read_excel(file_obj)
+            self.validate_columns(df)
+
+            df = self.rename_columns(df)
+
+            all_integers = df["quantity"].apply(lambda x: isinstance(x, int)).all()
+
+            if not all_integers:
+                raise ValueError(
+                    "No todos los datos en la columna Cantidad son números"
+                )
+
+            data = []
+
+            codes = []
+
+            for _, row in df.iterrows():
+                aux = row.to_dict()
+                aux["status"] = "Exitoso"
+
+                code = row["code"]
+                try:
+
+                    product = Product.objects.get(code=code, brand__tenant=tenant)
+                    StoreProduct.objects.get(product=product, store=store)
+                except Product.DoesNotExist:
+                    aux["status"] = "Código no encontrado"
+                    data.append(aux)
+                    continue
+                except StoreProduct.DoesNotExist:
+                    aux["status"] = "Producto encontrado pero no existe en la tienda"
+                    data.append(aux)
+                    continue
+
+                if code in codes:
+                    aux["status"] = "Codigo repetido en el archivo"
+                else:
+                    codes.append(code)
+
+                data.append(aux)
+
+            return Response(data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            print(1, e)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(2, e)
+            return Response(
+                {"error": f"Unexpected error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+@method_decorator(get_store(), name="dispatch")
+class ImportStoreProduct(APIView):
+
+    def validate_columns(self, df):
+        expected_columns = ["Código", "Cantidad", "Descripción"]
+        if list(df.columns) != expected_columns:
+            raise ValueError("Formato de excel incorrecto")
+
+    def rename_columns(self, df):
+        return df.rename(
+            columns={
+                "Código": "code",
+                "Cantidad": "quantity",
+                "Descripción": "description",
+            }
+        )
+
+    def post(self, request):
+        file_obj = request.FILES.get("file")
+
+        if not file_obj:
+            return Response(
+                {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tenant = self.request.user.get_tenant()
+        store = self.request.store
+        seller = self.request.user
+        action = request.data.get("action")
+
+        if action not in ['A', 'E']:
+            raise ValueError("ERROR EN ACTION")   
+
+        try:
+            df = pd.read_excel(file_obj)
+            self.validate_columns(df)
+            df = self.rename_columns(df)
+
+            logs = []  # Lista para almacenar registros de StoreProductLog
+
+            for _, row in df.iterrows():
+                code = row["code"]
+                quantity = row["quantity"]
+
+                # Obtener el producto y la relación StoreProduct
+                product = Product.objects.get(code=code, brand__tenant=tenant)
+                store_product = StoreProduct.objects.get(product=product, store=store)
+
+                previous_stock = store_product.stock
+                updated_stock = previous_stock + quantity if action == 'E' else quantity
+
+                # Actualizar el stock del producto
+                store_product.stock = updated_stock
+                store_product.save()
+
+                # Crear el log correspondiente
+                logs.append(
+                    StoreProductLog(
+                        store_product=store_product,
+                        user=seller,
+                        previous_stock=previous_stock,
+                        updated_stock=updated_stock,
+                        action=action,
+                        movement="IM",  # Movimiento: Venta
+                    )
+                )
+
+            # Guardar los logs en la base de datos
+            StoreProductLog.objects.bulk_create(logs)
+
+            return Response({}, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            print(e)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(e)
+            return Response(
+                {"error": f"Unexpected error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

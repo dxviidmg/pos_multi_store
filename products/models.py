@@ -180,6 +180,7 @@ class StoreProductLog(CreatedAtModel):
         ("DE", "Devolucíon"),
         ("VE", "Venta"),
         ("MA", "Manual"),
+        ("IM", "Importación"),
     ]
 
     store_product = models.ForeignKey(

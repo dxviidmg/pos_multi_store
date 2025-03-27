@@ -28,4 +28,6 @@ urlpatterns += [
     path('products/import/', views.ProductImport.as_view(), name='product-import'),
     path('products/delete/', views.DeleteProductsView.as_view(), name='products-delete'),
     path('brands/delete/', views.DeleteBrandsView.as_view(), name='brands-delete'),
+    path('store-products/import-validation/', views.StoreProductImportValidation.as_view(), name='store-product-import-validation'),
+    path('store-products/import/', views.ImportStoreProduct.as_view(), name='store-product-import'),
 ]
