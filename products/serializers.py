@@ -262,10 +262,16 @@ class StoreWorkerSerializer(serializers.ModelSerializer):
 #        return obj.worker.username
 
     def get_total_sales(self, obj):
+        start_date_str = self.context.get("start_date")
+        end_date_str = self.context.get("end_date")
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else date.today()
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date.today()
+
         if isinstance(obj, dict):
+        
             user = User.objects.get(username=obj['worker']['username'])
-            return calculate_total_sales_by_seller(user)
-        return calculate_total_sales_by_seller(obj.worker)
+            return calculate_total_sales_by_seller(user, start_date, end_date)
+        return calculate_total_sales_by_seller(obj.worker, start_date, end_date)
 
     class Meta:
         model = StoreWorker

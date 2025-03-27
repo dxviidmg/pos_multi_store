@@ -221,10 +221,8 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
     return cash_summary
 
 
-def calculate_total_sales_by_seller(seller):  
-    if date:
-        sales = Sale.objects.filter(seller=seller)
-    else:
-        sales = Sale.objects.filter(seller=seller)
+def calculate_total_sales_by_seller(seller, start_date, end_date):  
+
+    sales = Sale.objects.filter(seller=seller, created_at__date__range=[start_date, end_date])
     total_sales = sales.aggregate(total=Sum("total"))["total"] or 0
     return total_sales
