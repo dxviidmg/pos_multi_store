@@ -604,6 +604,7 @@ class ProductImportValidation(APIView):
 				aux = row.to_dict()
 				aux["status"] = "Exitoso"
 				code = row["code"]
+				aux['excel_row'] = _ + 2
 
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
 					aux["status"] = "Código encontrado"
@@ -706,9 +707,7 @@ class ProductImport(APIView):
 			)
 
 		tenant = self.request.user.get_tenant()
-		print(request.data)
 		import_stock = request.data.get("import_stock")
-		print('import_stock', import_stock)
 
 		try:
 			df = pd.read_excel(file_obj).replace({np.nan: None})
@@ -736,8 +735,6 @@ class ProductImport(APIView):
 					)
 
 				data_row["department"] = department_cache[department_name]
-
-				print(data_row)
 
 				data_row["wholesale_price_on_client_discount"] = bool(
 					data_row["wholesale_price_on_client_discount"]
@@ -840,7 +837,6 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
 		return StoreWorkerSerializer
 
 	def get_serializer(self, *args, **kwargs):
-		print(self.request.GET)
 		kwargs.setdefault("context", {}).update(
 			{"start_date": self.request.GET.get("start_date", None)}
 		)
@@ -943,10 +939,10 @@ class StoreProductImportValidation(APIView):
 			return Response(data, status=status.HTTP_200_OK)
 
 		except ValueError as e:
-			print(1, e)
+			print(e)
 			return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 		except Exception as e:
-			print(2, e)
+			print(e)
 			return Response(
 				{"error": f"Unexpected error: {str(e)}"},
 				status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -997,7 +993,6 @@ class ImportStoreProduct(APIView):
 				code = row["code"]
 				quantity = row["quantity"]
 
-				print('row')
 
 				# Obtener el producto y la relación StoreProduct
 				product = Product.objects.get(code=code, brand__tenant=tenant)
@@ -1042,7 +1037,6 @@ class ImportCanIcludeQuantity(APIView):
 	def get(self, request):
 		tenant = self.request.user.get_tenant()
 		store_count = Store.objects.filter(tenant=tenant).count()
-		print('store_count', store_count)
 		if store_count == 1:
 			return Response(True, status=status.HTTP_200_OK)
 		return Response(False, status=status.HTTP_200_OK)
