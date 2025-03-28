@@ -158,13 +158,6 @@ db_from_env = dj_database_url.config(conn_max_age=500)
 if db_from_env:
     DATABASES["default"].update(db_from_env)
 
-#Para conectarse a una base de datos remota desde mi local
-#DATABASE_URL = config('DATABASE_URL', None)
-#if DATABASE_URL:
-#    DATABASES = {
-#        'default': dj_database_url.parse(DATABASE_URL)
-#    }
-
 CORS_ALLOW_HEADERS = [
     'store-id',
     'content-type',

@@ -756,7 +756,7 @@ class ProductImport(APIView):
 				if import_stock == "Y":
 					updated_stock = quantity
 					store = Store.objects.get(tenant=tenant)
-					sp = StoreProduct.objects.get(store=store)
+					sp = StoreProduct.objects.get(store=store, product=product)
 					previous_stock = sp.stock
 					sp.stock = quantity
 					sp.save()
