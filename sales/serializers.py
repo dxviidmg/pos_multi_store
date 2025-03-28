@@ -34,8 +34,10 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def get_is_duplicate(self, obj):
         previous_obj = Sale.objects.filter(pk__lt=obj.pk, store=obj.store).order_by('-pk').first()
-        diff = obj.created_at - previous_obj.created_at
-        return diff.total_seconds() < 1
+        if previous_obj:
+            diff = obj.created_at - previous_obj.created_at
+            return diff.total_seconds() < 1
+        return False
     
     def get_reference(self, obj):
         return obj.get_reference()
