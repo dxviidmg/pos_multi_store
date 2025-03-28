@@ -26,13 +26,10 @@ def run():
             ids += sp2
 
     ids = set(ids)
-    print(ids)
 
     data = []
     for id in ids:
         sp = StoreProduct.objects.get(id=id)
-        print(sp)
-
         data += [{'tenant': sp.store.tenant.name, 'store': sp.store.name, 'code': sp.product.code, 'name': sp.product.name}]
 
     
