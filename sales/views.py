@@ -318,13 +318,15 @@ class ImportSales(APIView):
 class CancelSale(APIView):
     def post(self, request):
         sale_id = request.data.get("id")
-        products_sale_to_cancel_ids = request.data.get("products_sale_to_cancel")
+        products_sale_to_cancel = request.data.get("products_sale_to_cancel")
 
-        if not sale_id or not products_sale_to_cancel_ids:
+        if not sale_id or not products_sale_to_cancel:
             return Response(
                 {"detail": "Sale ID and products to cancel are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        
+        products_sale_to_cancel_ids = [product_sale_to_cancel['id'] for product_sale_to_cancel in products_sale_to_cancel]
 
         try:
             sale = Sale.objects.get(id=sale_id)
@@ -343,6 +345,7 @@ class CancelSale(APIView):
                 {"detail": "No products found to cancel."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
 
         cash_back = 0
         logs = []  # Lista para almacenar registros de StoreProductLog

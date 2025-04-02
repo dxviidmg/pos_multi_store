@@ -35,13 +35,12 @@ from django.utils.decorators import method_decorator
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from datetime import date
 from django.db.models import Sum
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets
 from django.contrib.auth.models import User
-
+from .utils import is_list_in_another
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
@@ -530,16 +529,6 @@ class InvestmentsView(APIView):
 		)
 
 
-
-def is_list_in_another(small, big):
-	return all(item in big for item in small)
-
-list1 = [1, 2, 3]
-list2 = [4, 3, 2, 1, 5, 6]
-
-
-
-
 @method_decorator(get_store(), name="dispatch")
 class ProductImportValidation(APIView):
 	def validate_columns(self, df, import_stock):
@@ -604,6 +593,8 @@ class ProductImportValidation(APIView):
 				aux = row.to_dict()
 				aux["status"] = "Exitoso"
 				code = row["code"]
+
+				print(code)
 				aux['excel_row'] = _ + 2
 
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
