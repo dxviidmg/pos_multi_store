@@ -42,6 +42,7 @@ from rest_framework import viewsets
 from django.contrib.auth.models import User
 from .utils import is_list_in_another
 
+
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
 	def get_serializer_class(self):
@@ -152,22 +153,23 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 	def get_queryset(self):
 		tenant = self.request.user.get_tenant()
-		brand_id = self.request.GET.get("brand_id", None)
-		max_stock = self.request.GET.get("max_stock", None)
-		if brand_id:
-			if max_stock:
-				return (
-					Product.objects.annotate(total_stock=Sum("product_stores__stock"))
-					.filter(
-						brand__id=brand_id,
-						total_stock__lte=max_stock,  # Ahora se puede filtrar por stock
-					)
-					.order_by("name")
-				)
-			return Product.objects.filter(brand__id=brand_id).order_by("name")
-		return Product.objects.filter(brand__tenant=tenant).order_by(
-			"brand__name", "name"
-		)
+		brand_id = self.request.GET.get("brand_id")
+		print('brand_id', brand_id)
+		max_stock = self.request.GET.get("max_stock")
+
+		filters = Q(brand__tenant=tenant)
+
+		if brand_id and brand_id != '':
+			filters &= Q(brand__id=brand_id)
+
+		queryset = Product.objects.filter(filters).select_related("brand")
+
+		if max_stock:
+			queryset = queryset.annotate(total_stock=Sum("product_stores__stock")).filter(
+				total_stock__lte=max_stock
+			)
+
+		return queryset.order_by("brand__name", "name")
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -595,7 +597,7 @@ class ProductImportValidation(APIView):
 				code = row["code"]
 
 				print(code)
-				aux['excel_row'] = _ + 2
+				aux["excel_row"] = _ + 2
 
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
 					aux["status"] = "Código encontrado"
@@ -685,7 +687,7 @@ class ProductImport(APIView):
 				"Cantidad minima mayoreo": "min_wholesale_quantity",
 				"Precio Mayoreo en descuento de clientes": "wholesale_price_on_client_discount",
 				"Departamento": "department",
-				"Cantidad": "quantity"
+				"Cantidad": "quantity",
 			}
 		)
 
@@ -721,8 +723,10 @@ class ProductImport(APIView):
 
 				department_name = data_row["department"]
 				if department_name not in department_cache:
-					department_cache[department_name], _ = Department.objects.get_or_create(
-						name=department_name, tenant=tenant
+					department_cache[department_name], _ = (
+						Department.objects.get_or_create(
+							name=department_name, tenant=tenant
+						)
 					)
 
 				data_row["department"] = department_cache[department_name]
@@ -730,8 +734,6 @@ class ProductImport(APIView):
 				data_row["wholesale_price_on_client_discount"] = bool(
 					data_row["wholesale_price_on_client_discount"]
 				)
-
-
 
 				data_row["brand"] = brand_cache[brand_name]
 				data_row["wholesale_price_on_client_discount"] = bool(
@@ -755,7 +757,7 @@ class ProductImport(APIView):
 							user=request.user,
 							previous_stock=previous_stock,
 							updated_stock=updated_stock,
-							action='A',
+							action="A",
 							movement="IM",  # Movimiento: Venta
 						)
 					)
@@ -970,8 +972,8 @@ class ImportStoreProduct(APIView):
 		seller = self.request.user
 		action = request.data.get("action")
 
-		if action not in ['A', 'E']:
-			raise ValueError("ERROR EN ACTION")   
+		if action not in ["A", "E"]:
+			raise ValueError("ERROR EN ACTION")
 
 		try:
 			df = pd.read_excel(file_obj)
@@ -984,13 +986,12 @@ class ImportStoreProduct(APIView):
 				code = row["code"]
 				quantity = row["quantity"]
 
-
 				# Obtener el producto y la relación StoreProduct
 				product = Product.objects.get(code=code, brand__tenant=tenant)
 				store_product = StoreProduct.objects.get(product=product, store=store)
 
 				previous_stock = store_product.stock
-				updated_stock = previous_stock + quantity if action == 'E' else quantity
+				updated_stock = previous_stock + quantity if action == "E" else quantity
 
 				# Actualizar el stock del producto
 				store_product.stock = updated_stock
