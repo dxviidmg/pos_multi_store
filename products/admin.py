@@ -32,9 +32,8 @@ class ProductTransferAdmin(admin.ModelAdmin):
 
 @admin.register(StoreProductLog)
 class StoreProductLogAdmin(admin.ModelAdmin):
-    search_fields = ['id']
-#    list_display = ['id', 'product__id', 'product__name', 'store__id', 'product__code', 'store__name', 'stock']
-#    list_filter = ['store__tenant', 'store']
+    search_fields = ['id', 'store_product__product__code']
+    list_display = ['id', 'created_at', 'store_product__product__code']
 
 
 
