@@ -334,12 +334,11 @@ class ConfirmDistributionView(APIView):
 		logs = []  # Lista para almacenar los logs de StoreProductLog
 
 		for product_data in products:
-			product_id = product_data.get("product_id")
+			product_id = product_data['product']['id']
 			quantity = product_data.get("quantity")
-
 			if not product_id or quantity is None or quantity <= 0:
 				return Response(
-					{"status": "Invalid product data"},
+					{"status": "Id o cantidad invalida"},
 					status=status.HTTP_400_BAD_REQUEST,
 				)
 
