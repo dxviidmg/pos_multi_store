@@ -198,8 +198,8 @@ STORAGES = {
     },
 }
 
-STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+#checkSTATIC_URL = "/static/"
+# check STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Media en S3
