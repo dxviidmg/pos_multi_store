@@ -212,7 +212,7 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
             },
                         {
                 "name": "Numero de ventas",
-                "amount": sales.count(),
+                "amount": products_sale.count(),
             },
         ]
     )
