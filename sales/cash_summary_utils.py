@@ -143,13 +143,14 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
     else:
         sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date])
     
-    if department_id == "0" or department_id == 0:
+    if department_id == "0":
         department_id = None
 
     products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id)
     total_sales = sum(product_sale.get_total() for product_sale in products_sale)
     total_profit = sum(product_sale.get_profit() for product_sale in products_sale)
 
+    sale_count = products_sale.values_list('sale_id').distinct().count()
     payment_method_labels = dict(Payment.PAYMENT_METHOD_CHOICES)
 
     # Crear un diccionario con todos los métodos de pago y valores iniciales en 0
@@ -212,7 +213,7 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
             },
                         {
                 "name": "Numero de ventas",
-                "amount": products_sale.count(),
+                "amount": sale_count,
             },
         ]
     )
