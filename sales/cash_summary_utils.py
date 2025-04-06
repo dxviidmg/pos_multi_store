@@ -132,13 +132,8 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
                 "name": "Numero de ventas",
                 "amount": sales.count(),
             },
-            {
-                "name": "Numero de ventas",
-                "amount": sales.count(),
-            },
         ]
     )
-
     return cash_summary
 
 
@@ -214,6 +209,10 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
                 "name": "Total",
                 "amount": 0,
                 "total_data": True,
+            },
+                        {
+                "name": "Numero de ventas",
+                "amount": sales.count(),
             },
         ]
     )
