@@ -186,7 +186,7 @@ class StoreViewSet(viewsets.ModelViewSet):
 			{"end_date": self.request.GET.get("end_date", None)}
 		)
 		kwargs.setdefault("context", {}).update(
-			{"brand_id": self.request.GET.get("brand_id", None)}
+			{"department_id": self.request.GET.get("department_id", None)}
 		)
 		return super().get_serializer(*args, **kwargs)
 
