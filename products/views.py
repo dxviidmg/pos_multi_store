@@ -154,20 +154,19 @@ class ProductViewSet(viewsets.ModelViewSet):
 	def get_queryset(self):
 		tenant = self.request.user.get_tenant()
 		brand_id = self.request.GET.get("brand_id")
-		print('brand_id', brand_id)
 		max_stock = self.request.GET.get("max_stock")
 
 		filters = Q(brand__tenant=tenant)
 
-		if brand_id and brand_id != '':
+		if brand_id and brand_id != "":
 			filters &= Q(brand__id=brand_id)
 
 		queryset = Product.objects.filter(filters).select_related("brand")
 
 		if max_stock:
-			queryset = queryset.annotate(total_stock=Sum("product_stores__stock")).filter(
-				total_stock__lte=max_stock
-			)
+			queryset = queryset.annotate(
+				total_stock=Sum("product_stores__stock")
+			).filter(total_stock__lte=max_stock)
 
 		return queryset.order_by("brand__name", "name")
 
@@ -334,7 +333,7 @@ class ConfirmDistributionView(APIView):
 		logs = []  # Lista para almacenar los logs de StoreProductLog
 
 		for product_data in products:
-			product_id = product_data['product']['id']
+			product_id = product_data["product"]["id"]
 			quantity = product_data.get("quantity")
 			if not product_id or quantity is None or quantity <= 0:
 				return Response(
@@ -590,16 +589,25 @@ class ProductImportValidation(APIView):
 
 			data, codes = [], set()
 
-			for _, row in df.iterrows():
+			for _, row in df.to_dict(orient="records"):
 				aux = row.to_dict()
+				
+				aux = {
+					key: value.strip()
+					for key, value in aux.items()
+				}
+				
 				aux["status"] = "Exitoso"
 				code = row["code"]
 				aux["excel_row"] = _ + 2
 
+
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
 					aux["status"] = "Existe un producto registrado con código"
 				elif code in codes:
-					aux["status"] = "Hay una fila previa en el archivo que tiene este código"
+					aux["status"] = (
+						"Hay una fila previa en el archivo que tiene este código"
+					)
 				else:
 					codes.add(code)
 
@@ -709,6 +717,12 @@ class ProductImport(APIView):
 
 			logs = []
 			for data_row in df.to_dict(orient="records"):
+
+				data_row = {
+					key: value.strip()
+					for key, value in data_row.items()
+				}
+
 				quantity = data_row.pop("quantity")
 				brand_name = data_row["brand"]
 				if brand_name not in brand_cache:
@@ -737,7 +751,9 @@ class ProductImport(APIView):
 					data_row["wholesale_price_on_client_discount"]
 				)
 
-				code_exists = Product.objects.filter(code=data_row['code'], brand__tenant=tenant).exists()
+				code_exists = Product.objects.filter(
+					code=data_row["code"], brand__tenant=tenant
+				).exists()
 				if code_exists:
 					continue
 
