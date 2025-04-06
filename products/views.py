@@ -594,14 +594,12 @@ class ProductImportValidation(APIView):
 				aux = row.to_dict()
 				aux["status"] = "Exitoso"
 				code = row["code"]
-
-				print(code)
 				aux["excel_row"] = _ + 2
 
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
-					aux["status"] = "Código encontrado"
+					aux["status"] = "Existe un producto registrado con código"
 				elif code in codes:
-					aux["status"] = "Código añadido en el archivo"
+					aux["status"] = "Hay una fila previa en el archivo que tiene este código"
 				else:
 					codes.add(code)
 
@@ -626,7 +624,7 @@ class ProductImportValidation(APIView):
 									"Al menos uno de los valores no es mayor a 0"
 								)
 						except ValueError:
-							aux["status"] = "Valores inválidos"
+							aux["status"] = "Valores númericos inválidos"
 
 					if create_brands == "N":
 						try:
@@ -738,6 +736,10 @@ class ProductImport(APIView):
 				data_row["wholesale_price_on_client_discount"] = bool(
 					data_row["wholesale_price_on_client_discount"]
 				)
+
+				code_exists = Product.objects.filter(code=data_row['code'], brand__tenant=tenant).exists()
+				if code_exists:
+					continue
 
 				product = Product(**data_row)
 				product.save()  # D
