@@ -154,12 +154,16 @@ class ProductViewSet(viewsets.ModelViewSet):
 	def get_queryset(self):
 		tenant = self.request.user.get_tenant()
 		brand_id = self.request.GET.get("brand_id")
+		department_id = self.request.GET.get("department_id")
 		max_stock = self.request.GET.get("max_stock")
 
 		filters = Q(brand__tenant=tenant)
 
 		if brand_id and brand_id != "":
 			filters &= Q(brand__id=brand_id)
+
+		if department_id and department_id != "":
+			filters &= Q(department__id=department_id)
 
 		queryset = Product.objects.filter(filters).select_related("brand")
 
