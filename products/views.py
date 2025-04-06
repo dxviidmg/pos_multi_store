@@ -589,37 +589,33 @@ class ProductImportValidation(APIView):
 
 			data, codes = [], set()
 
-			for _, row in df.to_dict(orient="records"):
-				aux = row.to_dict()
-				
-				aux = {
-					key: value.strip()
-					for key, value in aux.items()
+			for _, data_row in enumerate(df.to_dict(orient="records")):
+				data_row = {
+					key: value.strip() if isinstance(value, str) else value
+					for key, value in data_row.items()
 				}
 				
-				aux["status"] = "Exitoso"
-				code = row["code"]
-				aux["excel_row"] = _ + 2
+				data_row["status"] = "Exitoso"
+				code = data_row["code"]
+				data_row["excel_row"] = _ + 2
 
 
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
-					aux["status"] = "Existe un producto registrado con código"
+					data_row["status"] = "Código existente en el sistema"
 				elif code in codes:
-					aux["status"] = (
-						"Hay una fila previa en el archivo que tiene este código"
-					)
+					data_row["status"] = "Código existente en el archivo"
 				else:
 					codes.add(code)
 
-					v1, v2 = aux.get("wholesale_price"), aux.get(
+					v1, v2 = data_row.get("wholesale_price"), data_row.get(
 						"min_wholesale_quantity"
 					)
 					if (v1 is None) ^ (v2 is None):
-						aux["status"] = (
+						data_row["status"] = (
 							"Si existe mayoreo debe ingresar el precio mayoreo y la cantidad mínima"
 						)
 					else:
-						prices = [aux.get("cost"), aux.get("unit_price")]
+						prices = [data_row.get("cost"), data_row.get("unit_price")]
 						if v1 is not None and v2 is not None:
 							prices.extend([v1, v2])
 
@@ -628,32 +624,34 @@ class ProductImportValidation(APIView):
 								float(price) for price in prices if price is not None
 							]
 							if not all(price > 0 for price in prices):
-								aux["status"] = (
+								data_row["status"] = (
 									"Al menos uno de los valores no es mayor a 0"
 								)
 						except ValueError:
-							aux["status"] = "Valores númericos inválidos"
+							data_row["status"] = "Valores númericos inválidos"
 
 					if create_brands == "N":
 						try:
-							Brand.objects.get(name=row["brand"])
+							Brand.objects.get(name=data_row["brand"])
 						except Brand.DoesNotExist:
-							aux["status"] = "Marca inexistente"
+							data_row["status"] = "Marca inexistente"
 
 					if create_departments == "N":
 						try:
-							Department.objects.get(name=row["departament"])
+							Department.objects.get(name=data_row["departament"])
 						except Department.DoesNotExist:
 							if departments_mandatory == "Y":
-								aux["status"] = "Departamento inexistente"
+								data_row["status"] = "Departamento inexistente"
 
-				data.append(aux)
+				data.append(data_row)
 
 			return Response(data, status=status.HTTP_200_OK)
 
 		except ValueError as e:
+			print(e)
 			return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 		except Exception as e:
+			print(e)
 			return Response(
 				{"error": f"Unexpected error: {str(e)}"},
 				status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -719,7 +717,7 @@ class ProductImport(APIView):
 			for data_row in df.to_dict(orient="records"):
 
 				data_row = {
-					key: value.strip()
+					key: value.strip() if isinstance(value, str) else value
 					for key, value in data_row.items()
 				}
 
