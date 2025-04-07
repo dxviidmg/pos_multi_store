@@ -598,11 +598,10 @@ class ProductImportValidation(APIView):
 					key: value.strip() if isinstance(value, str) else value
 					for key, value in data_row.items()
 				}
-				
+
 				data_row["status"] = "Exitoso"
 				code = data_row["code"]
 				data_row["excel_row"] = _ + 2
-
 
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
 					data_row["status"] = "Código existente en el sistema"
@@ -795,6 +794,19 @@ class ProductImport(APIView):
 				{"error": f"Unexpected error: {str(e)}"},
 				status=status.HTTP_500_INTERNAL_SERVER_ERROR,
 			)
+
+
+class ProductReassign(APIView):
+	def post(self, request):
+		reassign_type = request.data.get("reassign_type")
+		origin_id = request.data.get("origin_id")
+		destination_id = request.data.get("destination_id")
+
+		filter = {reassign_type: origin_id}
+		update_data = {reassign_type: destination_id}
+		Product.objects.filter(**filter).update(**update_data)
+
+		return Response({}, status=status.HTTP_200_OK)
 
 
 @method_decorator(get_store(), name="dispatch")
