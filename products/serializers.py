@@ -98,8 +98,24 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return data
     
+
+class StoreBaseSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    store_type_display = serializers.SerializerMethodField()
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    def get_store_type_display(self, obj):
+        return obj.get_store_type_display()
+    
+    class Meta:
+        model = Store
+        fields = "__all__"
+
 class StoreProductBaseSerializer(serializers.ModelSerializer):
     product =  ProductSearchSerializer(read_only=True)
+    store = StoreBaseSerializer(read_only=True)
 
     class Meta:
         model = StoreProduct
@@ -189,18 +205,12 @@ class TransferSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class StoreSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField()
-    store_type_display = serializers.SerializerMethodField()
+class StoreSerializer(StoreBaseSerializer):
     url_printer = serializers.SerializerMethodField()
     products_count = serializers.IntegerField(source='count_products', read_only=True)
     workers_count = serializers.IntegerField(source='count_workers', read_only=True)
 
-    def get_full_name(self, obj):
-        return obj.get_full_name()
 
-    def get_store_type_display(self, obj):
-        return obj.get_store_type_display()
 
     def get_url_printer(self, obj):
         return obj.get_url_printer()

@@ -58,6 +58,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 		q = self.request.GET.get("q", None)
 		code = self.request.GET.get("code", None)
 		brand_id = self.request.GET.get("brand_id", None)
+		all_stores = self.request.GET.get("all_stores", 'N')
 		# Intentar obtener la tienda, retornar un queryset vacío si no existe
 		store = self.request.store
 		tenant = self.request.user.get_tenant()
@@ -65,11 +66,12 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 		# Filtrar por código del producto si está especificado
 		if code:
 			product = Product.objects.filter(code=code, brand__tenant=tenant).first()
-			return (
-				StoreProduct.objects.filter(product=product, store=store)
-				if product
-				else []
-			)
+			if product:
+				if all_stores == 'Y':
+					return StoreProduct.objects.filter(product=product)
+				return StoreProduct.objects.filter(product=product, store=store)
+			else:
+				return []
 
 		# Construir la consulta de búsqueda en `Product` si se proporciona `q`
 
