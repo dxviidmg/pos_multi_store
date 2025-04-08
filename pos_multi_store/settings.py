@@ -171,21 +171,10 @@ AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
 AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME')
 AWS_QUERYSTRING_AUTH = False
 
-#STORAGES = {
-#    'default': {
-#        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
-#    },
-#    'staticfiles': {
-#        'BACKEND': 'storages.backends.s3boto3.S3StaticStorage',
-#    },
-#}
-
-
 AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
 
 AWS_MEDIA_LOCATION = "media"
 
-# Configurar storage para media en S3 y static en local
 STORAGES = {
     "default": {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
@@ -198,9 +187,5 @@ STORAGES = {
     },
 }
 
-#checkSTATIC_URL = "/static/"
-# check STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
-# Media en S3
 MEDIA_URL = f"{AWS_S3_CUSTOM_DOMAIN}/{AWS_MEDIA_LOCATION}/"

@@ -8,8 +8,8 @@ def run():
 
     for index, tenant in enumerate(tenants):
 
-        if index == 0:
-            continue
+#        if index == 0:
+#            continue
 
         products = Product.objects.filter(brand__tenant=tenant)
         print('tenant', tenant.name)
@@ -20,10 +20,10 @@ def run():
 
         for item in repeated_codes:
             print(f"Code: {item['code']} - Count: {item['code_count']}")
-            products = Product.objects.filter(code=item['code'], brand__tenant=tenant)
-            products = products.exclude(id=products.first().id)
-            print(products)
-            products.delete()
+#            products = Product.objects.filter(code=item['code'], brand__tenant=tenant)
+#            products = products.exclude(id=products.first().id)
+#            print(products)
+#            products.delete()
 
 
-        break
+#        break
