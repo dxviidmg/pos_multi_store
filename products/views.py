@@ -593,7 +593,7 @@ class ProductImportValidation(APIView):
 			if df.empty:
 				raise ValueError("El excel esta vacio")
 
-			data, codes = [], set()
+			data, codes = [], dict()
 
 			for _, data_row in enumerate(df.to_dict(orient="records")):
 				data_row = {
@@ -608,9 +608,9 @@ class ProductImportValidation(APIView):
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
 					data_row["status"] = "Código existente en el sistema"
 				elif code in codes:
-					data_row["status"] = "Código existente en el archivo"
+					data_row["status"] = "Código existente en la fila " + str(codes[code])
 				else:
-					codes.add(code)
+					codes[code] = data_row["excel_row"]
 
 					v1, v2 = data_row.get("wholesale_price"), data_row.get(
 						"min_wholesale_quantity"
