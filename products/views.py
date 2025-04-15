@@ -40,7 +40,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets
 from django.contrib.auth.models import User
-from .utils import is_list_in_another
+from .utils import is_list_in_another, is_positive_number
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -593,7 +593,7 @@ class ProductImportValidation(APIView):
 			if df.empty:
 				raise ValueError("El excel esta vacio")
 
-			data, codes = [], set()
+			data, codes = [], dict()
 
 			for _, data_row in enumerate(df.to_dict(orient="records")):
 				data_row = {
@@ -608,9 +608,9 @@ class ProductImportValidation(APIView):
 				if Product.objects.filter(code=code, brand__tenant=tenant).exists():
 					data_row["status"] = "Código existente en el sistema"
 				elif code in codes:
-					data_row["status"] = "Código existente en el archivo"
+					data_row["status"] = "Código existente en la fila " + str(codes[code])
 				else:
-					codes.add(code)
+					codes[code] = data_row["excel_row"]
 
 					v1, v2 = data_row.get("wholesale_price"), data_row.get(
 						"min_wholesale_quantity"
@@ -647,6 +647,12 @@ class ProductImportValidation(APIView):
 						except Department.DoesNotExist:
 							if departments_mandatory == "Y":
 								data_row["status"] = "Departamento inexistente"
+
+					if import_stock == "Y":
+						is_positivo = is_positive_number(data_row["quantity"])
+
+						if not is_positivo:
+							data_row["status"] = "Cantidad debe ser un número positivo"
 
 				data.append(data_row)
 
@@ -736,14 +742,17 @@ class ProductImport(APIView):
 				data_row["brand"] = brand_cache[brand_name]
 
 				department_name = data_row["department"]
-				if department_name not in department_cache:
-					department_cache[department_name], _ = (
-						Department.objects.get_or_create(
-							name=department_name, tenant=tenant
-						)
-					)
 
-				data_row["department"] = department_cache[department_name]
+				print('department_name', department_name)
+
+				if department_name:
+					data_row["department"] = department_cache.get(
+						department_name, 
+						Department.objects.get_or_create(name=department_name, tenant=tenant)[0]
+					)
+				else:
+					data_row["department"] = None
+
 
 				data_row["wholesale_price_on_client_discount"] = bool(
 					data_row["wholesale_price_on_client_discount"]
@@ -759,7 +768,7 @@ class ProductImport(APIView):
 				).exists()
 				if code_exists:
 					continue
-
+				
 				product = Product(**data_row)
 				product.save()  # D
 
