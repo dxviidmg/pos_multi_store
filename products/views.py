@@ -40,7 +40,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets
 from django.contrib.auth.models import User
-from .utils import is_list_in_another
+from .utils import is_list_in_another, is_positive_number
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -648,6 +648,12 @@ class ProductImportValidation(APIView):
 							if departments_mandatory == "Y":
 								data_row["status"] = "Departamento inexistente"
 
+					if import_stock == "Y":
+						is_positivo = is_positive_number(data_row["quantity"])
+
+						if not is_positivo:
+							data_row["status"] = "Cantidad debe ser un número positivo"
+
 				data.append(data_row)
 
 			return Response(data, status=status.HTTP_200_OK)
@@ -736,14 +742,17 @@ class ProductImport(APIView):
 				data_row["brand"] = brand_cache[brand_name]
 
 				department_name = data_row["department"]
-				if department_name not in department_cache:
-					department_cache[department_name], _ = (
-						Department.objects.get_or_create(
-							name=department_name, tenant=tenant
-						)
-					)
 
-				data_row["department"] = department_cache[department_name]
+				print('department_name', department_name)
+
+				if department_name:
+					data_row["department"] = department_cache.get(
+						department_name, 
+						Department.objects.get_or_create(name=department_name, tenant=tenant)[0]
+					)
+				else:
+					data_row["department"] = None
+
 
 				data_row["wholesale_price_on_client_discount"] = bool(
 					data_row["wholesale_price_on_client_discount"]
@@ -759,7 +768,7 @@ class ProductImport(APIView):
 				).exists()
 				if code_exists:
 					continue
-
+				
 				product = Product(**data_row)
 				product.save()  # D
 

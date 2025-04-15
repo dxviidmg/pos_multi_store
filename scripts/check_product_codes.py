@@ -20,10 +20,3 @@ def run():
 
         for item in repeated_codes:
             print(f"Code: {item['code']} - Count: {item['code_count']}")
-#            products = Product.objects.filter(code=item['code'], brand__tenant=tenant)
-#            products = products.exclude(id=products.first().id)
-#            print(products)
-#            products.delete()
-
-
-#        break
