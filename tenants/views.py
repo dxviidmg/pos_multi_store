@@ -31,7 +31,7 @@ class TenantInfoView(APIView):
                 days_diff = (payment.end_of_validity - today).days
                 if days_diff < 0:
                     notices.append(f"Tiene un adeudo, favor de pagar")
-                if days_diff == 0:
+                elif days_diff == 0:
                     notices.append(f"Ultimo dia de pago, favor de pagar")
                 elif days_diff <= 7:
                     notices.append(f"Próximo pago en {days_diff} días")
