@@ -10,6 +10,8 @@ import pandas as pd
 from products.decorators import get_store
 from django.utils.decorators import method_decorator
 from .cash_summary_utils import calculate_cash_summary
+from django.shortcuts import get_object_or_404
+
 
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.
@@ -318,93 +320,81 @@ class ImportSales(APIView):
 class CancelSale(APIView):
     def post(self, request):
         sale_id = request.data.get("id")
-        products_sale_to_cancel = request.data.get("products_sale_to_cancel")
+        products_data = request.data.get("products_sale_to_cancel")
 
-        if not sale_id or not products_sale_to_cancel:
+        if not sale_id or not products_data:
             return Response(
                 {"detail": "Sale ID and products to cancel are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        products_sale_to_cancel_ids = [product_sale_to_cancel['id'] for product_sale_to_cancel in products_sale_to_cancel]
 
-        try:
-            sale = Sale.objects.get(id=sale_id)
-        except Sale.DoesNotExist:
-            return Response(
-                {"detail": "No sale found to cancel."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        sale = get_object_or_404(Sale, id=sale_id)
+        product_ids = products_data.keys()
 
-        products_sale_to_cancel = ProductSale.objects.filter(
-            id__in=products_sale_to_cancel_ids
-        )
-
-        if not products_sale_to_cancel.exists():
+        products_to_cancel = ProductSale.objects.filter(id__in=product_ids)
+        if not products_to_cancel.exists():
             return Response(
                 {"detail": "No products found to cancel."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        logs = []
+        total_refund = 0
 
-        cash_back = 0
-        logs = []  # Lista para almacenar registros de StoreProductLog
-
-        # Use a transaction to ensure atomicity
         with transaction.atomic():
-            for product_sale in products_sale_to_cancel:
-                store_product = StoreProduct.objects.filter(
-                    store=sale.store, product=product_sale.product
-                ).first()
+            for product_sale in products_to_cancel:
+                quantity_to_cancel = products_data.get(str(product_sale.pk), 0)
+                # Actualizar stock
+                store_product = get_object_or_404(
+                    StoreProduct, store=sale.store, product=product_sale.product
+                )
 
-                if store_product:
-                    previous_stock = store_product.stock
-                    updated_stock = previous_stock + product_sale.quantity
+                previous_stock = store_product.stock
+                store_product.stock += quantity_to_cancel
+                store_product.save()
 
-                    # Actualizar el stock del producto
-                    store_product.stock = updated_stock
-                    store_product.save()
+                logs.append(StoreProductLog(
+                    store_product=store_product,
+                    user=request.user,
+                    previous_stock=previous_stock,
+                    updated_stock=store_product.stock,
+                    action="E",
+                    movement="DE",
+                ))
 
-                    # Crear un log para esta operación
-                    logs.append(
-                        StoreProductLog(
-                            store_product=store_product,
-                            user=request.user,
-                            previous_stock=previous_stock,
-                            updated_stock=updated_stock,
-                            action="E",  # Acción: Entrada
-                            movement="DE",  # Movimiento: Cancelación de compra
-                        )
-                    )
+                # Calcular y aplicar reembolso
+                if product_sale.quantity == quantity_to_cancel:
+                    total_refund += product_sale.get_total()
+                    product_sale.delete()
+                else:
+                    refund = product_sale.price * quantity_to_cancel
+                    total_refund += refund
+                    product_sale.quantity -= quantity_to_cancel
+                    product_sale.save()
 
-                cash_back += product_sale.get_total()
-                product_sale.delete()
-
-            # Recalculate the sale total
+            # Actualizar o eliminar la venta
             remaining_products = sale.products_sale.all()
+
             if remaining_products.exists():
-                total = sum(product.get_total() for product in remaining_products)
-                sale.total = total
+                old_total = sale.total
+                new_total = sum(p.get_total() for p in remaining_products)
+                sale.total = new_total
                 sale.save()
 
                 payment = Payment.objects.get(sale=sale)
-                payment.amount = total
+                payment.amount = new_total
                 payment.save()
 
-                # Guardar los logs en la base de datos
                 StoreProductLog.objects.bulk_create(logs)
+                cash_back = old_total - new_total
 
-                serializer = SaleSerializer(sale)
                 return Response(
-                    {"sale": serializer.data, "cash_back": cash_back},
+                    {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
                     status=status.HTTP_200_OK,
                 )
 
-            # If no products remain, delete the sale
-            cash_back = sale.total
-            sale.delete()
-
-        # Guardar los logs en caso de que la venta se haya eliminado completamente
-        StoreProductLog.objects.bulk_create(logs)
-
-        return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)
+            else:
+                cash_back = sale.total
+                sale.delete()
+                StoreProductLog.objects.bulk_create(logs)
+                return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)
