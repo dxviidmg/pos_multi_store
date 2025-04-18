@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Store, Product, StoreProduct, Brand, Transfer, StoreProductLog, CashFlow, StoreWorker, Department
+from .models import Store, Product, StoreProduct, Brand, Transfer, CashFlow, StoreWorker, Department
 
 
 @admin.register(Product)
@@ -30,10 +30,10 @@ class ProductTransferAdmin(admin.ModelAdmin):
     list_display = ['id', 'product__id', 'product__name', 'product__code', 'origin_store__id', 'destination_store__id']
 
 
-@admin.register(StoreProductLog)
-class StoreProductLogAdmin(admin.ModelAdmin):
-    search_fields = ['id', 'store_product__product__code']
-    list_display = ['id', 'created_at', 'store_product__product__code']
+#@admin.register(StoreProductLog)
+#class StoreProductLogAdmin(admin.ModelAdmin):
+#    search_fields = ['id', 'store_product__product__code']
+#    list_display = ['id', 'created_at', 'store_product__product__code']
 
 
 

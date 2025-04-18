@@ -170,7 +170,7 @@ class Transfer(CreatedAtModel):
     def __str__(self):
         return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"
 
-
+"""
 class StoreProductLog(CreatedAtModel):
     ACTIONS_CHOICES = [("E", "Entrada"), ("S", "Salida"), ("A", "Ajuste")]
 
@@ -207,6 +207,7 @@ class StoreProductLog(CreatedAtModel):
     def calculate_difference(self):
         difference = self.updated_stock - self.previous_stock
         return f"+{difference}" if difference > 0 else str(difference)
+"""
 
 
 class CashFlow(CreatedAtModel):
@@ -221,6 +222,8 @@ class CashFlow(CreatedAtModel):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
+    def __str__(self):
+        return ("{} {}").format(self.concept, self.store)
 
 class StoreWorker(models.Model):
     ROLE_CHOICES = [

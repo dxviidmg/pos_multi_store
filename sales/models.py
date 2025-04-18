@@ -9,13 +9,24 @@ class Sale(CreatedAtModel):
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
-
+    
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)
 
-    def is_cancelable(self):
+    def has_only_cash_payment(self):
         payments = self.payments.all()
         return payments.count() == 1 and payments.filter(payment_method="EF").exists()
+
+    def get_refunded(self):
+        refunded = 0
+        for product_sale in self.products_sale.exclude(returned_quantity=0):
+            refunded = refunded + product_sale.get_refunded()
+
+        return refunded
+        
+    def is_cancelable(self):
+        print(self.has_only_cash_payment(), self.get_refunded())
+        return self.has_only_cash_payment() and self.get_refunded() == 0
 
     def get_payments_methods_display(self):
         return [payment.get_payment_method_display() for payment in self.payments.all()]
@@ -29,6 +40,8 @@ class Sale(CreatedAtModel):
             profit = profit + product_sale.get_profit()
 
         return profit
+    
+
 
 
 class ProductSale(models.Model):
@@ -40,6 +53,7 @@ class ProductSale(models.Model):
     )
     quantity = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    returned_quantity = models.IntegerField(default=0)
 
     def get_total(self):
         return self.quantity * self.price
@@ -47,7 +61,9 @@ class ProductSale(models.Model):
     def get_profit(self):
         return (self.price - self.product.cost) * self.quantity
 
-
+    def get_refunded(self):
+        return self.returned_quantity * self.price
+    
 class Payment(models.Model):
     PAYMENT_METHOD_CHOICES = (
         ("EF", "Efectivo"),
