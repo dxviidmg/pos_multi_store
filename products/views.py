@@ -826,6 +826,15 @@ class DeleteBrandsView(APIView):
 		return Response(
 			{"status": "success", "message": "Marcas borrados correctamente"}
 		)
+	
+class DeleteDepartmentsView(APIView):
+	@transaction.atomic
+	def post(self, request):
+		ids = request.data
+		Department.objects.filter(id__in=ids).delete()
+		return Response(
+			{"status": "success", "message": "Marcas borrados correctamente"}
+		)
 
 
 @method_decorator(get_store(), name="dispatch")

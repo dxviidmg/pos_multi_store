@@ -27,6 +27,7 @@ urlpatterns += [
     path('products/reassign/', views.ProductReassign.as_view(), name='product-reassign'),
     path('products/delete/', views.DeleteProductsView.as_view(), name='products-delete'),
     path('brands/delete/', views.DeleteBrandsView.as_view(), name='brands-delete'),
+    path('departments/delete/', views.DeleteDepartmentsView.as_view(), name='departments-delete'),
     path('store-products/import-validation/', views.StoreProductImportValidation.as_view(), name='store-product-import-validation'),
     path('store-products/import/', views.ImportStoreProduct.as_view(), name='store-product-import'),
     path('store-products/import/can-include-quantity/', views.ImportCanIcludeQuantity.as_view(), name='can-include-quantity'),
