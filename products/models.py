@@ -170,44 +170,6 @@ class Transfer(CreatedAtModel):
     def __str__(self):
         return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"
 
-"""
-class StoreProductLog(CreatedAtModel):
-    ACTIONS_CHOICES = [("E", "Entrada"), ("S", "Salida"), ("A", "Ajuste")]
-
-    MOVEMENT_CHOICES = [
-        ("DI", "Distribución"),
-        ("TR", "Transferencia"),
-        ("DE", "Devolucíon"),
-        ("VE", "Venta"),
-        ("MA", "Manual"),
-        ("IM", "Importación"),
-    ]
-
-    store_product = models.ForeignKey(
-        StoreProduct, on_delete=models.CASCADE, related_name="store_product_logs"
-    )
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    previous_stock = models.IntegerField()
-    updated_stock = models.IntegerField()
-    action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
-    movement = models.CharField(max_length=2, choices=MOVEMENT_CHOICES, default="MA")
-
-    def __str__(self):
-        return "{} {} {} {} {}".format(
-            self.store_product,
-            self.action,
-            self.movement,
-            self.previous_stock,
-            self.updated_stock,
-        )
-
-    def get_description(self):
-        return "{} {}".format(self.get_action_display(), self.get_movement_display())
-
-    def calculate_difference(self):
-        difference = self.updated_stock - self.previous_stock
-        return f"+{difference}" if difference > 0 else str(difference)
-"""
 
 
 class CashFlow(CreatedAtModel):
