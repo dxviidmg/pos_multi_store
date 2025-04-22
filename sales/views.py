@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
 from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product, StoreProductLog
+from products.models import StoreProduct, Product  # , StoreProductLog
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -11,6 +11,7 @@ from products.decorators import get_store
 from django.utils.decorators import method_decorator
 from .cash_summary_utils import calculate_cash_summary
 from django.shortcuts import get_object_or_404
+from logs.models import StoreProductLog
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -22,12 +23,20 @@ class SaleViewSet(viewsets.ModelViewSet):
         return SaleSerializer
 
     def get_queryset(self):
-        date = self.request.GET.get("date")
         store = self.request.store
-        query = {'store': store, 'created_at__date':date}
-        if self.request.user.get_role() == 'seller':
-            query['seller'] = self.request.user
-        return Sale.objects.filter(**query).order_by('id')
+        
+        date = self.request.GET.get("date")
+        query = {"store": store, "created_at__date": date}
+
+        sale_id = self.request.GET.get("sale_id")
+
+        if sale_id:
+            query['id__startswith'] = sale_id
+            print('sale_id', sale_id)
+
+        if self.request.user.get_role() == "seller":
+            query["seller"] = self.request.user
+        return Sale.objects.filter(**query).order_by("id")
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
@@ -97,7 +106,11 @@ class SaleViewSet(viewsets.ModelViewSet):
                     "sale": sale_instance,
                     "payment_method": payment_data["payment_method"],
                     "amount": payment_data["amount"],
-                    "reference": reference_payment if payment_data["payment_method"] != "EF" else None
+                    "reference": (
+                        reference_payment
+                        if payment_data["payment_method"] != "EF"
+                        else None
+                    ),
                 }
                 Payment.objects.create(**data)
 
@@ -337,14 +350,20 @@ class CancelSale(APIView):
                 {"detail": "No products found to cancel."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        
+
 
         logs = []
         total_refund = 0
 
         with transaction.atomic():
             for product_sale in products_to_cancel:
+
                 quantity_to_cancel = products_data.get(str(product_sale.pk), 0)
-                # Actualizar stock
+                product_sale.returned_quantity += quantity_to_cancel
+                product_sale.quantity -= quantity_to_cancel
+                product_sale.save()
+                
                 store_product = get_object_or_404(
                     StoreProduct, store=sale.store, product=product_sale.product
                 )
@@ -353,29 +372,36 @@ class CancelSale(APIView):
                 store_product.stock += quantity_to_cancel
                 store_product.save()
 
-                logs.append(StoreProductLog(
-                    store_product=store_product,
-                    user=request.user,
-                    previous_stock=previous_stock,
-                    updated_stock=store_product.stock,
-                    action="E",
-                    movement="DE",
-                ))
+                logs.append(
+                    StoreProductLog(
+                        store_product=store_product,
+                        user=request.user,
+                        previous_stock=previous_stock,
+                        updated_stock=store_product.stock,
+                        action="E",
+                        movement="DE",
+#                        sale=sale,
+                    )
+                )
 
                 # Calcular y aplicar reembolso
                 if product_sale.quantity == quantity_to_cancel:
                     total_refund += product_sale.get_total()
-                    product_sale.delete()
+#                    product_sale.delete()
                 else:
                     refund = product_sale.price * quantity_to_cancel
                     total_refund += refund
-                    product_sale.quantity -= quantity_to_cancel
-                    product_sale.save()
+#                    product_sale.quantity -= quantity_to_cancel
+#                    product_sale.save()
 
             # Actualizar o eliminar la venta
             remaining_products = sale.products_sale.all()
+            old_total1 = sale.total
+            x = sale.get_refunded()
 
-            if remaining_products.exists():
+            print(old_total1, x)
+            
+            if sale.total != sale.get_refunded():
                 old_total = sale.total
                 new_total = sum(p.get_total() for p in remaining_products)
                 sale.total = new_total
@@ -395,6 +421,10 @@ class CancelSale(APIView):
 
             else:
                 cash_back = sale.total
-                sale.delete()
                 StoreProductLog.objects.bulk_create(logs)
-                return Response({"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK)
+#                sale.is_canceled = True
+#                sale.save()
+                sale.delete()
+                return Response(
+                    {"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK
+                )

@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/', include('products.urls', namespace="products")),
     path('api/', include('sales.urls', namespace="sales")),
     path('api/', include('tenants.urls', namespace="tenants")),
+    path('api/', include('logs.urls', namespace="logs")),
 ]
 
 from django.conf import settings
