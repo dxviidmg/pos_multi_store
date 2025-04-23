@@ -12,6 +12,7 @@ from django.utils.decorators import method_decorator
 from .cash_summary_utils import calculate_cash_summary
 from django.shortcuts import get_object_or_404
 from logs.models import StoreProductLog
+from rest_framework.exceptions import NotFound
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -116,6 +117,15 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         return sale_instance
 
+    def get_object(self):
+        store = self.request.store
+        sale_id = self.kwargs.get("pk")  # DRF usa "pk" aunque lo sobreescribas
+
+        try:
+            sale = Sale.objects.get(id=sale_id, store=store)
+            return sale
+        except Sale.DoesNotExist:
+            raise NotFound(detail="Sale not found for this store.")
 
 @method_decorator(get_store(), name="dispatch")
 class CashSummary(APIView):
