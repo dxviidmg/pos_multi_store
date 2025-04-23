@@ -22,7 +22,12 @@ class SaleSerializer(serializers.ModelSerializer):
     products_sale = ProductSaleSerializer(many=True)
     is_duplicate = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
+    refunded = serializers.SerializerMethodField()
 
+
+    
+    def get_refunded(self, obj):
+        return obj.get_refunded()
     def get_seller_username(self, obj):
         return obj.seller.username
 
@@ -51,3 +56,19 @@ class SaleCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
         fields = ["total", "client"]
+
+
+
+class SaleSerializer2(serializers.ModelSerializer):
+
+    products_sale = ProductSaleSerializer(many=True)
+    refunded = serializers.SerializerMethodField()
+
+
+    
+    def get_refunded(self, obj):
+        return obj.get_refunded()
+    
+    class Meta:
+        model = Sale
+        fields = "__all__"
