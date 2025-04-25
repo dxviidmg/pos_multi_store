@@ -780,6 +780,17 @@ class ProductReassign(APIView):
 		Product.objects.filter(**filter).update(**update_data)
 
 		return Response({}, status=status.HTTP_200_OK)
+	
+
+class ProductUpperCode(APIView):
+	def post(self, request):
+		tenant = self.request.user.get_tenant()
+		products = Product.objects.filter(brand__tenant=tenant, code__iregex=r'^[a-z]+$')#.update(**update_data)
+		for product in products:
+			product.code = product.code.upper()
+			product.save()
+
+		return Response({}, status=status.HTTP_200_OK)
 
 
 @method_decorator(get_store(), name="dispatch")
