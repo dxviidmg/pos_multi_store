@@ -5,7 +5,7 @@ from products.models import StoreProduct
 from sales.models import Sale
 
 class StoreProductLog(CreatedAtModel):
-    ACTIONS_CHOICES = [("E", "Entrada"), ("S", "Salida"), ("A", "Ajuste")]
+    ACTIONS_CHOICES = [("E", "Entrada"), ("S", "Salida"), ("A", "Ajuste"), ("N", "NA")]
 
     MOVEMENT_CHOICES = [
         ("MA", "Manual"),
@@ -14,6 +14,7 @@ class StoreProductLog(CreatedAtModel):
         ("TR", "Transferencia"),
         ("DE", "Devolucíon"),
         ("VE", "Venta"),
+        ("AP", "Apartado"),
     ]
 
     store_product = models.ForeignKey(
@@ -36,6 +37,8 @@ class StoreProductLog(CreatedAtModel):
         )
 
     def get_description(self):
+        if self.get_action_display() == 'NA':
+            return self.get_movement_display()
         return "{} {}".format(self.get_action_display(), self.get_movement_display())
 
     def calculate_difference(self):

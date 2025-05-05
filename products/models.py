@@ -3,7 +3,6 @@ from django.contrib.auth.models import User
 from tenants.models import Tenant, CreatedAtModel
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
-from datetime import date
 from django.db.models import Sum
 
 
@@ -150,7 +149,16 @@ class StoreProduct(models.Model):
             product=self.product, transfer_datetime=None
         )
 
-        return sum(transfer.quantity for transfer in transfers)
+        stock_reserved_in_transfers = sum(transfer.quantity for transfer in transfers)
+        stock_reserved_in_reservations = (
+            self.store.sales
+            .filter(reservation_in_progress=True, products_sale__product=self.product)
+            .aggregate(total_quantity=Sum('products_sale__quantity'))['total_quantity'] or 0
+        )
+
+
+
+        return stock_reserved_in_transfers + stock_reserved_in_reservations
 
     def calculate_available_stock(self):
         return self.stock - self.calculate_reserved_stock()
