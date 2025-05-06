@@ -3,12 +3,16 @@ from clients.models import Client
 from products.models import Product, Store
 from django.contrib.auth.models import User
 from tenants.models import CreatedAtModel
+from django.db.models import Sum
+
 
 class Sale(CreatedAtModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
+    reservation_in_progress = models.BooleanField(default=False)
+
     
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)
@@ -41,8 +45,11 @@ class Sale(CreatedAtModel):
 
         return profit
     
+    def get_paid(self):
+        return self.payments.all().aggregate(total_amount=Sum('amount'))['total_amount'] or 0
+        
 
-
+        
 
 class ProductSale(models.Model):
     product = models.ForeignKey(

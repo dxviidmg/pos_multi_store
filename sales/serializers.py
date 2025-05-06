@@ -23,7 +23,7 @@ class SaleSerializer(serializers.ModelSerializer):
     is_duplicate = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
     refunded = serializers.SerializerMethodField()
-
+    paid = serializers.SerializerMethodField()
 
     
     def get_refunded(self, obj):
@@ -47,6 +47,9 @@ class SaleSerializer(serializers.ModelSerializer):
     def get_reference(self, obj):
         return obj.get_reference()
     
+    def get_paid(self, obj):
+        return obj.get_paid()
+    
     class Meta:
         model = Sale
         fields = "__all__"
@@ -55,7 +58,7 @@ class SaleSerializer(serializers.ModelSerializer):
 class SaleCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
-        fields = ["total", "client"]
+        fields = ["total", "client", "reservation_in_progress"]
 
 
 
@@ -68,6 +71,8 @@ class SaleSerializer2(serializers.ModelSerializer):
     
     def get_refunded(self, obj):
         return obj.get_refunded()
+    
+
     
     class Meta:
         model = Sale
