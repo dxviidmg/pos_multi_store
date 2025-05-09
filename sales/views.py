@@ -27,53 +27,62 @@ class SaleViewSet(viewsets.ModelViewSet):
         store = self.request.store
 
         date = self.request.GET.get("date")
-        reservation_in_progress = self.request.GET.get("reservation_in_progress") == "true"
-        print('reservation_in_progress', reservation_in_progress)
-        query = {"store": store, "created_at__date": date, "reservation_in_progress": reservation_in_progress}
+        reservation_in_progress = (
+            self.request.GET.get("reservation_in_progress") == "true"
+        )
+
+
+        query = {
+            "store": store,
+#            "created_at__date": date,
+            "reservation_in_progress": reservation_in_progress,
+        }
+
+        if not reservation_in_progress:
+            query['created_at__date'] = date
+
+        
 
         sale_id = self.request.GET.get("sale_id")
 
         if sale_id:
             query["id__startswith"] = sale_id
-            print("sale_id", sale_id)
 
         if self.request.user.get_role() == "seller":
             query["seller"] = self.request.user
+
+        print(query)
+        
         return Sale.objects.filter(**query).order_by("id")
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
         payments_data = self.request.data.get("payments")
 
-        print('payments_data', payments_data)
         reference_payment = self.request.data.get("reference_payment")
         sale_exchange = self.request.data.get("sale_exchange")
 
         reservation_in_progress = self.request.data.get("reservation_in_progress")
-        print(self.request.data.get("reservation_in_progress"), type(self.request.data.get("reservation_in_progress")))
-        print('reservation_in_progress', reservation_in_progress)
 
         if not store_products_data:
             return Response(
                 {"detail": "store_products is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         if not reservation_in_progress and not payments_data:
             return Response(
                 {"detail": "payment is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        print('chales')
         updated_store_products = []  # Lista para almacenar instancias de StoreProduct
         logs = []  # Lista para almacenar logs de StoreProductLog
 
         store = self.request.store
         seller = self.request.user
 
-    # Usar una transacción para asegurar la atomicidad
-        print('antes de atomic')
+        # Usar una transacción para asegurar la atomicidad
         with transaction.atomic():
             for product_data in store_products_data:
                 product_store = StoreProduct.objects.get(id=product_data["id"])
@@ -90,27 +99,26 @@ class SaleViewSet(viewsets.ModelViewSet):
                         store_product=product_store,
                         user=seller,
                         previous_stock=previous_stock,
-                        updated_stock= previous_stock if reservation_in_progress else updated_stock,
-                        action= "N" if reservation_in_progress else "S",
-                        movement="AP" if reservation_in_progress else "VE"
+                        updated_stock=(
+                            previous_stock if reservation_in_progress else updated_stock
+                        ),
+                        action="N" if reservation_in_progress else "S",
+                        movement="AP" if reservation_in_progress else "VE",
                     )
                 )
 
-            print('x1')
             # Actualizar los stocks de los productos en una sola operación
             if not reservation_in_progress:
-                print('x1.4')
                 StoreProduct.objects.bulk_update(updated_store_products, ["stock"])
-            print('x2')
             # Guardar los logs en la base de datos
             StoreProductLog.objects.bulk_create(logs)
 
             # Guardar la venta y asociarla al usuario actual
-
-            print('antes de guardar la instancia')
-            sale_instance = serializer.save(store=store, seller=seller, reservation_in_progress=reservation_in_progress)
-
-            print('pk', sale_instance.pk)
+            sale_instance = serializer.save(
+                store=store,
+                seller=seller,
+                reservation_in_progress=reservation_in_progress,
+            )
 
             # Crear las relaciones de ProductSale
             for product_data in store_products_data:
@@ -163,6 +171,63 @@ class SaleViewSet(viewsets.ModelViewSet):
             return sale
         except Sale.DoesNotExist:
             raise NotFound(detail="Sale not found for this store.")
+
+    def perform_update(self, serializer):
+        payment_data = self.request.data.get("payment")
+
+        if not payment_data:
+            return Response(
+                {"detail": "payment is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        Payment.objects.create(**payment_data)
+        sale_instance = serializer.save()
+
+        reservation_in_progress = self.request.data.get("reservation_in_progress")
+
+        if not reservation_in_progress:
+
+            store = self.request.store
+            seller = self.request.user
+            updated_store_products = []
+            logs = []
+            with transaction.atomic():
+
+                for product_sale in sale_instance.products_sale.all():
+                    product_store = StoreProduct.objects.get(
+                        store=store, product=product_sale.product
+                    )
+                    previous_stock = product_store.stock
+                    updated_stock = previous_stock - product_sale.quantity
+
+                    # Actualizar el stock del producto
+                    product_store.stock = updated_stock
+                    updated_store_products.append(product_store)
+
+                    # Crear el log correspondiente
+                    logs.append(
+                        StoreProductLog(
+                            store_product=product_store,
+                            user=seller,
+                            previous_stock=previous_stock,
+                            updated_stock=(
+                                previous_stock
+                                if reservation_in_progress
+                                else updated_stock
+                            ),
+                            action="S",
+                            movement="VE",
+                        )
+                    )
+
+                # Actualizar los stocks de los productos en una sola operación
+                if not reservation_in_progress:
+                    StoreProduct.objects.bulk_update(updated_store_products, ["stock"])
+                # Guardar los logs en la base de datos
+                StoreProductLog.objects.bulk_create(logs)
+
+        return sale_instance
 
 
 @method_decorator(get_store(), name="dispatch")

@@ -29,9 +29,9 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
 
     # Obtener total de ventas
     if date:
-        sales = Sale.objects.filter(store=store, created_at__date=date)
+        sales = Sale.objects.filter(store=store, created_at__date=date, reservation_in_progress=False)
     else:
-        sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date])
+        sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date], reservation_in_progress=False)
     total_sales = sales.aggregate(total=Sum("total"))["total"] or 0
 
     # Calcular la ganancia total del día sumando el beneficio de cada venta
@@ -40,11 +40,12 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
     # Obtener pagos relacionados con esas ventas
     if date:
         related_payments = Payment.objects.filter(
-            sale__store=store, sale__created_at__date=date
+            sale__store=store, created_at__date=date
         )
+
     else:
         related_payments = Payment.objects.filter(
-                    sale__store=store, sale__created_at__date__range=[start_date, end_date]
+                    sale__store=store, created_at__date__range=[start_date, end_date]
                 )        
     payments_grouped_by_method = related_payments.values("payment_method").annotate(
         total_amount=Sum("amount")
@@ -85,22 +86,11 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
     cash_summary.extend(
         [
             {
-                "name": "Total en pagos",
+                "name": "Total de ventas",
                 "amount": total_received_payments,
                 "payment_method_data": True,
                 "sales_data": True,
-            },
-            {
-                "name": "Total en ventas",
-                "amount": total_sales,
-                "sales_data": True,
                 "total_data": True,
-            },
-
-            {
-                "name": "Balanceado",
-                "amount": "Si" if total_sales == total_received_payments else "No",
-                "sales_data": True,
             },
             {"name": "Entradas", "amount": total_income, "cashflow_data": True},
             {
@@ -125,7 +115,7 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
             },
             {
                 "name": "Total",
-                "amount": total_sales + net_cash_flow,
+                "amount": total_received_payments + net_cash_flow,
                 "total_data": True,
             },
             {
@@ -139,14 +129,14 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
 
 def calculate_cash_summary_by_department(store, date, start_date=None, end_date=None, department_id=""):  
     if date:
-        sales = Sale.objects.filter(store=store, created_at__date=date)
+        sales = Sale.objects.filter(store=store, created_at__date=date, reservation_in_progress=False)
     else:
-        sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date])
+        sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date], reservation_in_progress=False)
     
     if department_id == "0":
         department_id = None
 
-    products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id)
+    products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id, reservation_in_progress=False)
     total_sales = sum(product_sale.get_total() for product_sale in products_sale)
     total_profit = sum(product_sale.get_profit() for product_sale in products_sale)
 
@@ -223,6 +213,6 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
 
 def calculate_total_sales_by_seller(seller, start_date, end_date):  
 
-    sales = Sale.objects.filter(seller=seller, created_at__date__range=[start_date, end_date])
+    sales = Sale.objects.filter(seller=seller, created_at__date__range=[start_date, end_date], reservation_in_progress=False)
     total_sales = sales.aggregate(total=Sum("total"))["total"] or 0
     return total_sales
