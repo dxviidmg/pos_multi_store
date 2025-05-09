@@ -29,8 +29,11 @@ class Sale(CreatedAtModel):
         return refunded
         
     def is_cancelable(self):
-        print(self.has_only_cash_payment(), self.get_refunded())
-        return self.has_only_cash_payment() and self.get_refunded() == 0
+        return (
+            not self.reservation_in_progress and
+            self.has_only_cash_payment() and
+            self.get_refunded() == 0
+        )
 
     def get_payments_methods_display(self):
         return [payment.get_payment_method_display() for payment in self.payments.all()]
@@ -71,7 +74,7 @@ class ProductSale(models.Model):
     def get_refunded(self):
         return self.returned_quantity * self.price
     
-class Payment(models.Model):
+class Payment(CreatedAtModel):
     PAYMENT_METHOD_CHOICES = (
         ("EF", "Efectivo"),
         ("TA", "Tarjeta"),
