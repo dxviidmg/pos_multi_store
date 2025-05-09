@@ -19,6 +19,7 @@ class CustomAuthToken(ObtainAuthToken):
             'email': user.email,
             'tenant_name': user.get_tenant().name,
             'tenant_short_name': user.get_tenant().short_name,
+            'supports_reservations': user.get_tenant().supports_reservations,
             'sellers': user.get_tenant().sellers,
             'store_id': store.id if store else None,
             'store_name': store.name if store else None,
