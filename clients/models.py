@@ -37,3 +37,4 @@ class Client(models.Model):
             created_at__date__range=(start_date, end_date)
         ).aggregate(total_amount=Sum("total"))["total_amount"]
         return total or 0
+    
