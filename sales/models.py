@@ -7,7 +7,7 @@ from django.db.models import Sum
 
 
 class Sale(CreatedAtModel):
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True, related_name='sales')
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
