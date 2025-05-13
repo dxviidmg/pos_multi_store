@@ -1,8 +1,7 @@
 from django.db import models
-from products.models import Base
 from django.core.validators import MinValueValidator, MaxValueValidator, MinLengthValidator
 from tenants.models import Tenant
-from django.db.models import Q
+from django.db.models import Sum
 
 
 class Discount(models.Model):
@@ -31,3 +30,10 @@ class Client(models.Model):
 
     def __str__(self):
         return self.get_full_name()
+    
+
+    def get_total_sales_amount(self, start_date, end_date):
+        total = self.sales.filter(
+            created_at__date__range=(start_date, end_date)
+        ).aggregate(total_amount=Sum("total"))["total_amount"]
+        return total or 0

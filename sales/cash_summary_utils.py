@@ -32,7 +32,6 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
         sales = Sale.objects.filter(store=store, created_at__date=date, reservation_in_progress=False)
     else:
         sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date], reservation_in_progress=False)
-    total_sales = sales.aggregate(total=Sum("total"))["total"] or 0
 
     # Calcular la ganancia total del día sumando el beneficio de cada venta
     total_profit = sum(sale.get_profit() for sale in sales)
@@ -137,7 +136,6 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
         department_id = None
 
     products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id, reservation_in_progress=False)
-    total_sales = sum(product_sale.get_total() for product_sale in products_sale)
     total_profit = sum(product_sale.get_profit() for product_sale in products_sale)
 
     sale_count = products_sale.values_list('sale_id').distinct().count()
@@ -160,18 +158,6 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
                 "name": "Total en pagos",
                 "amount": 0,
                 "payment_method_data": True,
-                "sales_data": True,
-            },
-            {
-                "name": "Total en ventas",
-                "amount": total_sales,
-                "sales_data": True,
-                "total_data": True,
-            },
-
-            {
-                "name": "Balanceado",
-                "amount": 0,
                 "sales_data": True,
             },
             {"name": "Entradas", "amount": 0, "cashflow_data": True},

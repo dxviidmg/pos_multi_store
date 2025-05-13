@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Discount, Client
 from django.core.exceptions import ValidationError
+from datetime import datetime, date
 
 
 class DiscountSerializer(serializers.ModelSerializer):
@@ -31,6 +32,7 @@ class ClientSerializer(serializers.ModelSerializer):
 	full_name = serializers.SerializerMethodField()
 	discount_percentage = serializers.SerializerMethodField()
 	discount_percentage_complement = serializers.SerializerMethodField()
+	total_sales_amount = serializers.SerializerMethodField()
 
 	def get_full_name(self, obj):
 		return obj.get_full_name()
@@ -40,6 +42,14 @@ class ClientSerializer(serializers.ModelSerializer):
 
 	def get_discount_percentage_complement(self, obj):
 		return obj.discount.get_discount_percentage_complement()
+	
+	def get_total_sales_amount(self, obj):
+		start_date_str = self.context.get("start_date")
+		end_date_str = self.context.get("end_date")
+
+		start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else date.today()
+		end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date.today()
+		return obj.get_total_sales_amount(start_date, end_date)
 
 	class Meta:
 		model = Client

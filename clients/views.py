@@ -36,3 +36,13 @@ class ClientViewSet(viewsets.ModelViewSet):
 				discount__in=discounts,
 			)
 		return Client.objects.filter(discount__in=discounts)
+
+
+	def get_serializer(self, *args, **kwargs):
+		kwargs.setdefault("context", {}).update(
+			{"start_date": self.request.GET.get("start_date", None)}
+		)
+		kwargs.setdefault("context", {}).update(
+			{"end_date": self.request.GET.get("end_date", None)}
+		)
+		return super().get_serializer(*args, **kwargs)
