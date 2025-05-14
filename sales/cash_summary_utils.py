@@ -135,7 +135,7 @@ def calculate_cash_summary_by_department(store, date, start_date=None, end_date=
     if department_id == "0":
         department_id = None
 
-    products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id, reservation_in_progress=False)
+    products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id)
     total_profit = sum(product_sale.get_profit() for product_sale in products_sale)
 
     sale_count = products_sale.values_list('sale_id').distinct().count()
