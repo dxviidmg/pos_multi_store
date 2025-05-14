@@ -1,10 +1,10 @@
-from datetime import date
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from collections import defaultdict
 from .models import Sale, Payment, ProductSale
 from products.models import CashFlow
 
-def calculate_cash_summary(store, date, start_date=None, end_date=None):  
+
+def calculate_cash_summary(store, date, start_date=None, end_date=None):
     if date:
         cash_flow_totals_by_type = (
             CashFlow.objects.filter(store=store, created_at__date=date)
@@ -14,14 +14,19 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
     else:
 
         cash_flow_totals_by_type = (
-            CashFlow.objects.filter(store=store, created_at__date__range=[start_date, end_date])
+            CashFlow.objects.filter(
+                store=store, created_at__date__range=[start_date, end_date]
+            )
             .values("transaction_type")
             .annotate(total=Sum("amount"))
         )
     # Mapear los totales en un defaultdict para evitar valores None
     transaction_sums = defaultdict(
         int,
-        {entry["transaction_type"]: entry["total"] for entry in cash_flow_totals_by_type},
+        {
+            entry["transaction_type"]: entry["total"]
+            for entry in cash_flow_totals_by_type
+        },
     )
     total_income = transaction_sums["E"]
     total_expenses = transaction_sums["S"]
@@ -29,9 +34,15 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
 
     # Obtener total de ventas
     if date:
-        sales = Sale.objects.filter(store=store, created_at__date=date, reservation_in_progress=False)
+        sales = Sale.objects.filter(
+            store=store, created_at__date=date, reservation_in_progress=False
+        )
     else:
-        sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date], reservation_in_progress=False)
+        sales = Sale.objects.filter(
+            store=store,
+            created_at__date__range=[start_date, end_date],
+            reservation_in_progress=False,
+        )
 
     # Calcular la ganancia total del día sumando el beneficio de cada venta
     total_profit = sum(sale.get_profit() for sale in sales)
@@ -44,8 +55,8 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
 
     else:
         related_payments = Payment.objects.filter(
-                    sale__store=store, created_at__date__range=[start_date, end_date]
-                )        
+            sale__store=store, created_at__date__range=[start_date, end_date]
+        )
     payments_grouped_by_method = related_payments.values("payment_method").annotate(
         total_amount=Sum("amount")
     )
@@ -53,7 +64,7 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
         related_payments.aggregate(total=Sum("amount"))["total"] or 0
     )
 
-        # Mapeo de métodos de pago
+    # Mapeo de métodos de pago
     payment_method_labels = dict(Payment.PAYMENT_METHOD_CHOICES)
 
     # Crear un diccionario con todos los métodos de pago y valores iniciales en 0
@@ -72,7 +83,6 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
         }
         for method, amount in payments_dict.items()
     ]
-
 
     net_cash = (
         next(
@@ -94,7 +104,9 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
             {"name": "Entradas", "amount": total_income, "cashflow_data": True},
             {
                 "name": "Salidas",
-                "amount": f"-{total_expenses}" if total_expenses != 0 else str(total_expenses),
+                "amount": (
+                    f"-{total_expenses}" if total_expenses != 0 else str(total_expenses)
+                ),
                 "cashflow_data": True,
             },
             {
@@ -126,79 +138,98 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
     return cash_summary
 
 
-def calculate_cash_summary_by_department(store, date, start_date=None, end_date=None, department_id=""):  
-    if date:
-        sales = Sale.objects.filter(store=store, created_at__date=date, reservation_in_progress=False)
-    else:
-        sales = Sale.objects.filter(store=store, created_at__date__range=[start_date, end_date], reservation_in_progress=False)
-    
+def calculate_cash_summary_by_department(
+    store, date, start_date=None, end_date=None, department_id=""
+):
     if department_id == "0":
         department_id = None
 
-    products_sale = ProductSale.objects.filter(sale__in=sales, product__department=department_id)
-    total_profit = sum(product_sale.get_profit() for product_sale in products_sale)
+    date_filter = Q(sale__store=store)
+    if date:
+        date_filter &= Q(created_at__date=date)
+    else:
+        date_filter &= Q(created_at__date__range=[start_date, end_date])
 
-    sale_count = products_sale.values_list('sale_id').distinct().count()
+    related_payments = Payment.objects.filter(date_filter)
+
+    sales = related_payments.values_list("sale_id", flat=True).distinct()
+
+    # Filtrar productos vendidos por departamento
+    product_filter = Q(sale_id__in=sales)
+    if department_id:
+        product_filter &= Q(product__department=department_id)
+
+    products_sale = ProductSale.objects.filter(product_filter)
+
+    # Total de pagos recibidos solo de productos del departamento (si aplica)
+    total_received = sum(p.get_total() for p in products_sale)
+
+    # Ganancia total
+    total_profit = sum(p.get_profit() for p in products_sale)
+
+    # Conteo de ventas únicas
+    sale_count = products_sale.values("sale_id").distinct().count()
+
+    # Inicializar todos los métodos de pago en 0
     payment_method_labels = dict(Payment.PAYMENT_METHOD_CHOICES)
+    payments_dict = {method: 0 for method in payment_method_labels}
 
-    # Crear un diccionario con todos los métodos de pago y valores iniciales en 0
-    payments_dict = {method: 0 for method in payment_method_labels.keys()}
+    # (Opcional) Si deseas desglosar los métodos de pago solo para ese departamento, agrega lógica aquí
+
     cash_summary = [
         {
-            "name": payment_method_labels.get(method, method),
+            "name": payment_method_labels[method],
             "amount": amount,
             "payment_method_data": True,
         }
         for method, amount in payments_dict.items()
     ]
 
-    cash_summary.extend(
-        [
-            {
-                "name": "Total en pagos",
-                "amount": 0,
-                "payment_method_data": True,
-                "sales_data": True,
-            },
-            {"name": "Entradas", "amount": 0, "cashflow_data": True},
-            {
-                "name": "Salidas",
-                "amount": 0,
-                "cashflow_data": True,
-            },
-            {
-                "name": "Total de E/S",
-                "amount": 0,
-                "cashflow_data": True,
-                "total_data": True,
-            },
-            {
-                "name": "Total en caja",
-                "amount": 0,
-                "total_data": True,
-            },
-            {
-                "name": "Total de ganancias",
-                "amount": 0,
-                "amount": total_profit,
-            },
-            {
-                "name": "Total",
-                "amount": 0,
-                "total_data": True,
-            },
-                        {
-                "name": "Numero de ventas",
-                "amount": sale_count,
-            },
-        ]
-    )
+    # Secciones adicionales
+    cash_summary += [
+        {
+            "name": "Total en pagos",
+            "amount": total_received,
+            "payment_method_data": True,
+            "sales_data": True,
+        },
+        {"name": "Entradas", "amount": 0, "cashflow_data": True},
+        {"name": "Salidas", "amount": 0, "cashflow_data": True},
+        {
+            "name": "Total de E/S",
+            "amount": 0,
+            "cashflow_data": True,
+            "total_data": True,
+        },
+        {
+            "name": "Total en caja",
+            "amount": 0,
+            "total_data": True,
+        },
+        {
+            "name": "Total de ganancias",
+            "amount": total_profit,
+        },
+        {
+            "name": "Total",
+            "amount": 0,
+            "total_data": True,
+        },
+        {
+            "name": "Numero de ventas",
+            "amount": sale_count,
+        },
+    ]
 
     return cash_summary
 
 
-def calculate_total_sales_by_seller(seller, start_date, end_date):  
+def calculate_total_sales_by_seller(seller, start_date, end_date):
 
-    sales = Sale.objects.filter(seller=seller, created_at__date__range=[start_date, end_date], reservation_in_progress=False)
+    sales = Sale.objects.filter(
+        seller=seller,
+        created_at__date__range=[start_date, end_date],
+        reservation_in_progress=False,
+    )
     total_sales = sales.aggregate(total=Sum("total"))["total"] or 0
     return total_sales
