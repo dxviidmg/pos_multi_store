@@ -38,12 +38,11 @@ class SaleViewSet(viewsets.ModelViewSet):
             "reservation_in_progress": reservation_in_progress,
         }
 
-        if not reservation_in_progress:
+        sale_id = self.request.GET.get("sale_id")
+
+        if not reservation_in_progress and not sale_id:
             query['created_at__date'] = date
 
-        
-
-        sale_id = self.request.GET.get("sale_id")
 
         if sale_id:
             query["id__startswith"] = sale_id

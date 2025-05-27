@@ -180,14 +180,14 @@ class TransferSerializer(serializers.ModelSerializer):
 
 
 class StoreSerializer(StoreBaseSerializer):
-    url_printer = serializers.SerializerMethodField()
+    printer = serializers.SerializerMethodField()
     products_count = serializers.IntegerField(source='count_products', read_only=True)
     workers_count = serializers.IntegerField(source='count_workers', read_only=True)
 
 
 
-    def get_url_printer(self, obj):
-        return obj.get_url_printer()
+    def get_printer(self, obj):
+        return obj.get_store_printer()
     
     class Meta:
         model = Store
