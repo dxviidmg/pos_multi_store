@@ -58,9 +58,11 @@ class Store(Base):
 
         super().save(*args, **kwargs)
 
-    def get_url_printer(self):
-        if self.has_printer_installed:
-            return "http://127.0.0.1:5000/"
+    def get_store_printer(self):
+        store_printer = self.printer.all().first()
+
+        if store_printer:
+            return {'cut_command': store_printer.printer.has_cut_command, 'url': 'http://127.0.0.1:5000/'}
         return False
 
     def get_investment(self):
@@ -83,7 +85,6 @@ class Store(Base):
 
     def count_workers(self):
         return self.workers.all().count()
-
 
 
 class Product(Base):
