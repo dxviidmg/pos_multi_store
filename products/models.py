@@ -62,8 +62,8 @@ class Store(Base):
         store_printer = self.printer.all().first()
 
         if store_printer:
-            return {'cut_command': store_printer.printer.has_cut_command, 'url': 'http://127.0.0.1:5000/'}
-        return False
+            return {'cut_command': store_printer.printer.has_cut_command}
+        return {}
 
     def get_investment(self):
         store_products = self.store_products.all()
