@@ -63,7 +63,7 @@ class Store(Base):
 
         if store_printer:
             return {'cut_command': store_printer.printer.has_cut_command}
-        return {}
+        return False
 
     def get_investment(self):
         store_products = self.store_products.all()
