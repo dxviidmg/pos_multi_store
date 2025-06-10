@@ -592,10 +592,17 @@ class ProductImportValidation(APIView):
 							]
 							if not all(price > 0 for price in prices):
 								data_row["status"] = (
-									"Al menos uno de los valores no es mayor a 0"
+									"Costo y precio(s) deben ser mayores a 0"
 								)
+
+							if len(prices) == 4 and prices[2] > prices[1]:
+									data_row["status"] = "Precio mayoreo es mas grande que precio unitario"
+
+							if len(prices) == 4 and prices[0] > prices[2]:
+									data_row["status"] = "Precio mayoreo es mas chico que costo"
+
 						except ValueError:
-							data_row["status"] = "Valores númericos inválidos"
+							data_row["status"] = "Precios o costos inválidos"
 
 					if create_brands == "N":
 						try:
