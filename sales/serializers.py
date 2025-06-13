@@ -60,7 +60,7 @@ class SaleSerializer(serializers.ModelSerializer):
 class SaleCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
-        fields = ["total", "client", "reservation_in_progress"]
+        fields = ["id", "total", "client", "reservation_in_progress"]
 
 
 class SaleSerializer2(serializers.ModelSerializer):
