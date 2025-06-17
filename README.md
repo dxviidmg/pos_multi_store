@@ -2,10 +2,10 @@
 
 # Pendientes
 
-## Imprimir devolución. 1
-## Imprimir abonos y liquidaciones. 2
-## Checar añadir. 3
+## Imprimir devolución. 1 (Listo)
+## Imprimir abonos y liquidaciones. 2 (Listo)
+## Checar añadir. 3 (Revisar con su equipo)
 
-## Ajuste de stock aritmetico (+/-). 6
+## Lista de ventas por cliente. 4 (Listo)
 ## Mejoras de ticket (Nombre, telefono y direccion). 5
-## Lista de ventas por cliente. 4
+## Ajuste de stock aritmetico (+/-). 6

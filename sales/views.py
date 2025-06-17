@@ -25,34 +25,42 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         store = self.request.store
+        user = self.request.user
 
+        # Obtener parámetros
         date = self.request.GET.get("date")
-        reservation_in_progress = (
-            self.request.GET.get("reservation_in_progress") == "true"
-        )
-
-
-        query = {
-            "store": store,
-#            "created_at__date": date,
-            "reservation_in_progress": reservation_in_progress,
-        }
-
+        reservation_in_progress = self.request.GET.get("reservation_in_progress") == "true"
         sale_id = self.request.GET.get("sale_id")
+        first_name = self.request.GET.get("first_name")
+        last_name = self.request.GET.get("last_name")
 
-        if not reservation_in_progress and not sale_id:
-            query['created_at__date'] = date
+        # Construir query base
+        query = {"store": store}
 
+        if reservation_in_progress:
+            query["reservation_in_progress"] = True
+        else:
+            query["reservation_in_progress"] = False
+            if date:
+                query["created_at__date"] = date
 
         if sale_id:
             query["id__startswith"] = sale_id
 
-        if self.request.user.get_role() == "seller":
-            query["seller"] = self.request.user
+        if user.get_role() == "seller":
+            query["seller"] = user
 
-        print(query)
-        
-        return Sale.objects.filter(**query).order_by("id")
+        if first_name:
+            query["client__first_name__icontains"] = first_name
+
+        if last_name:
+            query["client__last_name__icontains"] = last_name
+
+        # Si hay búsqueda por cliente, ignorar el filtro por fecha
+        if (first_name or last_name) and "created_at__date" in query:
+            query.pop("created_at__date")
+
+        return Sale.objects.filter(**query).order_by("-id")
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
