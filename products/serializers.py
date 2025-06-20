@@ -100,9 +100,13 @@ class ProductSerializer(serializers.ModelSerializer):
     
 
 class StoreBaseSerializer(serializers.ModelSerializer):
+    tenant_name = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
     store_type_display = serializers.SerializerMethodField()
 
+    def get_tenant_name(self, obj):
+        return obj.tenant.name
+    
     def get_full_name(self, obj):
         return obj.get_full_name()
 

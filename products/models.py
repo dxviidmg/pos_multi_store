@@ -34,7 +34,8 @@ class Store(Base):
     STORE_TYPE_CHOICES = (("A", "Almacen"), ("T", "Tienda"))
     store_type = models.CharField(max_length=1, choices=STORE_TYPE_CHOICES)
     manager = models.OneToOneField(User, on_delete=models.CASCADE)
-    has_printer_installed = models.BooleanField(default=False)
+    address = models.CharField(max_length=30, null=True, blank=True)
+    phone_number = models.CharField(max_length=10, null=True, blank=True)
 
     def get_full_name(self):
         return "{} {}".format(self.get_store_type_display(), self.name)
@@ -59,10 +60,12 @@ class Store(Base):
         super().save(*args, **kwargs)
 
     def get_store_printer(self):
-        store_printer = self.printer.all().first()
+        store_printer = self.printer.filter(store=self).first()
+
+
 
         if store_printer:
-            return {'cut_command': store_printer.printer.has_cut_command}
+            return store_printer.id
         return False
 
     def get_investment(self):
