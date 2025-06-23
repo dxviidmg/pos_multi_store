@@ -792,7 +792,7 @@ class ProductReassign(APIView):
 class ProductUpperCode(APIView):
 	def post(self, request):
 		tenant = self.request.user.get_tenant()
-		products = Product.objects.filter(brand__tenant=tenant, code__regex=r'^[a-z]+$')#.update(**update_data)
+		products = Product.objects.filter(brand__tenant=tenant, code__regex=r'^[a-z]+$')
 		for product in products:
 			product.code = product.code.upper()
 			product.save()
