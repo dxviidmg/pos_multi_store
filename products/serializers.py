@@ -187,12 +187,14 @@ class StoreSerializer(StoreBaseSerializer):
     printer = serializers.SerializerMethodField()
     products_count = serializers.IntegerField(source='count_products', read_only=True)
     workers_count = serializers.IntegerField(source='count_workers', read_only=True)
-
+    accepts_exchanges = serializers.SerializerMethodField()
 
 
     def get_printer(self, obj):
         return obj.get_store_printer()
     
+    def get_accepts_exchanges(self, obj):
+        return obj.tenant.accepts_exchanges
     class Meta:
         model = Store
         fields = "__all__"

@@ -22,10 +22,10 @@ class Tenant(CreatedAtModel):
     stores = models.IntegerField()
     is_sandbox = models.BooleanField(default=False)
     sellers = models.IntegerField(default=0)
-    supports_departments = models.BooleanField(default=False)
     displays_stock_in_storages = models.BooleanField(default=False)
+    supports_departments = models.BooleanField(default=False)
     supports_reservations = models.BooleanField(default=False)
-    
+    accepts_exchanges = models.BooleanField(default=False)
     def __str__(self):
         return self.name
 
