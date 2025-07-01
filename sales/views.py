@@ -13,6 +13,7 @@ from .cash_summary_utils import calculate_cash_summary
 from django.shortcuts import get_object_or_404
 from logs.models import StoreProductLog
 from rest_framework.exceptions import NotFound
+from datetime import datetime
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -154,18 +155,23 @@ class SaleViewSet(viewsets.ModelViewSet):
                 }
                 Payment.objects.create(**data)
 
+            print('sale_exchange', sale_exchange)
             if "id" in sale_exchange:
-                cash_flow_data = {
-                    "amount": sale_exchange["refunded"],
-                    "transaction_type": "S",
-                    "concept": "Diferencia entre compra "
-                    + str(sale_instance.pk)
-                    + " devolución "
-                    + str(sale_exchange["id"]),
-                    "user": seller,
-                    "store": store,
-                }
-                CashFlow.objects.create(**cash_flow_data)
+                created_dt = datetime.fromisoformat(sale_exchange['created_at']).date()
+                today = datetime.today().date()
+
+                if created_dt != today:
+                    cash_flow_data = {
+                        "amount": sale_exchange["refunded"],
+                        "transaction_type": "S",
+                        "concept": "Diferencia entre compra "
+                        + str(sale_instance.pk)
+                        + " devolución "
+                        + str(sale_exchange["id"]),
+                        "user": seller,
+                        "store": store,
+                    }
+                    CashFlow.objects.create(**cash_flow_data)
 
         return sale_instance
 
@@ -511,29 +517,28 @@ class CancelSale(APIView):
             # Actualizar o eliminar la venta
             remaining_products = sale.products_sale.all()
 
+            # calcular cash_back de inicio
+            cash_back = 0
+
             if sale.total != sale.get_refunded():
                 old_total = sale.total
                 new_total = sum(p.get_total() for p in remaining_products)
+
                 sale.total = new_total
-                sale.save()
+                sale.save(update_fields=["total"])
 
-                payment = Payment.objects.get(sale=sale)
-                payment.amount = new_total
-                payment.save()
+                Payment.objects.filter(sale=sale).update(amount=new_total)
 
-                StoreProductLog.objects.bulk_create(logs)
                 cash_back = old_total - new_total
-
-                return Response(
-                    {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
-                    status=status.HTTP_200_OK,
-                )
-
             else:
-                cash_back = sale.total
-                StoreProductLog.objects.bulk_create(logs)
                 sale.is_canceled = True
-                sale.save()
-                return Response(
-                    {"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK
-                )
+                sale.save(update_fields=["is_canceled"])
+
+                cash_back = sale.total
+
+            StoreProductLog.objects.bulk_create(logs)
+
+            return Response(
+                {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
+                status=status.HTTP_200_OK,
+            )
