@@ -35,13 +35,14 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
     # Obtener total de ventas
     if date:
         sales = Sale.objects.filter(
-            store=store, created_at__date=date, reservation_in_progress=False
+            store=store, created_at__date=date, reservation_in_progress=False, is_canceled=False
         )
     else:
         sales = Sale.objects.filter(
             store=store,
             created_at__date__range=[start_date, end_date],
             reservation_in_progress=False,
+            is_canceled=False
         )
 
     # Calcular la ganancia total del día sumando el beneficio de cada venta
@@ -55,7 +56,7 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
 
     else:
         related_payments = Payment.objects.filter(
-            sale__store=store, created_at__date__range=[start_date, end_date]
+            sale__store=store, created_at__date__range=[start_date, end_date], sale__is_canceled=False
         )
     payments_grouped_by_method = related_payments.values("payment_method").annotate(
         total_amount=Sum("amount")
@@ -144,7 +145,7 @@ def calculate_cash_summary_by_department(
     if department_id == "0":
         department_id = None
 
-    date_filter = Q(sale__store=store)
+    date_filter = Q(sale__store=store, sale__is_canceled=False)
     if date:
         date_filter &= Q(created_at__date=date)
     else:
@@ -230,6 +231,7 @@ def calculate_total_sales_by_seller(seller, start_date, end_date):
         seller=seller,
         created_at__date__range=[start_date, end_date],
         reservation_in_progress=False,
+        is_canceled=False
     )
     total_sales = sales.aggregate(total=Sum("total"))["total"] or 0
     return total_sales

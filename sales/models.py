@@ -12,6 +12,7 @@ class Sale(CreatedAtModel):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
     reservation_in_progress = models.BooleanField(default=False)
+    is_canceled = models.BooleanField(default=False)
 
     
     def __str__(self):
