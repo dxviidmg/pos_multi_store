@@ -39,7 +39,7 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def get_is_duplicate(self, obj):
         previous_obj = (
-            Sale.objects.filter(pk__lt=obj.pk, store=obj.store).order_by("-pk").first()
+            Sale.objects.filter(pk__lt=obj.pk, store=obj.store, is_canceled=False).order_by("-pk").first()
         )
         if previous_obj:
             diff = obj.created_at - previous_obj.created_at

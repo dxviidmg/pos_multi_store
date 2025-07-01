@@ -103,6 +103,7 @@ class StoreBaseSerializer(serializers.ModelSerializer):
     tenant_name = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
     store_type_display = serializers.SerializerMethodField()
+    manager_username = serializers.SerializerMethodField()
 
     def get_tenant_name(self, obj):
         return obj.tenant.name
@@ -112,6 +113,9 @@ class StoreBaseSerializer(serializers.ModelSerializer):
 
     def get_store_type_display(self, obj):
         return obj.get_store_type_display()
+    
+    def get_manager_username(self, obj):
+        return obj.manager.username
     
     class Meta:
         model = Store

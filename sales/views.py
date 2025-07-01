@@ -510,8 +510,6 @@ class CancelSale(APIView):
 
             # Actualizar o eliminar la venta
             remaining_products = sale.products_sale.all()
-            old_total1 = sale.total
-            x = sale.get_refunded()
 
             if sale.total != sale.get_refunded():
                 old_total = sale.total
@@ -534,7 +532,8 @@ class CancelSale(APIView):
             else:
                 cash_back = sale.total
                 StoreProductLog.objects.bulk_create(logs)
-                sale.delete()
+                sale.is_canceled = True
+                sale.save()
                 return Response(
                     {"sale": {}, "cash_back": cash_back}, status=status.HTTP_200_OK
                 )
