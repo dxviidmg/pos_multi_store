@@ -20,9 +20,15 @@ admin.site.register(Brand)
 @admin.register(Store)
 class StoreProdutAdmin(admin.ModelAdmin):
     search_fields = ['name']
-    list_display = ['id', 'name', 'store_type', 'tenant']
+    list_display = ['id', 'name', 'store_type', 'tenant', 'list_printers']
     list_filter = ['tenant', 'store_type']
 
+    def list_printers(self, obj):
+        return ", ".join([
+            sp.printer.__str__() for sp in obj.printer.all()
+        ])
+
+    list_printers.short_description = "Printers"
 
 @admin.register(Transfer)
 class ProductTransferAdmin(admin.ModelAdmin):
