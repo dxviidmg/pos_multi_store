@@ -32,7 +32,6 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
     total_expenses = transaction_sums["S"]
     net_cash_flow = total_income - total_expenses
 
-    # Obtener total de ventas
     if date:
         sales = Sale.objects.filter(
             store=store, created_at__date=date, reservation_in_progress=False, is_canceled=False
@@ -51,7 +50,7 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
     # Obtener pagos relacionados con esas ventas
     if date:
         related_payments = Payment.objects.filter(
-            sale__store=store, created_at__date=date
+            sale__store=store, created_at__date=date, sale__is_canceled=False
         )
 
     else:
