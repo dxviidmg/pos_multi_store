@@ -43,6 +43,7 @@ from django.contrib.auth.models import User
 from .utils import is_list_in_another, is_positive_number
 from logs.models import StoreProductLog
 
+
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
 	def get_serializer_class(self):
@@ -55,64 +56,59 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 		return StoreProductSerializer
 
 	def get_queryset(self):
-		q = self.request.GET.get("q", None)
-		code = self.request.GET.get("code", None)
-		brand_id = self.request.GET.get("brand_id", None)
-		all_stores = self.request.GET.get("all_stores", 'N')
-		# Intentar obtener la tienda, retornar un queryset vacío si no existe
-		store = self.request.store
-		tenant = self.request.user.get_tenant()
+		request = self.request
+		query_params = request.query_params
 
-		# Filtrar por código del producto si está especificado
+		q = query_params.get("q")
+		code = query_params.get("code")
+		brand_id = query_params.get("brand_id")
+		department_id = query_params.get("department_id")
+		all_stores = query_params.get("all_stores", "N")
+		max_stock = query_params.get("max_stock")
+
+		store = request.store
+		tenant = request.user.get_tenant()
+
+		# --- Búsqueda directa por código ---
 		if code:
 			product = Product.objects.filter(code=code, brand__tenant=tenant).first()
-			if product:
-				if all_stores == 'Y':
-					return StoreProduct.objects.filter(product=product)
-				return StoreProduct.objects.filter(product=product, store=store)
-			else:
-				return []
+			if not product:
+				return StoreProduct.objects.none()
 
-		# Construir la consulta de búsqueda en `Product` si se proporciona `q`
+			queryset = StoreProduct.objects.filter(product=product)
+			if all_stores != "Y":
+				queryset = queryset.filter(store=store)
+
+			return queryset.prefetch_related("product").order_by(
+				"product__brand__name", "product__name"
+			)
+
+		# --- Búsqueda general ---
+		product_filters = Q(brand__tenant=tenant)
 
 		if q:
-			filters = Q()
+			product_filters &= Q(name__icontains=q) | Q(brand__name__icontains=q)
+		if brand_id:
+			product_filters &= Q(brand_id=brand_id)
+		if department_id:
+			product_filters &= Q(department_id=department_id)
 
-			filters |= Q(brand__name__icontains=q) | Q(name__icontains=q)
+		product_queryset = Product.objects.filter(product_filters).select_related("brand")
 
-			# Obtener productos y filtrar `StoreProduct` según la tienda
-			product_queryset = Product.objects.filter(
-				filters, brand__tenant=tenant
-			).select_related("brand")[:200]
-		elif brand_id:
-			product_queryset = Product.objects.filter(
-				brand__id=brand_id
-			).select_related("brand")
-		else:
-			brands = Brand.objects.filter(tenant=tenant)
-			product_queryset = Product.objects.filter(brand__in=brands).select_related(
-				"brand"
-			)
+		if q:
+			product_queryset = product_queryset[:200]
 
-		max_stock = self.request.GET.get("max_stock", None)
+		# --- Filtro StoreProduct ---
+		storeproduct_filters = Q(product__in=product_queryset)
+		if all_stores != "Y":
+			storeproduct_filters &= Q(store=store)
 		if max_stock:
-			return (
-				StoreProduct.objects.filter(
-					product__in=product_queryset, store=store, stock__lte=max_stock
-				)
-				.prefetch_related("product")
-				.order_by(
-					"product__brand__name",
-					"product__name",
-				)
-			)
+			storeproduct_filters &= Q(stock__lte=max_stock)
+
 		return (
-			StoreProduct.objects.filter(product__in=product_queryset, store=store)
+			StoreProduct.objects.filter(storeproduct_filters)
 			.prefetch_related("product")
-			.order_by(
-				"product__brand__name",
-				"product__name",
-			)
+			.order_by("product__brand__name", "product__name")
 		)
 
 	def perform_update(self, serializer):
