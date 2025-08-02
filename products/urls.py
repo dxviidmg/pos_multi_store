@@ -32,5 +32,6 @@ urlpatterns += [
     path('store-products/import-validation/', views.StoreProductImportValidation.as_view(), name='store-product-import-validation'),
     path('store-products/import/', views.ImportStoreProduct.as_view(), name='store-product-import'),
     path('store-products/import/can-include-quantity/', views.ImportCanIcludeQuantity.as_view(), name='can-include-quantity'),
-    path('store-product-async/', views.StoreProductAsync.as_view(), name='store-product-async'),
+    path('async-store-product/', views.StoreProductAsync.as_view(), name='async-store-product'),
+    path('async-store-products/result/<str:task_id>/', views.StoreProductTaskResult.as_view(), name='async_store_product_task_result'),
 ]
