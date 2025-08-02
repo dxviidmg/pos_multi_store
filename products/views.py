@@ -5,13 +5,12 @@ from .serializers import (
 	ProductSerializer,
 	BrandSerializer,
 	StoreProductBaseSerializer,
-#	StoreProductLogSerializer,
 	CashFlowSerializer,
 	CashFlowCreateSerializer,
-#	StoreProductLogSerializer2,
 	StoreCashSummarySerializer,
 	StoreWorkerSerializer,
 	DepartmentSerializer,
+	StoreProductForStockSerializer
 )
 from .models import (
 	StoreProduct,
@@ -49,10 +48,12 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 	def get_serializer_class(self):
 		q = self.request.GET.get("q", "")
 		code = self.request.GET.get("code", "")
+		only_stock = self.request.GET.get("only_stock", "") == "true"
 
+		if only_stock:
+			return StoreProductForStockSerializer
 		if not q and not code:
 			return StoreProductBaseSerializer
-
 		return StoreProductSerializer
 
 	def get_queryset(self):
@@ -1053,6 +1054,15 @@ class ImportStoreProduct(APIView):
 
 
 class ImportCanIcludeQuantity(APIView):
+	def get(self, request):
+		tenant = self.request.user.get_tenant()
+		store_count = Store.objects.filter(tenant=tenant).count()
+		if store_count == 1:
+			return Response(True, status=status.HTTP_200_OK)
+		return Response(False, status=status.HTTP_200_OK)
+	
+@method_decorator(get_store(), name="dispatch")
+class StoreProductAsync(APIView):
 	def get(self, request):
 		tenant = self.request.user.get_tenant()
 		store_count = Store.objects.filter(tenant=tenant).count()
