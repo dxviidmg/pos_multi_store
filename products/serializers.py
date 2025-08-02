@@ -122,7 +122,7 @@ class StoreBaseSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 class StoreProductBaseSerializer(serializers.ModelSerializer):
-    product =  ProductSearchSerializer(read_only=True)
+    product = ProductSearchSerializer(read_only=True)
     store = StoreBaseSerializer(read_only=True)
 
     class Meta:
@@ -161,7 +161,13 @@ class StoreProductSerializer(StoreProductBaseSerializer):
             if sp.calculate_available_stock() > 0
         ]
 
+#Enfocado al inventario
+class StoreProductForStockSerializer(serializers.ModelSerializer):
+    product = ProductSearchSerializer(read_only=True)
 
+    class Meta:
+        model = StoreProduct
+        fields = "__all__"
 
 class TransferSerializer(serializers.ModelSerializer):
     product_code = serializers.SerializerMethodField()
