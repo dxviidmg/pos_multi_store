@@ -6,5 +6,5 @@ from .serializers import StoreProductForStockSerializer
 def get_store_products_task(store_id):
     queryset = StoreProduct.objects.filter(store_id=store_id)
     serializer = StoreProductForStockSerializer(queryset, many=True)
-    data = serializer.data
+    data = (serializer.data)
     return data
