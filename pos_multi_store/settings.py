@@ -200,7 +200,7 @@ import ssl
 BROKER_USE_SSL = {
     "ssl_cert_reqs": ssl.CERT_NONE
 }
-CELERY_REDIS_BACKEND_USE_SSL = True
+#CELERY_REDIS_BACKEND_USE_SSL = True
 
 #CELERY_BROKER_URL = "redis://localhost:6379/0" 
 CELERY_ACCEPT_CONTENT = ["json"]
