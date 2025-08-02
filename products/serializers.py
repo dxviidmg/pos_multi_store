@@ -57,7 +57,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Product
-        fields = ["id", "code", "brand_name", "name", "prices", "image"]    
+        fields = ["id", "code", "brand_name", "name", "prices", "image"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -161,9 +161,20 @@ class StoreProductSerializer(StoreProductBaseSerializer):
             if sp.calculate_available_stock() > 0
         ]
 
+
+class ProductForStockSerializer(serializers.ModelSerializer):
+    brand_name = serializers.SerializerMethodField()
+
+    def get_brand_name(self, obj):
+        return obj.brand.name
+    
+    class Meta:
+        model = Product
+        fields = ["id", "code", "brand_name", "name", "image"]
+
 #Enfocado al inventario
 class StoreProductForStockSerializer(serializers.ModelSerializer):
-    product = ProductSearchSerializer(read_only=True)
+    product = ProductForStockSerializer(read_only=True)
 
     class Meta:
         model = StoreProduct
