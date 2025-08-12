@@ -193,10 +193,11 @@ class TransferSerializer(serializers.ModelSerializer):
 
     def get_description(self, obj):
         store = self.context["request"].store
-        if store == obj.origin_store:
-            return "Le proveere este producto a " + obj.destination_store.__str__()
-        elif store == obj.destination_store:
+
+        if store == obj.destination_store:
             return "Le solicite este producto a " + obj.origin_store.__str__()
+        elif store == obj.origin_store:
+            return "Le proveere este producto a " + obj.destination_store.__str__()
         return "No tengo gerencia entre traspaso"
 
     class Meta:
