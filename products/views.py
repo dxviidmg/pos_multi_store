@@ -41,7 +41,7 @@ from rest_framework import viewsets
 from django.contrib.auth.models import User
 from .utils import is_list_in_another, is_positive_number
 from logs.models import StoreProductLog
-from .tasks import get_store_products_task
+from .tasks import get_store_products_task, calculate_store_investments
 from django.http import JsonResponse
 from celery.result import AsyncResult
 
@@ -496,9 +496,21 @@ class InvestmentsView(APIView):
 			status=status.HTTP_200_OK,
 		)
 
+class InvestmentsView(APIView):
+    def get(self, request):
+        user = request.user
+        tenant = user.get_tenant()
+#        stores = Store.objects.filter(tenant=tenant)
+
+        task = calculate_store_investments.delay(tenant.id)
+
+        return Response(
+            {"task_id": task.id},
+            status=status.HTTP_202_ACCEPTED
+        )
 
 @method_decorator(get_store(), name="dispatch")
-class ProductImportValidation(APIView):
+class ProductImportValidationView(APIView):
 	def validate_columns(self, df, import_stock):
 		expected_columns = [
 			"Código",
@@ -776,7 +788,7 @@ class ProductImport(APIView):
 			)
 
 
-class ProductReassign(APIView):
+class ProductReassignView(APIView):
 	def post(self, request):
 		reassign_type = request.data.get("reassign_type")
 		origin_id = request.data.get("origin_id")
@@ -789,7 +801,7 @@ class ProductReassign(APIView):
 		return Response({}, status=status.HTTP_200_OK)
 	
 
-class ProductUpperCode(APIView):
+class ProductUpperCodeView(APIView):
 	def post(self, request):
 		tenant = self.request.user.get_tenant()
 		products = Product.objects.filter(brand__tenant=tenant, code__regex=r'^[a-z]+$')
@@ -891,7 +903,7 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(get_store(), name="dispatch")
-class StoreProductImportValidation(APIView):
+class StoreProductImportValidationView(APIView):
 
 	def validate_columns(self, df):
 		expected_columns = ["Código", "Cantidad", "Descripción"]
@@ -974,7 +986,7 @@ class StoreProductImportValidation(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class ImportStoreProduct(APIView):
+class ImportStoreProductView(APIView):
 
 	def validate_columns(self, df):
 		expected_columns = ["Código", "Cantidad", "Descripción"]
@@ -1056,7 +1068,7 @@ class ImportStoreProduct(APIView):
 			)
 
 
-class ImportCanIcludeQuantity(APIView):
+class ImportCanIcludeQuantityView(APIView):
 	def get(self, request):
 		tenant = self.request.user.get_tenant()
 		store_count = Store.objects.filter(tenant=tenant).count()
@@ -1065,7 +1077,7 @@ class ImportCanIcludeQuantity(APIView):
 		return Response(False, status=status.HTTP_200_OK)
 	
 @method_decorator(get_store(), name="dispatch")
-class StoreProductAsync(APIView):
+class StoreProductAsyncView(APIView):
 	def get(self, request):
 		tenant = self.request.user.get_tenant()
 		store = self.request.store
@@ -1073,7 +1085,7 @@ class StoreProductAsync(APIView):
 		return JsonResponse({"message": "process started", "task_id": task.id})
 	
 
-class StoreProductTaskResult(APIView):
+class TaskResultView(APIView):
     def get(self, request, task_id):
         result = AsyncResult(task_id)
         return JsonResponse({
