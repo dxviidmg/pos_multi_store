@@ -1,6 +1,6 @@
 from celery import shared_task
 from .models import StoreProduct, Store
-from .serializers import StoreProductForStockSerializer
+from .serializers import StoreProductForStockSerializer, TransferSerializer
 
 @shared_task
 def get_store_products_task(store_id):
@@ -18,8 +18,12 @@ def calculate_store_investments(tenant):
     for store in stores:
         data.append({"store": store.id, "investment": store.get_investment()})
 
-#    queryset = StoreProduct.objects.filter(store_id=store_id)
-#    serializer = StoreProductForStockSerializer(queryset, many=True)
-#    data = (serializer.data)
     return data
 
+
+@shared_task
+def create_transfer_task(data, store_id):
+    serializer = TransferSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    transfer = serializer.save(origin_store_id=store_id)
+    return transfer.id
