@@ -41,7 +41,7 @@ from rest_framework import viewsets
 from django.contrib.auth.models import User
 from .utils import is_list_in_another, is_positive_number
 from logs.models import StoreProductLog
-from .tasks import get_store_products_task, calculate_store_investments
+from .tasks import get_store_products_task, calculate_store_investments, create_transfer_task
 from django.http import JsonResponse
 from celery.result import AsyncResult
 
@@ -149,7 +149,15 @@ class TransferViewSet(viewsets.ModelViewSet):
 			Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
 		)
 
-
+	def create(self, request, *args, **kwargs):
+		store = self.request.store
+		# Lanza la tarea asíncrona
+		task = create_transfer_task.delay(request.data, store.id)
+		return Response(
+			{"task_id": task.id, "status": "processing"},
+			status=status.HTTP_202_ACCEPTED
+		)
+		
 class ProductViewSet(viewsets.ModelViewSet):
 	serializer_class = ProductSerializer
 
@@ -497,17 +505,17 @@ class InvestmentsView(APIView):
 		)
 
 class InvestmentsView(APIView):
-    def get(self, request):
-        user = request.user
-        tenant = user.get_tenant()
+	def get(self, request):
+		user = request.user
+		tenant = user.get_tenant()
 #        stores = Store.objects.filter(tenant=tenant)
 
-        task = calculate_store_investments.delay(tenant.id)
+		task = calculate_store_investments.delay(tenant.id)
 
-        return Response(
-            {"task_id": task.id},
-            status=status.HTTP_202_ACCEPTED
-        )
+		return Response(
+			{"task_id": task.id},
+			status=status.HTTP_202_ACCEPTED
+		)
 
 @method_decorator(get_store(), name="dispatch")
 class ProductImportValidationView(APIView):
@@ -1086,10 +1094,10 @@ class StoreProductAsyncView(APIView):
 	
 
 class TaskResultView(APIView):
-    def get(self, request, task_id):
-        result = AsyncResult(task_id)
-        return JsonResponse({
-            "task_id": task_id,
-            "status": result.status,
-            "result": result.result if result.ready() else None
-        })
+	def get(self, request, task_id):
+		result = AsyncResult(task_id)
+		return JsonResponse({
+			"task_id": task_id,
+			"status": result.status,
+			"result": result.result if result.ready() else None
+		})
