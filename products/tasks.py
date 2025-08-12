@@ -22,8 +22,8 @@ def calculate_store_investments(tenant):
 
 
 @shared_task
-def create_transfer_task(data, store_id):
+def create_transfer_task(data):
     serializer = TransferSerializer(data=data)
     serializer.is_valid(raise_exception=True)
-    transfer = serializer.save(origin_store_id=store_id)
+    transfer = serializer.save()
     return transfer.id

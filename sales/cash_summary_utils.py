@@ -49,7 +49,6 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
 
     # Obtener pagos relacionados con esas ventas
 
-    print(date)
     if date:
         related_payments = Payment.objects.filter(
             sale__store=store, created_at__date=date, sale__is_canceled=False
@@ -59,8 +58,7 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
         related_payments = Payment.objects.filter(
             sale__store=store, created_at__date__range=[start_date, end_date], sale__is_canceled=False
         )
-    
-    print(related_payments)
+
     payments_grouped_by_method = related_payments.values("payment_method").annotate(
         total_amount=Sum("amount")
     )
@@ -139,7 +137,6 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
             },
         ]
     )
-    print(cash_summary)
     return cash_summary
 
 

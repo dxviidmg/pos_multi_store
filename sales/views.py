@@ -155,7 +155,6 @@ class SaleViewSet(viewsets.ModelViewSet):
                 }
                 Payment.objects.create(**data)
 
-            print('sale_exchange', sale_exchange)
             if "id" in sale_exchange:
                 created_dt = datetime.fromisoformat(sale_exchange['created_at']).date()
                 today = datetime.today().date()
