@@ -1,6 +1,6 @@
 from django.db import models
 from clients.models import Client
-from products.models import Product, Store
+from products.models import Product, Store, StoreProduct
 from django.contrib.auth.models import User
 from tenants.models import CreatedAtModel
 from django.db.models import Sum
@@ -52,9 +52,34 @@ class Sale(CreatedAtModel):
     def get_paid(self):
         return self.payments.all().aggregate(total_amount=Sum('amount'))['total_amount'] or 0
         
-
+    def is_duplicate(self):
+        previous_obj = (
+            Sale.objects.filter(pk__lt=self.pk, store=self.store, is_canceled=False).order_by("-pk").first()
+        )
+        if previous_obj:
+            diff = self.created_at - previous_obj.created_at
+            return diff.total_seconds() < 1
+        return False
         
+    def revert_stock_and_delete(self):
+        """
+        Revierte el stock de los productos de esta venta y luego la elimina.
+        Solo se ejecuta si la venta es duplicada.
+        """
+        if not self.is_duplicate():
+            return False  # No hizo nada
 
+        for product_sale in self.products_sale.all():
+            store_product = StoreProduct.objects.get(
+                product=product_sale.product,
+                store=self.store
+            )
+            store_product.stock += product_sale.quantity
+            store_product.save()
+
+        self.delete()
+        return True
+    
 class ProductSale(models.Model):
     product = models.ForeignKey(
         Product, on_delete=models.CASCADE, related_name="product_sales"
