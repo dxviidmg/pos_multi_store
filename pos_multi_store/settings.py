@@ -50,7 +50,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
-    'storages'
+    'storages',
+    'django_celery_beat'
 ]
 
 
@@ -127,7 +128,7 @@ TIME_ZONE = 'America/Mexico_City'
 
 USE_I18N = True
 
-USE_TZ = False
+USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
@@ -197,3 +198,13 @@ CELERY_RESULT_BACKEND = config('REDIS_URL')
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
+
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "print-hello-every-minute": {
+        "task": "sales.tasks.delete_sales_duplicates",
+        "schedule": crontab(minute="0"),
+    },
+}

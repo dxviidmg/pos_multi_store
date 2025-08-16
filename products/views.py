@@ -156,8 +156,6 @@ class TransferViewSet(viewsets.ModelViewSet):
         )
 
     def create(self, request, *args, **kwargs):
-        store = self.request.store
-        # Lanza la tarea asíncrona
         task = create_transfer_task.delay(request.data)
         return Response(
             {"task_id": task.id, "status": "processing"},

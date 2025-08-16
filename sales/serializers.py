@@ -38,13 +38,7 @@ class SaleSerializer(serializers.ModelSerializer):
         return obj.get_payments_methods_display()
 
     def get_is_duplicate(self, obj):
-        previous_obj = (
-            Sale.objects.filter(pk__lt=obj.pk, store=obj.store, is_canceled=False).order_by("-pk").first()
-        )
-        if previous_obj:
-            diff = obj.created_at - previous_obj.created_at
-            return diff.total_seconds() < 1
-        return False
+            return obj.is_duplicate()
 
     def get_reference(self, obj):
         return obj.get_reference()
