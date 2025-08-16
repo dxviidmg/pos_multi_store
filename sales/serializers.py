@@ -4,8 +4,12 @@ from clients.serializers import ClientSerializer
 
 
 class ProductSaleSerializer(serializers.ModelSerializer):
+    code = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
 
+    def get_code(self, obj):
+        return obj.product.code
+    
     def get_name(self, obj):
         return obj.product.name
 
