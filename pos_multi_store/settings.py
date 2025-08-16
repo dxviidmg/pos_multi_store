@@ -205,6 +205,6 @@ from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
     "print-hello-every-minute": {
         "task": "sales.tasks.delete_sales_duplicates",
-        "schedule": crontab(minute="0"),
+        "schedule": crontab(minute="*/3"),
     },
 }
