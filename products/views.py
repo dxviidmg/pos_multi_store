@@ -155,12 +155,12 @@ class TransferViewSet(viewsets.ModelViewSet):
             Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
         )
 
-    def create(self, request, *args, **kwargs):
-        task = create_transfer_task.delay(request.data)
-        return Response(
-            {"task_id": task.id, "status": "processing"},
-            status=status.HTTP_202_ACCEPTED,
-        )
+#    def create(self, request, *args, **kwargs):
+#        task = create_transfer_task.delay(request.data)
+#        return Response(
+#            {"task_id": task.id, "status": "processing"},
+#            status=status.HTTP_202_ACCEPTED,
+#        )
 
 
 class ProductViewSet(viewsets.ModelViewSet):
