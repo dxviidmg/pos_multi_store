@@ -6,6 +6,7 @@ from dateutil.relativedelta import relativedelta
 
 MONTHY_PRICE_BY_STORE = 500
 
+
 class CreatedAtModel(models.Model):
     """Abstract base class that adds created_at and updated_at fields to models."""
 
@@ -26,6 +27,7 @@ class Tenant(CreatedAtModel):
     supports_departments = models.BooleanField(default=False)
     supports_reservations = models.BooleanField(default=False)
     accepts_exchanges = models.BooleanField(default=False)
+
     def __str__(self):
         return self.name
 
@@ -48,6 +50,7 @@ class Tenant(CreatedAtModel):
 
     def count_products(self):
         return sum([brand.count_products() for brand in self.brand_set.all()])
+    
 
 class Payment(CreatedAtModel):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
@@ -61,9 +64,9 @@ class Payment(CreatedAtModel):
             tenant = self.tenant
             self.total = tenant.stores * self.months * MONTHY_PRICE_BY_STORE
 
-            #Analizar la promocion de vendedores
-#            if self.tenant.has_sellers: 
-#                self.total += self.months * MONTHY_PRICE_BY_STORE
+            # Analizar la promocion de vendedores
+            #            if self.tenant.has_sellers:
+            #                self.total += self.months * MONTHY_PRICE_BY_STORE
 
             last_payment = Payment.objects.filter(
                 tenant=tenant
