@@ -26,5 +26,6 @@ class CustomAuthToken(ObtainAuthToken):
             'store_type': store.store_type if store else None,
             'store_type_display': store.get_store_type_display() if store else None,
             'store_printer': store.get_store_printer() if store else None,
-            'role': user.get_role()
+            'role': user.get_role(),
+            'is_multi_store': user.get_tenant().stores > 1
         })

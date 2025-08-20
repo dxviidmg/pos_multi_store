@@ -255,9 +255,9 @@ class ConfirmProductTransfersView(APIView):
                 "transfer_datetime": None,
             }
 
-            try:
-                transfer_record = Transfer.objects.get(**transfer_filter)
-            except Transfer.DoesNotExist:
+            transfer_record = Transfer.objects.filter(**transfer_filter).first()
+
+            if not transfer_record:
                 return Response(
                     {"status": "Transfer not found"}, status=status.HTTP_404_NOT_FOUND
                 )
@@ -303,6 +303,7 @@ class ConfirmProductTransfersView(APIView):
                         updated_stock=destination_store_product.stock,
                         action="E",  # Acción: Entrada
                         movement="TR",  # Movimiento: Transferencia recibida
+                        store_related=origin_store
                     )
                 )
 
@@ -321,6 +322,7 @@ class ConfirmProductTransfersView(APIView):
                         updated_stock=origin_store_product.stock,
                         action="S",  # Acción: Salida
                         movement="TR",  # Movimiento: Transferencia enviada
+                        store_related=destination_store
                     )
                 )
 
@@ -378,6 +380,7 @@ class ConfirmDistributionView(APIView):
                         updated_stock=destination_store_product.stock,
                         action="E",  # Acción: Entrada
                         movement="DI",  # Movimiento: Distribución recibida
+                        store_related=origin_store
                     )
                 )
 
@@ -403,6 +406,7 @@ class ConfirmDistributionView(APIView):
                         updated_stock=origin_store_product.stock,
                         action="S",  # Acción: Salida
                         movement="DI",  # Movimiento: Distribución enviada
+                        store_related=destination_store_product.store
                     )
                 )
 
@@ -586,7 +590,18 @@ class ProductImportValidationView(APIView):
 
                 data_row["status"] = "Exitoso"
                 code = data_row["code"]
+                brand = data_row["brand"]
                 data_row["excel_row"] = _ + 2
+
+                if not code or code == '':
+                    data_row["status"] = "Sin código"
+                    data.append(data_row)
+                    continue
+
+                if not brand or brand == '':
+                    data_row["status"] = "Sin marca"
+                    data.append(data_row)
+                    continue
 
                 if Product.objects.filter(code=code, brand__tenant=tenant).exists():
                     data_row["status"] = "Código existente en el sistema"

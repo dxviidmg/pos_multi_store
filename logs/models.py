@@ -1,8 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 from tenants.models import CreatedAtModel
-from products.models import StoreProduct
-from sales.models import Sale
+from products.models import StoreProduct, Store
+
 
 class StoreProductLog(CreatedAtModel):
     ACTIONS_CHOICES = [("E", "Entrada"), ("S", "Salida"), ("A", "Ajuste"), ("N", "NA")]
@@ -20,12 +20,14 @@ class StoreProductLog(CreatedAtModel):
     store_product = models.ForeignKey(
         StoreProduct, on_delete=models.CASCADE, related_name="store_product_logs"
     )
+    store_related = models.ForeignKey(
+        Store, on_delete=models.CASCADE, related_name="store_related", null=True, blank=True
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     previous_stock = models.IntegerField()
     updated_stock = models.IntegerField()
     action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
     movement = models.CharField(max_length=2, choices=MOVEMENT_CHOICES, default="MA")
-#    sale = models.ForeignKey(Sale, null=True, blank=True, on_delete=models.CASCADE)
 
     def __str__(self):
         return "{} {} {} {} {}".format(
@@ -37,8 +39,13 @@ class StoreProductLog(CreatedAtModel):
         )
 
     def get_description(self):
+        print(self.get_action_display())
         if self.get_action_display() == 'NA':
             return self.get_movement_display()
+        if self.store_related:
+            if self.action == "S":
+                return "{} {} Destino: {}".format(self.get_action_display(), self.get_movement_display(), self.store_related.get_full_name())            
+            return "{} {} Origen: {}".format(self.get_action_display(), self.get_movement_display(), self.store_related.get_full_name())            
         return "{} {}".format(self.get_action_display(), self.get_movement_display())
 
     def calculate_difference(self):
