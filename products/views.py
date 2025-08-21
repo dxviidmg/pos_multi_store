@@ -773,6 +773,9 @@ class ProductImport(APIView):
                     data_row["wholesale_price_on_client_discount"]
                 )
 
+                if len(data_row["name"]) > 100:
+                    data_row["name"] = data_row["name"][:100]
+
                 code_exists = Product.objects.filter(
                     code=data_row["code"], brand__tenant=tenant
                 ).exists()
