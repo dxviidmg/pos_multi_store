@@ -825,10 +825,18 @@ class ProductReassignView(APIView):
         reassign_type = request.data.get("reassign_type")
         origin_id = request.data.get("origin_id")
         destination_id = request.data.get("destination_id")
+        delete_origin = request.data.get("delete_origin") == "true"
 
         filter = {reassign_type: origin_id}
         update_data = {reassign_type: destination_id}
         Product.objects.filter(**filter).update(**update_data)
+
+        if delete_origin:
+            if reassign_type == "brand":
+                origin = Brand.objects.get(id=origin_id)
+            else:
+                origin = Department.objects.get(id=origin_id)
+            origin.delete()
 
         return Response({}, status=status.HTTP_200_OK)
 
@@ -836,10 +844,13 @@ class ProductReassignView(APIView):
 class ProductUpperCodeView(APIView):
     def post(self, request):
         tenant = self.request.user.get_tenant()
-        products = Product.objects.filter(brand__tenant=tenant, code__regex=r"[a-z]")
+        products = Product.objects.filter(brand__tenant=tenant).filter(Q(code__regex=r"[a-z]") | Q(code__contains="'"))
+        products_to_update = []
         for product in products:
-            product.code = product.code.upper()
-            product.save()
+            product.code = product.code.upper().replace("'", "-")
+            products_to_update.append(product)
+
+        Product.objects.bulk_update(products_to_update, ["code"])
 
         return Response({"productos": len(products)}, status=status.HTTP_200_OK)
 
