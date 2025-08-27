@@ -834,7 +834,7 @@ class ProductReassignView(APIView):
 
 
 class ProductUpperCodeView(APIView):
-    def post(self):
+    def post(self, request):
         tenant = self.request.user.get_tenant()
         products = Product.objects.filter(brand__tenant=tenant).filter(Q(code__regex=r"[a-z]") | Q(code__contains="'"))
         products_to_update = []
