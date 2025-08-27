@@ -825,10 +825,18 @@ class ProductReassignView(APIView):
         reassign_type = request.data.get("reassign_type")
         origin_id = request.data.get("origin_id")
         destination_id = request.data.get("destination_id")
+        delete_origin = request.data.get("delete_origin") == "true"
 
         filter = {reassign_type: origin_id}
         update_data = {reassign_type: destination_id}
         Product.objects.filter(**filter).update(**update_data)
+
+        if delete_origin:
+            if reassign_type == "brand":
+                origin = Brand.objects.get(id=origin_id)
+            else:
+                origin = Department.objects.get(id=origin_id)
+            origin.delete()
 
         return Response({}, status=status.HTTP_200_OK)
 
