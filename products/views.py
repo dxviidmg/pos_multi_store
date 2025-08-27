@@ -834,12 +834,15 @@ class ProductReassignView(APIView):
 
 
 class ProductUpperCodeView(APIView):
-    def post(self, request):
+    def post(self):
         tenant = self.request.user.get_tenant()
-        products = Product.objects.filter(brand__tenant=tenant, code__regex=r"[a-z]")
+        products = Product.objects.filter(brand__tenant=tenant).filter(Q(code__regex=r"[a-z]") | Q(code__contains="'"))
+        products_to_update = []
         for product in products:
-            product.code = product.code.upper()
-            product.save()
+            product.code = product.code.upper().replace("'", "-")
+            products_to_update.append(product)
+
+        Product.objects.bulk_update(products_to_update, ["code"])
 
         return Response({"productos": len(products)}, status=status.HTTP_200_OK)
 
