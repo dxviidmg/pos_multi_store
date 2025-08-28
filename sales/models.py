@@ -13,7 +13,7 @@ class Sale(CreatedAtModel):
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
     reservation_in_progress = models.BooleanField(default=False)
     is_canceled = models.BooleanField(default=False)
-
+    reason_cancel = models.CharField(max_length=50, null=True, blank=True)
     
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)

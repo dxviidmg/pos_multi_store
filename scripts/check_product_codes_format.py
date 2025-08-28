@@ -6,8 +6,6 @@ def run():
     for product in products:
 
 
-        tiene_minusculas = any(c.islower() for c in product.code)
-#        print(tiene_minusculas)  # True
 
-        if tiene_minusculas:
+        if "'" in product.code:
             print(product.code, product.brand.tenant)

@@ -459,6 +459,7 @@ class CancelSale(APIView):
     def post(self, request):
         sale_id = request.data.get("id")
         products_data = request.data.get("products_sale_to_cancel")
+        reason_cancel = request.data.get("reason_cancel")
 
         if not sale_id or not products_data:
             return Response(
@@ -467,6 +468,10 @@ class CancelSale(APIView):
             )
 
         sale = get_object_or_404(Sale, id=sale_id)
+        if reason_cancel != "":
+            sale.reason_cancel = reason_cancel
+            sale.save()
+
         product_ids = products_data.keys()
 
         products_to_cancel = ProductSale.objects.filter(id__in=product_ids)

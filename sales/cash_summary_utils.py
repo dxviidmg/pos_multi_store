@@ -44,6 +44,7 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
             is_canceled=False
         )
 
+
     # Calcular la ganancia total del día sumando el beneficio de cada venta
     total_profit = sum(sale.get_profit() for sale in sales)
 
@@ -59,11 +60,34 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
             sale__store=store, created_at__date__range=[start_date, end_date], sale__is_canceled=False
         )
 
+
+    if date:
+        related_payments = Payment.objects.filter(
+            sale__store=store, created_at__date=date, sale__is_canceled=False
+        )
+
+        payments_canceled = Payment.objects.filter(
+            sale__store=store, created_at__date=date, sale__is_canceled=True
+        )
+
+    else:
+        related_payments = Payment.objects.filter(
+            sale__store=store, created_at__date__range=[start_date, end_date], sale__is_canceled=False
+        )
+
+        payments_canceled = Payment.objects.filter(
+            sale__store=store, created_at__date__range=[start_date, end_date], sale__is_canceled=True
+        )
+
     payments_grouped_by_method = related_payments.values("payment_method").annotate(
         total_amount=Sum("amount")
     )
     total_received_payments = (
         related_payments.aggregate(total=Sum("amount"))["total"] or 0
+    )
+
+    total_payments_canceled = (
+        payments_canceled.aggregate(total=Sum("amount"))["total"] or 0
     )
 
     # Mapeo de métodos de pago
@@ -135,6 +159,12 @@ def calculate_cash_summary(store, date, start_date=None, end_date=None):
                 "name": "Numero de ventas",
                 "amount": sales.count(),
             },
+                        {
+                "name": "Ventas canceladas",
+                "amount": total_payments_canceled,
+                                "total_data": True,
+            },
+            
         ]
     )
     return cash_summary
