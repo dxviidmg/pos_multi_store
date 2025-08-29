@@ -511,15 +511,15 @@ class InvestmentsView(APIView):
         )
 
 
-class InvestmentsView(APIView):
-    def get(self, request):
-        user = request.user
-        tenant = user.get_tenant()
+#class InvestmentsView(APIView):
+#    def get(self, request):
+#        user = request.user
+#        tenant = user.get_tenant()
         #        stores = Store.objects.filter(tenant=tenant)
 
-        task = calculate_store_investments.delay(tenant.id)
+#        task = calculate_store_investments.delay(tenant.id)
 
-        return Response({"task_id": task.id}, status=status.HTTP_202_ACCEPTED)
+#        return Response({"task_id": task.id}, status=status.HTTP_202_ACCEPTED)
 
 
 @method_decorator(get_store(), name="dispatch")

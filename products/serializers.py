@@ -217,6 +217,7 @@ class StoreSerializer(StoreBaseSerializer):
     
     def get_accepts_exchanges(self, obj):
         return obj.tenant.accepts_exchanges
+    
     class Meta:
         model = Store
         fields = "__all__"
