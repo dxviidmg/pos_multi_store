@@ -14,6 +14,7 @@ from django.core.exceptions import ValidationError
 from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary_by_department, calculate_total_sales_by_seller
 from datetime import datetime, date
 from django.contrib.auth.models import User
+from django.db.models import Sum, F
 
 
 class BrandSerializer(serializers.ModelSerializer):
@@ -145,20 +146,25 @@ class StoreProductSerializer(StoreProductBaseSerializer):
         return obj.calculate_reserved_stock()
 
     def get_stock_in_other_stores(self, obj):
-        # Optimize by pre-filtering and reducing unnecessary calculations
         store_type_filter = {} if obj.store.tenant.displays_stock_in_storages else {"store__store_type": "T"}
-        sps = StoreProduct.objects.filter(product=obj.product, **store_type_filter)
+
+        sps = (
+            StoreProduct.objects
+            .filter(product=obj.product, **store_type_filter)
+            .exclude(id=obj.id)
+            .annotate(
+                available_stock=F('stock')
+            )
+            .filter(available_stock__gt=0)
+        )
 
         return [
             {
                 "store_id": str(sp.store.id),
                 "store_name": str(sp.store),
-                "available_stock": sp.calculate_available_stock(),
+                "available_stock": sp.available_stock,
             }
             for sp in sps
-            .exclude(id=obj.id)
-            .exclude(stock=0)
-            if sp.calculate_available_stock() > 0
         ]
 
 
@@ -210,7 +216,7 @@ class StoreSerializer(StoreBaseSerializer):
     products_count = serializers.IntegerField(source='count_products', read_only=True)
     workers_count = serializers.IntegerField(source='count_workers', read_only=True)
     accepts_exchanges = serializers.SerializerMethodField()
-
+    pending_transfers_count = serializers.SerializerMethodField()
 
     def get_printer(self, obj):
         return obj.get_store_printer()
@@ -218,6 +224,9 @@ class StoreSerializer(StoreBaseSerializer):
     def get_accepts_exchanges(self, obj):
         return obj.tenant.accepts_exchanges
     
+    def get_pending_transfers_count(self, obj):
+        return obj.transfers_from.filter(transfer_datetime=None).count() + obj.transfers_to.filter(transfer_datetime=None).count()
+
     class Meta:
         model = Store
         fields = "__all__"
