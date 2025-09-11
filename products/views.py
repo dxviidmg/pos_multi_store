@@ -1149,13 +1149,13 @@ class StockInOtherStores(APIView):
         sps = (
             StoreProduct.objects.filter(product=product, **store_type_filter)
             .exclude(id=store_product.id)
-            .select_related("store")
+            .select_related("store").order_by('-store__store_type', 'store__name')
         )
 
         data = [
             {
                 "store_id": sp.id,
-                "store_name": sp.store.name,
+                "store_name": sp.store.get_full_name(),
                 "available_stock": sp.calculate_available_stock(),
             }
             for sp in sps
