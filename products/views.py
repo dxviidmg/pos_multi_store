@@ -48,6 +48,8 @@ from .tasks import (
 )
 from django.http import JsonResponse
 from celery.result import AsyncResult
+from django.db.models import Sum
+
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -509,17 +511,6 @@ class InvestmentsView(APIView):
             data,
             status=status.HTTP_200_OK,
         )
-
-
-#class InvestmentsView(APIView):
-#    def get(self, request):
-#        user = request.user
-#        tenant = user.get_tenant()
-        #        stores = Store.objects.filter(tenant=tenant)
-
-#        task = calculate_store_investments.delay(tenant.id)
-
-#        return Response({"task_id": task.id}, status=status.HTTP_202_ACCEPTED)
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -1140,3 +1131,34 @@ class TaskResultView(APIView):
                 "result": result.result if result.ready() else None,
             }
         )
+
+
+@method_decorator(get_store(), name="dispatch")
+class StockInOtherStores(APIView):
+    def get(self, request):
+        user = request.user
+        tenant = user.get_tenant()
+        store = request.store
+        code = request.GET.get("code", "")
+
+        product = Product.objects.select_related("brand").get(code=code, brand__tenant=tenant)
+        store_product = StoreProduct.objects.get(store=store, product=product)
+
+        store_type_filter = {} if tenant.displays_stock_in_storages else {"store__store_type": "T"}
+
+        sps = (
+            StoreProduct.objects.filter(product=product, **store_type_filter)
+            .exclude(id=store_product.id)
+            .select_related("store")
+        )
+
+        data = [
+            {
+                "store_id": sp.id,
+                "store_name": sp.store.name,
+                "available_stock": sp.calculate_available_stock(),
+            }
+            for sp in sps
+        ]
+
+        return Response(data, status=status.HTTP_200_OK)
