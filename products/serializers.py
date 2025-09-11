@@ -134,7 +134,6 @@ class StoreProductBaseSerializer(serializers.ModelSerializer):
 class StoreProductSerializer(StoreProductBaseSerializer):
     available_stock = serializers.SerializerMethodField()
     reserved_stock = serializers.SerializerMethodField()
-    stock_in_other_stores = serializers.SerializerMethodField()
 
     def get_product_description(self, obj):
         return obj.product.get_description()
@@ -145,27 +144,6 @@ class StoreProductSerializer(StoreProductBaseSerializer):
     def get_reserved_stock(self, obj):
         return obj.calculate_reserved_stock()
 
-    def get_stock_in_other_stores(self, obj):
-        store_type_filter = {} if obj.store.tenant.displays_stock_in_storages else {"store__store_type": "T"}
-
-        sps = (
-            StoreProduct.objects
-            .filter(product=obj.product, **store_type_filter)
-            .exclude(id=obj.id)
-            .annotate(
-                available_stock=F('stock')
-            )
-            .filter(available_stock__gt=0)
-        )
-
-        return [
-            {
-                "store_id": str(sp.store.id),
-                "store_name": str(sp.store),
-                "available_stock": sp.available_stock,
-            }
-            for sp in sps
-        ]
 
 
 class ProductForStockSerializer(serializers.ModelSerializer):

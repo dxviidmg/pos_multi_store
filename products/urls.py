@@ -34,4 +34,5 @@ urlpatterns += [
     path('store-products/import/can-include-quantity/', views.ImportCanIcludeQuantityView.as_view(), name='can-include-quantity'),
     path('async-store-product/', views.StoreProductAsyncView.as_view(), name='async-store-product'),
     path('task-result/<str:task_id>/', views.TaskResultView.as_view(), name='async_store_product_task_result'),
+    path('products/stock-other-stores/', views.StockInOtherStores.as_view(), name='stock-other-stores'),
 ]
