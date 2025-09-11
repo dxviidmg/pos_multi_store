@@ -38,7 +38,7 @@ class Store(Base):
     phone_number = models.CharField(max_length=10, null=True, blank=True)
 
     def get_full_name(self):
-        return "{} {}".format(self.get_store_type_display(), self.name)
+        return "{} ({})".format(self.name, self.get_store_type_display(), )
 
     def __str__(self):
         return self.get_full_name()
