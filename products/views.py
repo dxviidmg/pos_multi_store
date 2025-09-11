@@ -1154,7 +1154,7 @@ class StockInOtherStores(APIView):
 
         data = [
             {
-                "store_id": sp.id,
+                "store_id": sp.store.id,
                 "store_name": sp.store.get_full_name(),
                 "available_stock": sp.calculate_available_stock(),
             }
