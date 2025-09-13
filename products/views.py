@@ -155,7 +155,7 @@ class TransferViewSet(viewsets.ModelViewSet):
 
         return Transfer.objects.filter(
             Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
-        )
+        ).order_by('-id')
 
 #    def create(self, request, *args, **kwargs):
 #        task = create_transfer_task.delay(request.data)

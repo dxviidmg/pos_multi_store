@@ -14,7 +14,7 @@ from django.core.exceptions import ValidationError
 from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary_by_department, calculate_total_sales_by_seller
 from datetime import datetime, date
 from django.contrib.auth.models import User
-from django.db.models import Sum, F
+
 
 
 class BrandSerializer(serializers.ModelSerializer):
