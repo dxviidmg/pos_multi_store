@@ -124,7 +124,7 @@ class StoreBaseSerializer(serializers.ModelSerializer):
 
 class StoreProductBaseSerializer(serializers.ModelSerializer):
     product = ProductSearchSerializer(read_only=True)
-    store = StoreBaseSerializer(read_only=True)
+#    store = StoreBaseSerializer(read_only=True)
 
     class Meta:
         model = StoreProduct
