@@ -85,7 +85,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
             queryset = StoreProduct.objects.filter(
                 product__code=code, 
                 product__brand__tenant=tenant
-            ).select_related("product") # <-- Usar select_related
+            ).select_related("product")
 
             if all_stores != "Y":
                 queryset = queryset.filter(store=store)

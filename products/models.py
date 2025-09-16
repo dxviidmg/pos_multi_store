@@ -18,7 +18,7 @@ class Base(models.Model):
 
 
 class Brand(Base):
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_index=True)
 
     def count_products(self):
         return self.products.count()
@@ -100,7 +100,7 @@ class Product(Base):
 
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="products")
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="products", null=True, blank=True)
-    code = models.CharField(max_length=20)
+    code = models.CharField(max_length=20, db_index=True)
     name = models.CharField(max_length=100)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -145,6 +145,12 @@ class StoreProduct(models.Model):
     )
     stock = models.IntegerField(default=0)
 
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["store", "product"]),
+        ]
+        
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
 
