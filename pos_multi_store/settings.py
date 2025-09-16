@@ -66,6 +66,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'products.middleware.KeepAliveMiddleware'
 ]
 
 ROOT_URLCONF = 'pos_multi_store.urls'
@@ -155,8 +156,7 @@ REST_FRAMEWORK = {
 
 }
 
-#Para heroku
-db_from_env = dj_database_url.config(conn_max_age=500)
+db_from_env = dj_database_url.config(conn_max_age=None)
 
 if db_from_env:
     DATABASES["default"].update(db_from_env)

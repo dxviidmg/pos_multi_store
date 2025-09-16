@@ -1165,3 +1165,7 @@ class StockInOtherStores(APIView):
         ]
 
         return Response(data, status=status.HTTP_200_OK)
+    
+
+def ping(request):
+    return JsonResponse({"status": "alive"})
