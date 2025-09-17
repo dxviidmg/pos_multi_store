@@ -124,7 +124,6 @@ class StoreBaseSerializer(serializers.ModelSerializer):
 
 class StoreProductBaseSerializer(serializers.ModelSerializer):
     product = ProductSearchSerializer(read_only=True)
-#    store = StoreBaseSerializer(read_only=True)
 
     class Meta:
         model = StoreProduct
@@ -134,6 +133,7 @@ class StoreProductBaseSerializer(serializers.ModelSerializer):
 class StoreProductSerializer(StoreProductBaseSerializer):
     available_stock = serializers.SerializerMethodField()
     reserved_stock = serializers.SerializerMethodField()
+    store = StoreBaseSerializer(read_only=True)
 
     def get_product_description(self, obj):
         return obj.product.get_description()
@@ -156,7 +156,6 @@ class ProductForStockSerializer(serializers.ModelSerializer):
         model = Product
         fields = ["id", "code", "brand_name", "name", "image"]
 
-#Enfocado al inventario
 class StoreProductForStockSerializer(serializers.ModelSerializer):
     product = ProductForStockSerializer(read_only=True)
 
