@@ -82,16 +82,13 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         # --- Búsqueda directa por código ---
         if code:
             # Combinar las dos consultas en una sola
-            queryset = StoreProduct.objects.filter(
-                product__code=code, 
-                product__brand__tenant=tenant
-            ).select_related("product")
 
-            if all_stores != "Y":
-                queryset = queryset.filter(store=store)
+            filters = {"product__code": code, "product__brand__tenant": tenant}
+            if all_stores == "N":
+                filters["store"] = store
 
-            # select_related("product") cargará la información del producto
-            # en la misma consulta, evitando la segunda consulta.
+            queryset = StoreProduct.objects.filter(**filters).select_related("product")
+            
             return queryset.order_by(
                 "product__brand__name", "product__name"
             )
