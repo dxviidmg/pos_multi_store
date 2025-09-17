@@ -122,9 +122,6 @@ class Product(Base):
     def get_description(self):
         return "{} {}".format(self.brand.name, self.name).strip()
 
-    def get_description(self):
-        return "{} {}".format(self.brand.name, self.name).strip()
-
     def apply_wholesale(self):
         return (
             self.wholesale_price is not None and self.min_wholesale_quantity is not None
@@ -135,6 +132,10 @@ class Product(Base):
             self.product_stores.aggregate(total_stock=Sum("stock"))["total_stock"] or 0
         )
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["code", "brand"]),
+        ]
 
 class StoreProduct(models.Model):
     store = models.ForeignKey(
@@ -144,7 +145,6 @@ class StoreProduct(models.Model):
         Product, on_delete=models.CASCADE, related_name="product_stores"
     )
     stock = models.IntegerField(default=0)
-
 
     class Meta:
         indexes = [
