@@ -856,7 +856,7 @@ class CashFlowViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         store = self.request.store
         date = self.request.GET.get("date")
-        return CashFlow.objects.filter(store=store, created_at__date=date)
+        return CashFlow.objects.filter(store=store, created_at__date=date).order_by('id')
 
     @action(detail=False, methods=["get"])
     def choices(self, request):
