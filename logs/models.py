@@ -39,7 +39,6 @@ class StoreProductLog(CreatedAtModel):
         )
 
     def get_description(self):
-        print(self.get_action_display())
         if self.get_action_display() == 'NA':
             return self.get_movement_display()
         if self.store_related:

@@ -5,7 +5,6 @@ from django.urls import path
 app_name = 'logs'
 
 urlpatterns = [
-    path('store-product-logs/', views.StoreProductLogsView.as_view(), name='store-product-logs'),
-    path('store-product-logs/choices/', views.StoreProductLogsChoicesView.as_view(), name='store-product-logs-choices'),
-
+    path('store-product-log/', views.StoreProductLogsView.as_view(), name='store-product-logs'),
+    path('store-product-log/choices/', views.StoreProductLogsChoicesView.as_view(), name='store-product-logs-choices'),
 ]
