@@ -5,7 +5,6 @@ from .models import (
     Transfer,
     Store,
     Brand,
-#    StoreProductLog,
     CashFlow,
     StoreWorker,
     Department

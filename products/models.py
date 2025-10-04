@@ -91,7 +91,6 @@ class Store(Base):
 
 
 class Product(Base):
-
     def path(self, filename):
         return "{0}/products/{1}".format(
             self.brand.tenant.short_name,
