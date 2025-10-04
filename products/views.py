@@ -18,7 +18,6 @@ from .models import (
     Store,
     Transfer,
     Brand,
-    # 	StoreProductLog,
     CashFlow,
     StoreWorker,
     Department,
@@ -457,29 +456,23 @@ class AddProductsView(APIView):
         store_products_data = request.data.get("store_products", [])
         user = request.user
 
-        store_products = []
-        logs = []
-
         for store_product_data in store_products_data:
             store_product = StoreProduct.objects.get(id=store_product_data["id"])
             previous_stock = store_product.stock
-            store_product.stock += store_product_data["quantity"]
+            updated_stock = store_product.stock + store_product_data["quantity"]
+            store_product.stock = updated_stock
+            store_product.save()  # Guardamos el producto actualizado
 
-            store_products.append(store_product)
-            logs.append(
-                StoreProductLog(
-                    store_product=store_product,
-                    user=user,
-                    previous_stock=previous_stock,
-                    updated_stock=store_product.stock,
-                    action="E",  # Acción: Entrada
-                )
+            # Guardamos el log individualmente
+            log = StoreProductLog(
+                store_product=store_product,
+                user=user,
+                previous_stock=previous_stock,
+                updated_stock=updated_stock,
+                action="E",  # Acción: Entrada
             )
+            log.save()
 
-        # Operaciones en una transacción para mayor seguridad
-        with transaction.atomic():
-            StoreProduct.objects.bulk_update(store_products, ["stock"])
-            StoreProductLog.objects.bulk_create(logs)
         return Response(
             {"status": "success", "message": "Productos agregados correctamente"}
         )

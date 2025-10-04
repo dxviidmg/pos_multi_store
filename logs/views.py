@@ -6,6 +6,7 @@ from rest_framework import status
 from django.db import transaction
 from .models import StoreProductLog
 from .serializers import StoreProductLogSerializer, StoreProductLogSerializer2
+from rest_framework import viewsets
 
 # Create your views here.
 @method_decorator(get_store(), name="dispatch")
@@ -47,3 +48,10 @@ class StoreProductLogsChoicesView(APIView):
 			for key, label in StoreProductLog.ACTIONS_CHOICES
 		]
 		return Response(choices)
+	
+
+class StoreProductLogViewSet(viewsets.ModelViewSet):
+    serializer_class = StoreProductLogSerializer
+
+    def get_queryset(self):
+        return StoreProductLog.objects.all()
