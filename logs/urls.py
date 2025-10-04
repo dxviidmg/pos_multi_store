@@ -11,7 +11,7 @@ router.register('store-product-log', views.StoreProductLogViewSet, basename='sto
 
 urlpatterns = router.urls
 
-urlpatterns = [
+urlpatterns += [
     path('store-product-log/choices/', views.StoreProductLogsChoicesView.as_view(), name='store-product-logs-choices'),
     path('store-product-logs/', views.StoreProductLogsView.as_view(), name='store-product-logs'),
 ]
