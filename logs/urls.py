@@ -7,7 +7,6 @@ app_name = 'logs'
 
 
 router = DefaultRouter() 
-router.register('store', views.S, basename='store')
 router.register('store-product-log', views.StoreProductLogViewSet, basename='store-product-log')
 
 urlpatterns = router.urls
