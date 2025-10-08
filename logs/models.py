@@ -50,3 +50,21 @@ class StoreProductLog(CreatedAtModel):
     def calculate_difference(self):
         difference = self.updated_stock - self.previous_stock
         return f"+{difference}" if difference > 0 else str(difference)
+    
+
+    def is_duplicate(self):
+        previous_obj = (
+            StoreProductLog.objects.filter(pk__lt=self.pk, store_product=self.store_product, action=self.action, movement=self.movement).order_by("-pk").first()
+        )
+        if previous_obj:
+            diff = self.created_at - previous_obj.created_at
+            return diff.total_seconds() < 1
+        return False
+    
+    def is_consistent(self):
+        previous_obj = (
+            StoreProductLog.objects.filter(pk__lt=self.pk, store_product=self.store_product).order_by("-pk").first()
+        )
+        if previous_obj:
+            return self.previous_stock == previous_obj.updated_stock
+        return True

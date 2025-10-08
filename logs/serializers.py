@@ -8,6 +8,7 @@ class StoreProductLogSerializer(serializers.ModelSerializer):
     description = serializers.SerializerMethodField()
     difference = serializers.SerializerMethodField()
     user_username = serializers.SerializerMethodField()
+    is_consistent = serializers.SerializerMethodField()
 
     def get_description(self, obj):
         return obj.get_description()
@@ -18,6 +19,9 @@ class StoreProductLogSerializer(serializers.ModelSerializer):
     def get_user_username(self, obj):
         return obj.user.username
 
+    def get_is_consistent(self, obj):
+        return obj.is_consistent()
+    
     class Meta:
         model = StoreProductLog
         fields = "__all__"

@@ -341,7 +341,6 @@ class ConfirmProductTransfersView(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ConfirmDistributionView(APIView):
-    @transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
     def post(self, request):
         products = request.data.get("products")
         destination_store_id = request.data.get("destination_store")
