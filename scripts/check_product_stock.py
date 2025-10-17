@@ -1,27 +1,20 @@
 from tenants.models import Tenant
-from products.models import Product, StoreProductLog
+from products.models import Product, StoreProduct
 from django.db.models import Count
-
+from logs.models import StoreProductLog
+from tqdm import tqdm
 
 def run():
-    tenants = Tenant.objects.all()
+        sps = StoreProduct.objects.all()
 
-    for index, tenant in enumerate(tenants):
-        print(tenant)
-        if index == 0:
-            continue
+        sps = sps[46862:]
 
-        products = Product.objects.filter(brand__tenant=tenant)
+        for sp in tqdm(sps, desc="Procesando", unit="Log"):
+            spl = StoreProductLog.objects.filter(store_product=sp).order_by('id').last()
 
-        for product in products:
-            stock = product.get_stock()
-
-            if stock != 0:
+            if not spl:
                 continue
-
-            spl_count = StoreProductLog.objects.filter(
-                store_product__product=product
-            ).count()
-
-            if spl_count == 0:
-                print(product.code)
+            
+            if sp.stock == spl.updated_stock or sp.stock > 0:
+                continue
+            print(sp.product.code, sp.store, sp.stock, spl.updated_stock)

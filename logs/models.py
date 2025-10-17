@@ -54,17 +54,40 @@ class StoreProductLog(CreatedAtModel):
 
     def is_duplicate(self):
         previous_obj = (
-            StoreProductLog.objects.filter(pk__lt=self.pk, store_product=self.store_product, action=self.action, movement=self.movement).order_by("-pk").first()
+            StoreProductLog.objects
+            .filter(
+                store_product=self.store_product,
+                action=self.action,
+                movement=self.movement,
+                pk__lt=self.pk,
+            )
+            .order_by("-pk")
+            .only("created_at")  # 🔹 optimiza la consulta
+            .first()
         )
-        if previous_obj:
-            diff = self.created_at - previous_obj.created_at
-            return diff.total_seconds() < 1
-        return False
+
+        return bool(previous_obj and (self.created_at - previous_obj.created_at).total_seconds() < 1)
     
     def is_consistent(self):
         previous_obj = (
-            StoreProductLog.objects.filter(pk__lt=self.pk, store_product=self.store_product).order_by("-pk").first()
+            StoreProductLog.objects
+            .filter(store_product=self.store_product, pk__lt=self.pk)
+            .order_by("-pk")
+            .only("updated_stock")  # 🔹 solo trae el campo necesario
+            .first()
         )
-        if previous_obj:
-            return self.previous_stock == previous_obj.updated_stock
-        return True
+        return not previous_obj or self.previous_stock == previous_obj.updated_stock
+    
+    def is_consistent_v2(self):
+        previous_obj = (
+            StoreProductLog.objects
+            .filter(store_product=self.store_product, pk__lt=self.pk)
+            .order_by("-pk")
+            .only("updated_stock")  # optimiza la consulta
+            .first()
+        )
+
+        if not previous_obj:
+            return 0
+
+        return abs(self.previous_stock - previous_obj.updated_stock)

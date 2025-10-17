@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404
 from logs.models import StoreProductLog
 from rest_framework.exceptions import NotFound
 from datetime import datetime
-
+from .tasks import get_sales_duplicates
 
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.
@@ -34,7 +34,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         sale_id = self.request.GET.get("sale_id")
         first_name = self.request.GET.get("first_name")
         last_name = self.request.GET.get("last_name")
-
+        is_duplicated = self.request.GET.get("is_duplicated") == "true"
         # Construir query base
         query = {"store": store}
 
@@ -546,3 +546,19 @@ class CancelSale(APIView):
                 {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
                 status=status.HTTP_200_OK,
             )
+
+
+
+@method_decorator(get_store(), name="dispatch")
+class SaleAsyncView(APIView):
+    def get(self, request):
+        date = request.GET.get("date")
+        store = request.store
+        tenant = self.request.user.get_tenant()
+        print(tenant)
+
+        response_data = get_sales_duplicates.delay(tenant.id)
+
+        print(response_data)
+
+        return Response({"task_id": response_data.id})
