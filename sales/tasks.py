@@ -20,7 +20,7 @@ def delete_sales_duplicates():
 def get_sales_duplicates(tenant_id):
     today = now().date()
     stores=Store.objects.filter(tenant=tenant_id)
-    sales = Sale.objects.filter(store__in=stores)
+    sales = Sale.objects.filter(store__in=stores)[:10]
 
     ids = []
     for sale in sales:
