@@ -17,5 +17,6 @@ def run():
 #Correr en casa
     sales = Sale.objects.all()[22260:]
     
-    for sale in tqdm(sales, desc="delete sales", unit="Sale"):
-        sale.revert_stock_and_delete()
+    for sale in tqdm(sales.iterator(), desc="delete sales", unit="Sale"):
+        if sale.is_duplicate():
+            print(sale)
