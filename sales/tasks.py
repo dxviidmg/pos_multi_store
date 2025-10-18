@@ -19,23 +19,32 @@ def delete_sales_duplicates():
 @shared_task(bind=True)
 def get_sales_duplicates(self, tenant_id, start_date, end_date):
     stores = Store.objects.filter(tenant=tenant_id)
-    sales = Sale.objects.filter(store__in=stores, created_at__date__gte=start_date, created_at__date__lte=end_date)
+    sales = Sale.objects.filter(
+        store__in=stores,
+        created_at__date__range=(start_date, end_date)
+    )
 
-    print(sales)
     total = sales.count()
+    if total == 0:
+        return []  # No hay ventas, no vale la pena iterar
 
-    ids = []
+    duplicate_ids = []
 
     for i, sale in enumerate(sales):
         if sale.is_duplicate():
-            ids.append(sale.id)
-        
-        # actualizar progreso
-        self.update_state(
-            state="PROGRESS",
-            meta={"current": i, "total": total, "percent": int(i/total*100)}
-        )
+            duplicate_ids.append(sale.id)
 
-    duplicated_sales = Sale.objects.filter(id__in=ids)
+        # actualizar progreso cada 10 registros (ajustable)
+        if (i + 1) % 10 == 0 or (i + 1) == total:
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "current": i + 1,
+                    "total": total,
+                    "percent": int((i + 1) / total * 100)
+                }
+            )
+
+    duplicated_sales = Sale.objects.filter(id__in=duplicate_ids)
     serializer = SaleSerializer(duplicated_sales, many=True)
     return serializer.data
