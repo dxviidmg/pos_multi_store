@@ -17,11 +17,9 @@ def delete_sales_duplicates():
 
 
 @shared_task(bind=True)
-def get_sales_duplicates(self, tenant_id):
-    today = datetime.now().date()
-
+def get_sales_duplicates(self, tenant_id, start_date, end_date):
     stores = Store.objects.filter(tenant=tenant_id)
-    sales = Sale.objects.filter(store__in=stores, created_at__date__gte="2025-10-01")
+    sales = Sale.objects.filter(store__in=stores, created_at__date__gte=start_date, created_at__date__lte=end_date)
 
     print(sales)
     total = sales.count()
