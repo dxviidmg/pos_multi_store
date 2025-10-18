@@ -18,33 +18,38 @@ def delete_sales_duplicates():
 
 @shared_task(bind=True)
 def get_sales_duplicates(self, tenant_id, start_date, end_date):
-    stores = Store.objects.filter(tenant=tenant_id)
-    sales = Sale.objects.filter(
-        store__in=stores,
-        created_at__date__range=(start_date, end_date)
-    )
+    try:
+        stores = Store.objects.filter(tenant=tenant_id)
+        sales = Sale.objects.filter(
+            store__in=stores,
+            created_at__date__range=(start_date, end_date)
+        )
 
-    total = sales.count()
-    if total == 0:
-        return []  # No hay ventas, no vale la pena iterar
+        total = sales.count()
+        if total == 0:
+            return []
 
-    duplicate_ids = []
+        duplicate_ids = []
 
-    for i, sale in enumerate(sales):
-        if sale.is_duplicate():
-            duplicate_ids.append(sale.id)
+        for i, sale in enumerate(sales):
+            if sale.is_duplicate():
+                duplicate_ids.append(sale.id)
 
-        # actualizar progreso cada 10 registros (ajustable)
-        if (i + 1) % 10 == 0 or (i + 1) == total:
-            self.update_state(
-                state="PROGRESS",
-                meta={
-                    "current": i + 1,
-                    "total": total,
-                    "percent": int((i + 1) / total * 100)
-                }
-            )
+            if (i + 1) % 10 == 0 or (i + 1) == total:
+                self.update_state(
+                    state="PROGRESS",
+                    meta={
+                        "current": i + 1,
+                        "total": total,
+                        "percent": int((i + 1) / total * 100)
+                    }
+                )
 
-    duplicated_sales = Sale.objects.filter(id__in=duplicate_ids)
-    serializer = SaleSerializer(duplicated_sales, many=True)
-    return serializer.data
+        duplicated_sales = Sale.objects.filter(id__in=duplicate_ids)
+        serializer = SaleSerializer(duplicated_sales, many=True)
+
+        return list(serializer.data)
+
+    except Exception as e:
+        self.update_state(state="FAILURE", meta={"error": str(e)})
+        return {"error": str(e)}
