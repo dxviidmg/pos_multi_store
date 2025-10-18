@@ -552,12 +552,13 @@ class CancelSale(APIView):
 @method_decorator(get_store(), name="dispatch")
 class SaleAsyncView(APIView):
     def get(self, request):
-        date = request.GET.get("date")
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
         store = request.store
         tenant = self.request.user.get_tenant()
         print(tenant)
 
-        response_data = get_sales_duplicates.delay(tenant.id)
+        response_data = get_sales_duplicates.delay(tenant.id, start_date, end_date)
 
         print(response_data)
 
