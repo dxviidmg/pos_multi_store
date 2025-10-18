@@ -1121,6 +1121,7 @@ class TaskResultView(APIView):
                 "task_id": task_id,
                 "status": result.status,
                 "result": result.result if result.ready() else None,
+                "info": result.info if result.info else {}
             }
         )
 
