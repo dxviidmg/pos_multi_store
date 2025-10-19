@@ -14,18 +14,18 @@ def get_logs_duplicates_or_inconsistens_task(self, tenant_id, start_date, end_da
         )
 
         total = logs.count()
-        duplicate_ids = []
+        ids = []
 
         for i, log in enumerate(logs):
-            if log.is_duplicate() or log.is_consistent():
-                duplicate_ids.append(log.id)
+            if log.is_duplicate() or not log.is_consistent():
+                ids.append(log.id)
 
             self.update_state(
                 state="PROGRESS",
                 meta={"percent": int((i + 1) / total * 100), "total": total, "i": i},
             )
 
-        duplicated_sales = StoreProductLog.objects.filter(id__in=duplicate_ids)
+        duplicated_sales = StoreProductLog.objects.filter(id__in=ids)
         serializer = StoreProductLogSerializer(duplicated_sales, many=True)
 
         return list(serializer.data)
