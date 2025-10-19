@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404
 from logs.models import StoreProductLog
 from rest_framework.exceptions import NotFound
 from datetime import datetime
-from .tasks import get_sales_duplicates
+from .tasks import get_sales_duplicates_task
 
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.

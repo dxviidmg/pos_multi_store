@@ -17,7 +17,7 @@ def delete_sales_duplicates():
 
 
 @shared_task(bind=True)
-def get_sales_duplicates(self, tenant_id, start_date, end_date):    
+def get_sales_duplicates_task(self, tenant_id, start_date, end_date):    
     try:
 
         self.update_state(
