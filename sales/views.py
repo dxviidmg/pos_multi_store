@@ -546,20 +546,3 @@ class CancelSale(APIView):
                 {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
                 status=status.HTTP_200_OK,
             )
-
-
-
-@method_decorator(get_store(), name="dispatch")
-class SaleAsyncView(APIView):
-    def get(self, request):
-        start_date = request.GET.get("start_date")
-        end_date = request.GET.get("end_date")
-        store = request.store
-        tenant = self.request.user.get_tenant()
-        print(tenant)
-
-        response_data = get_sales_duplicates.delay(tenant.id, start_date, end_date)
-
-        print(response_data)
-
-        return Response({"task_id": response_data.id})
