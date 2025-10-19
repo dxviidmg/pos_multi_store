@@ -23,7 +23,8 @@ def get_sales_duplicates(self, tenant_id, start_date, end_date):
         self.update_state(
             state="PROGRESS",
             meta={
-                "percent": 1
+                "percent": 1,
+                "total": 0
             }
         )
                 
@@ -48,7 +49,8 @@ def get_sales_duplicates(self, tenant_id, start_date, end_date):
             self.update_state(
                 state="PROGRESS",
                 meta={
-                    "percent": int((i + 1) / total * 100)
+                    "percent": int((i + 1) / total * 100),
+                    "total": total
                 }
             )
 
