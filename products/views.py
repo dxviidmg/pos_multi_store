@@ -40,11 +40,7 @@ from rest_framework import viewsets
 from django.contrib.auth.models import User
 from .utils import is_list_in_another, is_positive_number
 from logs.models import StoreProductLog
-from .tasks import (
-    get_store_products_task,
-    calculate_store_investments,
-    create_transfer_task,
-)
+
 from django.http import JsonResponse
 from django.db.models import Sum
 
@@ -1101,15 +1097,6 @@ class ImportCanIcludeQuantityView(APIView):
         if store_count == 1:
             return Response(True, status=status.HTTP_200_OK)
         return Response(False, status=status.HTTP_200_OK)
-
-
-#@method_decorator(get_store(), name="dispatch")
-#class StoreProductAsyncView(APIView):
-#    def get(self, request):
-#        tenant = self.request.user.get_tenant()
-#        store = self.request.store
-#        task = get_store_products_task.delay(store.id)
-#        return JsonResponse({"message": "process started", "task_id": task.id})
 
 @method_decorator(get_store(), name="dispatch")
 class StockInOtherStores(APIView):
