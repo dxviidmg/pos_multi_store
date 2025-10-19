@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'sales',
     'logs',
     'printers',
+    'audit',
     'django_extensions',
     'rest_framework',
     'rest_framework.authtoken',
