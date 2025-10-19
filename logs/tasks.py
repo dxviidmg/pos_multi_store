@@ -7,22 +7,14 @@ from celery import shared_task
 @shared_task(bind=True)
 def get_logs_duplicates(self, tenant_id, start_date, end_date):
     try:
-
-        self.update_state(state="PROGRESS", meta={"percent": 1, "total": 0})
-
         stores = Store.objects.filter(tenant=tenant_id)
         logs = StoreProductLog.objects.filter(
             store_product__store__in=stores,
             created_at__date__range=(start_date, end_date),
         )
 
-        print(logs)
-
         total = logs.count()
         if total == 0:
-
-            self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
-
             return []
 
         duplicate_ids = []
@@ -33,7 +25,7 @@ def get_logs_duplicates(self, tenant_id, start_date, end_date):
 
             self.update_state(
                 state="PROGRESS",
-                meta={"percent": int((i + 1) / total * 100), "total": total},
+                meta={"percent": int((i + 1) / total * 100), "total": total, "i": i},
             )
 
         duplicated_sales = StoreProductLog.objects.filter(id__in=duplicate_ids)
@@ -51,20 +43,13 @@ def get_logs_duplicates(self, tenant_id, start_date, end_date):
 def get_logs_inconsistens(self, tenant_id, start_date, end_date):
     try:
 
-        self.update_state(state="PROGRESS", meta={"percent": 1, "total": 0})
-
         stores = Store.objects.filter(tenant=tenant_id)
         logs = StoreProductLog.objects.filter(
             store_product__store__in=stores,
             created_at__date__range=(start_date, end_date),
         )
-
-        print(logs)
-
         total = logs.count()
         if total == 0:
-
-            self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
 
             return []
 
@@ -76,7 +61,7 @@ def get_logs_inconsistens(self, tenant_id, start_date, end_date):
 
             self.update_state(
                 state="PROGRESS",
-                meta={"percent": int((i + 1) / total * 100), "total": total},
+                meta={"percent": int((i + 1) / total * 100), "total": total, "i": i},
             )
 
         duplicated_sales = StoreProductLog.objects.filter(id__in=duplicate_ids)

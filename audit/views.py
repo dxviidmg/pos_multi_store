@@ -19,8 +19,8 @@ class SaleAsyncView(APIView):
 
         task1 = get_sales_duplicates.delay(tenant.id, start_date, end_date)
         task2 = get_logs_duplicates.delay(tenant.id, start_date, end_date)
-        task3 = get_logs_inconsistens.delay(tenant.id, start_date, end_date)
-        return Response({"task1": task1.id, "task2": task2.id, "task3": task3.id})
+#        task3 = get_logs_inconsistens.delay(tenant.id, start_date, end_date)
+        return Response({"task1": task1.id, "task2": task2.id})
     
 
 # Create your views here.
