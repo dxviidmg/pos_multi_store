@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/', include('tenants.urls', namespace="tenants")),
     path('api/', include('logs.urls', namespace="logs")),
     path('api/', include('printers.urls', namespace="printers")),
+    path('api/', include('audit.urls', namespace="audit")),
 ]
 
 from django.conf import settings

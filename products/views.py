@@ -46,7 +46,6 @@ from .tasks import (
     create_transfer_task,
 )
 from django.http import JsonResponse
-from celery.result import AsyncResult
 from django.db.models import Sum
 
 
@@ -1104,27 +1103,13 @@ class ImportCanIcludeQuantityView(APIView):
         return Response(False, status=status.HTTP_200_OK)
 
 
-@method_decorator(get_store(), name="dispatch")
-class StoreProductAsyncView(APIView):
-    def get(self, request):
-        tenant = self.request.user.get_tenant()
-        store = self.request.store
-        task = get_store_products_task.delay(store.id)
-        return JsonResponse({"message": "process started", "task_id": task.id})
-
-
-class TaskResultView(APIView):
-    def get(self, request, task_id):
-        result = AsyncResult(task_id)
-        return JsonResponse(
-            {
-                "task_id": task_id,
-                "status": result.status,
-                "result": result.result if result.ready() else None,
-                "info": result.info if result.info else {}
-            }
-        )
-
+#@method_decorator(get_store(), name="dispatch")
+#class StoreProductAsyncView(APIView):
+#    def get(self, request):
+#        tenant = self.request.user.get_tenant()
+#        store = self.request.store
+#        task = get_store_products_task.delay(store.id)
+#        return JsonResponse({"message": "process started", "task_id": task.id})
 
 @method_decorator(get_store(), name="dispatch")
 class StockInOtherStores(APIView):

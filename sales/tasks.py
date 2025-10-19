@@ -38,6 +38,7 @@ def get_sales_duplicates(self, tenant_id, start_date, end_date):
 
         total = sales.count()
         if total == 0:
+            self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
             return []
 
         duplicate_ids = []
@@ -53,8 +54,6 @@ def get_sales_duplicates(self, tenant_id, start_date, end_date):
                     "total": total
                 }
             )
-
-        print('duplicate_ids', duplicate_ids)
 
         duplicated_sales = Sale.objects.filter(id__in=duplicate_ids)
         serializer = SaleSerializer(duplicated_sales, many=True)
