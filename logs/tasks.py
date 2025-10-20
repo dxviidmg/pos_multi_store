@@ -1,4 +1,4 @@
-from products.models import Store, StoreProduct
+from products.models import StoreProduct
 from .models import StoreProductLog
 from .serializers import StoreProductLogSerializer
 from celery import shared_task
@@ -34,7 +34,7 @@ def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_da
         )
         
         ids = []
-        update_every = max(total // 20, 1)
+        update_every = max(total // 10, 1)
         for i, log in enumerate(logs):
             if log.is_duplicate() or not log.is_consistent():
                 ids.append(log.id)
@@ -88,7 +88,7 @@ def get_store_products_inconsistens_task(self, store_ids):
         )
 
         ids = []
-        update_every = max(total // 20, 1)
+        update_every = max(total // 10, 1)
 
         for i, store_product in enumerate(store_products):
             last_store_product_log = StoreProductLog.objects.filter(store_product=store_product).order_by('id').last()
