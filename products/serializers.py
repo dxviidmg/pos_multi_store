@@ -274,3 +274,22 @@ class StoreWorkerSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreWorker
         fields = "__all__"
+
+
+class StoreProductAuditSerializer(serializers.ModelSerializer):
+    product_code = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    store_name = serializers.SerializerMethodField()
+
+    def get_product_code(self, obj):
+        return obj.product.code
+
+    def get_product_name(self, obj):
+        return obj.product.get_description()
+    
+    def get_store_name(self, obj):
+        return obj.store.get_full_name()
+    
+    class Meta:
+        model = StoreProduct
+        fields = ["id", "product_code", "product_name", "store_name", "stock"]

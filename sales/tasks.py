@@ -2,7 +2,7 @@ from celery import shared_task
 from datetime import datetime
 from .models import Sale
 from django.utils.timezone import now
-from .serializers import SaleSerializer
+from .serializers import SaleAuditSerializer
 from products.models import Store
 
 
@@ -48,7 +48,7 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
             
         ids = []
         update_every = max(total // 20, 1)
-        
+
         for i, sale in enumerate(sales):
             if sale.is_duplicate():
                 ids.append(sale.id)
@@ -58,19 +58,19 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
 
                 self.update_state(
                     state="PROGRESS",
-                    meta={"percent": percent, "total": total, "i": i},
+                    meta={"percent": percent, "total": total, "counter": len(ids)},
                 )
 
-        duplicated_sales = Sale.objects.filter(id__in=ids)
-        serializer = SaleSerializer(duplicated_sales, many=True)
+        repeated_sales = Sale.objects.filter(id__in=ids)
+        serializer = SaleAuditSerializer(repeated_sales, many=True)
 
         self.update_state(
             state="PROGRESS",
-            meta={"percent": 100, "total": total, "i": total},
+            meta={"percent": 100, "total": total},
         )
 
         return list(serializer.data)
 
     except Exception as e:
         self.update_state(state="FAILURE", meta={"error": str(e)})
-        return {"error": str(e)}
+        raise

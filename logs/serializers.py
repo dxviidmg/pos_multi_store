@@ -32,3 +32,27 @@ class StoreProductLogSerializer2(StoreProductLogSerializer):
 
     def get_product(self, obj):
         return ProductSerializer(obj.store_product.product).data
+    
+
+
+class StoreProductLogAuditSerializer(serializers.ModelSerializer):
+
+    product_code = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    store_name = serializers.SerializerMethodField()
+
+    def get_product_code(self, obj):
+        return obj.store_product.product.code
+
+    def get_product_name(self, obj):
+        return obj.store_product.product.get_description()
+
+    def get_store_name(self, obj):
+        return obj.store_product.store.get_full_name()
+
+    def get_is_consistent(self, obj):
+        return obj.is_consistent()
+    
+    class Meta:
+        model = StoreProductLog
+        fields = ["id", "created_at", "product_code", "product_name", "store_name"]
