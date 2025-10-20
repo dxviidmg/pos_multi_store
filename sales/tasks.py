@@ -47,9 +47,7 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
         )
             
         ids = []
-        update_every = max(total // 10, 1)
-
-        print(update_every)
+        update_every = max(total // 20, 1)
         
         for i, sale in enumerate(sales):
             if sale.is_duplicate():

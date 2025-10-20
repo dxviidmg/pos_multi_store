@@ -20,20 +20,20 @@ def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_da
             self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
             return []
 
-        self.update_state(state="PROGRESS", meta={"percent": 5, "total": 0})
+        self.update_state(state="PROGRESS", meta={"percent": 1, "total": 0})
 
         ids = []
-        update_every = max(total // 5, 1)
+        update_every = max(total // 20, 1)
         for i, log in enumerate(logs):
             if log.is_duplicate() or not log.is_consistent():
                 ids.append(log.id)
 
             if i % update_every == 0 or i == total:
-                percent = max(int((i / total) * 95), 5)
+                percent = max(int((i / total) * 99), 1)
 
                 self.update_state(
                     state="PROGRESS",
-                    meta={"percent": percent, "total": total, "i": i},
+                    meta={"percent": percent, "total": total},
                 )
 
         duplicated_sales = StoreProductLog.objects.filter(id__in=ids)
@@ -41,7 +41,7 @@ def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_da
 
         self.update_state(
             state="PROGRESS",
-            meta={"percent": 100, "total": total, "i": total},
+            meta={"percent": 100, "total": total},
         )
 
         return list(serializer.data)
@@ -68,13 +68,12 @@ def get_store_products_inconsistens_task(self, store_ids):
         update_every = max(total // 100, 1)
 
         for i, store_product in enumerate(store_products):
-            print(i, update_every)
             if i % update_every == 0 or i == total:
                 percent = max(int((i / total) * 99), 1)
 
                 self.update_state(
                     state="PROGRESS",
-                    meta={"percent": percent, "total": total, "i": i},
+                    meta={"percent": percent, "total": total},
                 )
 
             last_store_product_log = (
