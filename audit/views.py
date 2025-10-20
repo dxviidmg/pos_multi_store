@@ -7,19 +7,28 @@ from django.utils.decorators import method_decorator
 from sales.tasks import get_sales_duplicates_task
 from rest_framework.response import Response
 from logs.tasks import get_logs_duplicates_or_inconsistens_task, get_store_products_inconsistens_task
+from products.models import Store
 
 @method_decorator(get_store(), name="dispatch")
 class SaleAsyncView(APIView):
     def get(self, request):
         start_date = request.GET.get("start_date")
         end_date = request.GET.get("end_date")
-        store = request.store
+        store_id = request.GET.get("store_id", None)
+#        store = request.store
         tenant = self.request.user.get_tenant()
         print(tenant)
 
-        task1 = get_sales_duplicates_task.delay(tenant.id, start_date, end_date)
-        task2 = get_logs_duplicates_or_inconsistens_task.delay(tenant.id, start_date, end_date)
-        task3 = get_store_products_inconsistens_task.delay(tenant.id)
+
+        if store_id:
+            store_ids = [store_id]
+        else:
+            stores = Store.objects.filter(tenant=tenant)
+            store_ids = list(stores.values_list("id", flat=True))
+        
+        task1 = get_sales_duplicates_task.delay(store_ids, start_date, end_date)
+        task2 = get_logs_duplicates_or_inconsistens_task.delay(store_ids, start_date, end_date)
+        task3 = get_store_products_inconsistens_task.delay(store_ids)
         return Response({"task1": task1.id, "task2": task2.id, "task3": task3.id})
     
 

@@ -17,46 +17,59 @@ def delete_sales_duplicates():
 
 
 @shared_task(bind=True)
-def get_sales_duplicates_task(self, tenant_id, start_date, end_date):    
+def get_sales_duplicates_task(self, store_ids, start_date, end_date):    
     try:
 
         self.update_state(
             state="PROGRESS",
             meta={
-                "percent": 1,
+                "percent": 0,
                 "total": 0
             }
         )
                 
-        stores = Store.objects.filter(tenant=tenant_id)
         sales = Sale.objects.filter(
-            store__in=stores,
+            store_id__in=store_ids,
             created_at__date__range=(start_date, end_date)
         )
-
-        print(sales)
 
         total = sales.count()
         if total == 0:
             self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
             return []
 
-        duplicate_ids = []
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "percent": 5,
+                "total": 0
+            }
+        )
+            
+        ids = []
+        update_every = max(total // 20, 1)
 
+        print(update_every)
+        
         for i, sale in enumerate(sales):
             if sale.is_duplicate():
-                duplicate_ids.append(sale.id)
+                ids.append(sale.id)
 
-            self.update_state(
-                state="PROGRESS",
-                meta={
-                    "percent": int((i + 1) / total * 100),
-                    "total": total
-                }
-            )
+            if i % update_every == 0 or i == total:
+                percent = max(int((i / total) * 95), 5)
 
-        duplicated_sales = Sale.objects.filter(id__in=duplicate_ids)
+                self.update_state(
+                    state="PROGRESS",
+                    meta={"percent": percent, "total": total, "i": i},
+                )
+
+        duplicated_sales = Sale.objects.filter(id__in=ids)
         serializer = SaleSerializer(duplicated_sales, many=True)
+
+        self.update_state(
+            state="PROGRESS",
+            meta={"percent": 100, "total": total, "i": total},
+        )
 
         return list(serializer.data)
 

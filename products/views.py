@@ -11,6 +11,7 @@ from .serializers import (
     StoreWorkerSerializer,
     DepartmentSerializer,
     StoreProductForStockSerializer,
+    StoreBaseSerializer
 )
 from .models import (
     StoreProduct,
@@ -190,8 +191,9 @@ class ProductViewSet(viewsets.ModelViewSet):
 class StoreViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
-        return StoreCashSummarySerializer
-
+        if self.request.GET.get("start_date"):
+            return StoreCashSummarySerializer
+        return StoreBaseSerializer
     def get_serializer(self, *args, **kwargs):
         kwargs.setdefault("context", {}).update(
             {"start_date": self.request.GET.get("start_date", None)}
