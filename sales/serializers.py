@@ -72,3 +72,15 @@ class SaleSerializer2(serializers.ModelSerializer):
     class Meta:
         model = Sale
         fields = "__all__"
+
+
+class SaleAuditSerializer(serializers.ModelSerializer):
+    store_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Sale
+        fields = ["id", "created_at", "store_name"]
+
+    def get_store_name(self, obj):
+        # Puedes llamar al método o añadir más lógica
+        return obj.store.get_full_name()  # ejemplo: en mayúsculas

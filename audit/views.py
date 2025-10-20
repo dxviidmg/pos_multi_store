@@ -31,8 +31,6 @@ class Audit1AsyncView(APIView):
 @method_decorator(get_store(), name="dispatch")
 class Audit2AsyncView(APIView):
     def get(self, request):
-        start_date = request.GET.get("start_date")
-        end_date = request.GET.get("end_date")
         store_id = request.GET.get("store_id", None)
         tenant = self.request.user.get_tenant()
 
