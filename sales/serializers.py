@@ -24,7 +24,7 @@ class SaleSerializer(serializers.ModelSerializer):
     payments_methods = serializers.SerializerMethodField()
     client = ClientSerializer()
     products_sale = ProductSaleSerializer(many=True)
-    is_duplicate = serializers.SerializerMethodField()
+    is_repeated = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
     refunded = serializers.SerializerMethodField()
     paid = serializers.SerializerMethodField()
@@ -41,8 +41,8 @@ class SaleSerializer(serializers.ModelSerializer):
     def get_payments_methods(self, obj):
         return obj.get_payments_methods_display()
 
-    def get_is_duplicate(self, obj):
-            return obj.is_duplicate()
+    def get_is_repeated(self, obj):
+            return obj.is_repeated()
 
     def get_reference(self, obj):
         return obj.get_reference()

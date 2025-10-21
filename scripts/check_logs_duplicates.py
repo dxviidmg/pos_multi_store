@@ -16,7 +16,7 @@ def run():
     for index, store_products_log in enumerate(
         tqdm(store_products_logs, desc="Procesando", unit="item")
     ):
-        if store_products_log.is_duplicate():
+        if store_products_log.is_repeated():
             print(
                 store_products_log.store_product,
                 store_products_log.created_at,
