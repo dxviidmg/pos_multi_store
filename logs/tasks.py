@@ -27,7 +27,7 @@ def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_da
         ids = []
         update_every = max(total // 20, 1)
         for i, log in enumerate(logs):
-            if log.is_duplicate() or not log.is_consistent():
+            if log.is_repeated() or not log.is_consistent() or log.has_negatives():
                 ids.append(log.id)
 
             if i % update_every == 0 or i == total:

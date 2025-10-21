@@ -34,7 +34,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         sale_id = self.request.GET.get("sale_id")
         first_name = self.request.GET.get("first_name")
         last_name = self.request.GET.get("last_name")
-        is_duplicated = self.request.GET.get("is_duplicated") == "true"
+        is_repeatedd = self.request.GET.get("is_repeatedd") == "true"
         # Construir query base
         query = {"store": store}
 

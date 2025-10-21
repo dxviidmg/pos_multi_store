@@ -52,7 +52,7 @@ class StoreProductLog(CreatedAtModel):
         return f"+{difference}" if difference > 0 else str(difference)
     
 
-    def is_duplicate(self):
+    def is_repeated(self):
         previous_obj = (
             StoreProductLog.objects
             .filter(
@@ -78,16 +78,5 @@ class StoreProductLog(CreatedAtModel):
         )
         return not previous_obj or self.previous_stock == previous_obj.updated_stock
     
-    def is_consistent_v2(self):
-        previous_obj = (
-            StoreProductLog.objects
-            .filter(store_product=self.store_product, pk__lt=self.pk)
-            .order_by("-pk")
-            .only("updated_stock")  # optimiza la consulta
-            .first()
-        )
-
-        if not previous_obj:
-            return 0
-
-        return abs(self.previous_stock - previous_obj.updated_stock)
+    def has_negatives(self):
+        return self.previous_stock < 0 or self.updated_stock < 0

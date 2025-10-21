@@ -52,7 +52,7 @@ class Sale(CreatedAtModel):
     def get_paid(self):
         return self.payments.all().aggregate(total_amount=Sum('amount'))['total_amount'] or 0
         
-    def is_duplicate(self):
+    def is_repeated(self):
         previous_obj = (
             Sale.objects.filter(pk__lt=self.pk, store=self.store, is_canceled=False).order_by("-pk").first()
         )
@@ -66,7 +66,7 @@ class Sale(CreatedAtModel):
         Revierte el stock de los productos de esta venta y luego la elimina.
         Solo se ejecuta si la venta es duplicada.
         """
-        if not self.is_duplicate():
+        if not self.is_repeated():
             return False  # No hizo nada
 
         for product_sale in self.products_sale.all():

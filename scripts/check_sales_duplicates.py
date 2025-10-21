@@ -18,5 +18,5 @@ def run():
     sales = Sale.objects.filter(created_at__date__gte="2025-10-01")#[22260:]
     
     for sale in tqdm(sales, desc="check sales", unit="Sale"):
-        if sale.is_duplicate():
+        if sale.is_repeated():
             print(sale, sale.store)
