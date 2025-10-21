@@ -210,7 +210,6 @@ class StoreViewSet(viewsets.ModelViewSet):
         tenant = self.request.user.get_tenant()
         store = self.request.store
         store_type = self.request.GET.get("store_type", None)
-
         queryset = Store.objects.filter(tenant=tenant)
 
         if store_type:
@@ -218,8 +217,6 @@ class StoreViewSet(viewsets.ModelViewSet):
 
         if store:
             queryset = queryset.exclude(id=store.id)
-            if store.store_type == "T":
-                queryset = queryset.filter(store_type="T")
 
         return queryset
 

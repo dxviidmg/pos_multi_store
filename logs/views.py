@@ -18,6 +18,7 @@ class StoreProductLogsView(APIView):
 		brand_id = request.GET.get("brand_id")
 		action = request.GET.get("action")
 		store = request.store
+		store_related = request.GET.get("store_related")
 
 		if store_product_id:
 			store_product_logs = StoreProductLog.objects.filter(
@@ -34,6 +35,10 @@ class StoreProductLogsView(APIView):
 			if action:
 				q["action"] = action
 
+			if store_related:
+				q["store_related"] = store_related
+
+			print(q)
 			store_product_logs = StoreProductLog.objects.filter(**q).order_by("-id")
 			serializer_class = StoreProductLogSerializer2
 
