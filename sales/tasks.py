@@ -41,8 +41,9 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
         self.update_state(
             state="PROGRESS",
             meta={
-                "percent": 5,
-                "total": 0
+                "percent": 1,
+                "total": 0,
+                "total": total
             }
         )
             
@@ -54,7 +55,7 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
                 ids.append(sale.id)
 
             if i % update_every == 0 or i == total:
-                percent = max(int((i / total) * 95), 5)
+                percent = max(int((i / total) * 99), 1)
 
                 self.update_state(
                     state="PROGRESS",
