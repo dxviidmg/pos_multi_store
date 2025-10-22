@@ -63,7 +63,6 @@ def get_store_products_inconsistens_task(self, store_ids):
         self.update_state(state="PROGRESS", meta={"percent": 0, "total": 0})
 
         store_products = StoreProduct.objects.filter(store_id__in=store_ids)
-        print(len(store_products))
         total = store_products.count()
 
         if total == 0:
@@ -84,8 +83,6 @@ def get_store_products_inconsistens_task(self, store_ids):
         update_every = max(total // 5, 1)
 
         for i, sp in enumerate(store_products, start=1):
-            print(i)
-            # Actualizar progreso según tu lógica
             if i % update_every == 0 or i == total:
                 percent = max(int((i / total) * 99), 1)
                 self.update_state(
