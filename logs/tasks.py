@@ -4,42 +4,45 @@ from .serializers import StoreProductLogAuditSerializer
 from celery import shared_task
 from products.serializers import StoreProductAuditSerializer
 from django.db.models import OuterRef, Subquery
-
+import time
 
 
 @shared_task(bind=True)
 def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_date):
     try:
+        # Estado inicial
         self.update_state(state="PROGRESS", meta={"percent": 0, "total": 0})
-        logs = StoreProductLog.objects.filter(
+
+        logs_qs = StoreProductLog.objects.filter(
             store_product__store_id__in=store_ids,
             created_at__date__range=(start_date, end_date),
         )
 
-        total = logs.count()
-
+        total = logs_qs.count()
         if total == 0:
             self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
             return []
 
-        self.update_state(state="PROGRESS", meta={"percent": 1, "total": 0})
+        self.update_state(state="PROGRESS", meta={"percent": 1, "total": total})
 
         ids = []
         update_every = max(total // 20, 1)
-        for i, log in enumerate(logs):
+
+        # 🚀 Usar iterator() evita cargar todo en memoria
+        for i, log in enumerate(logs_qs.iterator(), start=1):
+            # Si estos métodos hacen queries, puede optimizarse más (ver nota abajo)
             if log.is_repeated() or not log.is_consistent() or log.has_negatives():
                 ids.append(log.id)
 
             if i % update_every == 0 or i == total:
                 percent = max(int((i / total) * 99), 1)
-
                 self.update_state(
                     state="PROGRESS",
                     meta={"percent": percent, "total": total},
                 )
 
-        duplicated_sales = StoreProductLog.objects.filter(id__in=ids)
-        serializer = StoreProductLogAuditSerializer(duplicated_sales, many=True)
+        inconsistent_logs = StoreProductLog.objects.filter(id__in=ids)
+        serializer = StoreProductLogAuditSerializer(inconsistent_logs, many=True)
 
         self.update_state(
             state="PROGRESS",
@@ -60,6 +63,7 @@ def get_store_products_inconsistens_task(self, store_ids):
         self.update_state(state="PROGRESS", meta={"percent": 0, "total": 0})
 
         store_products = StoreProduct.objects.filter(store_id__in=store_ids)
+        print(len(store_products))
         total = store_products.count()
 
         if total == 0:
@@ -77,9 +81,10 @@ def get_store_products_inconsistens_task(self, store_ids):
         )
 
         ids = []
-        update_every = max(total // 100, 1)
+        update_every = max(total // 5, 1)
 
         for i, sp in enumerate(store_products, start=1):
+            print(i)
             # Actualizar progreso según tu lógica
             if i % update_every == 0 or i == total:
                 percent = max(int((i / total) * 99), 1)
@@ -87,6 +92,7 @@ def get_store_products_inconsistens_task(self, store_ids):
                     state="PROGRESS",
                     meta={"percent": percent, "total": total},
                 )
+                time.sleep(0.5)
 
             # Detectar inconsistencias
             if sp.stock < 0 or (sp.last_log_stock is not None and sp.stock != sp.last_log_stock):
