@@ -69,6 +69,11 @@ def get_store_products_inconsistens_task(self, store_ids):
             self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
             return []
 
+        time.sleep(0.5)
+        self.update_state(
+            state="PROGRESS",
+            meta={"percent": 5, "total": total},
+        )
         # Subquery para obtener el último log
         last_log_subquery = StoreProductLog.objects.filter(
             store_product=OuterRef('pk')
