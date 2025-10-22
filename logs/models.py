@@ -51,22 +51,31 @@ class StoreProductLog(CreatedAtModel):
         difference = self.updated_stock - self.previous_stock
         return f"+{difference}" if difference > 0 else str(difference)
     
-
-    def get_previous_object(self):
-        return StoreProductLog.objects.filter(
+    
+    def is_repeated(self):
+        previous_obj = (
+            StoreProductLog.objects
+            .filter(
                 store_product=self.store_product,
                 action=self.action,
                 movement=self.movement,
                 pk__lt=self.pk,
-            ).order_by("-pk").only("created_at").first()
-        
-    def is_repeated(self):
-        previous_obj = self.get_previous_object()
+            )
+            .order_by("-pk")
+            .only("created_at")  # 🔹 optimiza la consulta
+            .first()
+        )
 
         return bool(previous_obj and (self.created_at - previous_obj.created_at).total_seconds() < 1)
     
     def is_consistent(self):
-        previous_obj = self.get_previous_object()
+        previous_obj = (
+            StoreProductLog.objects
+            .filter(store_product=self.store_product, pk__lt=self.pk)
+            .order_by("-pk")
+            .only("updated_stock")  # 🔹 solo trae el campo necesario
+            .first()
+        )
         return not previous_obj or self.previous_stock == previous_obj.updated_stock
     
     def has_negatives(self):
