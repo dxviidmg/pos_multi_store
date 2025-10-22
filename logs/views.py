@@ -38,7 +38,6 @@ class StoreProductLogsView(APIView):
 			if store_related:
 				q["store_related"] = store_related
 
-			print(q)
 			store_product_logs = StoreProductLog.objects.filter(**q).order_by("-id")
 			serializer_class = StoreProductLogSerializer2
 
