@@ -1,6 +1,6 @@
 from celery import shared_task
 from datetime import datetime
-from .models import Sale
+from .models import Sale, Payment
 from django.utils.timezone import now
 from .serializers import SaleAuditSerializer
 from products.models import Store
@@ -10,7 +10,8 @@ from django.db.models.functions import TruncMonth
 from datetime import datetime
 from django.db.models.functions import TruncDay
 from django.db.models.functions import ExtractWeekDay
-
+from django.db.models import Count
+from django.db.models import F
 
 
 @shared_task
@@ -110,7 +111,7 @@ def get_sales_by_month(self, store_ids):
 
         datasets = []
 
-        colors = ["red", "blue", "green", "yellow", "purple"]
+        colors = ["blue", "red", "yellow", "purple"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
         for i, store in enumerate(stores):
             datasets.append({
@@ -171,7 +172,7 @@ def get_sales_by_weekday(self, store_ids):
 
         datasets = []
 
-        colors = ["red", "blue", "green", "yellow", "purple"]
+        colors = ["blue", "red", "yellow", "purple"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
 
         # 🔹 Crear dataset por tienda
@@ -200,6 +201,48 @@ def get_sales_by_weekday(self, store_ids):
             })
 
         return datasets
+
+    except Exception as e:
+        print(e)
+        self.update_state(state="FAILURE", meta={"error": str(e)})
+        raise
+
+
+
+
+@shared_task(bind=True)
+def get_payment_methods_percentage(self, store_ids):
+    today = datetime.now()
+
+    try:
+        # 🔹 Filtrar ventas del año actual
+
+        # 🔹 Filtrar ventas del año actual y no canceladas
+        sales = Sale.objects.filter(
+            store_id__in=store_ids,
+            created_at__year=today.year,
+            is_canceled=False
+        )
+
+        # 🔹 Contar pagos por método
+        method_counts = (
+            Payment.objects
+            .filter(sale__in=sales)
+            .values('payment_method')
+            .annotate(total=Count('id'))
+        )
+
+        # 🔹 Diccionario de códigos a nombres legibles
+        payment_method_dict = dict(Payment.PAYMENT_METHOD_CHOICES)
+
+        # 🔹 Generar diccionario con nombres legibles y conteos
+        payment_counts = {
+            payment_method_dict.get(item['payment_method'], item['payment_method']): item['total']
+            for item in method_counts
+        }
+
+
+        return payment_counts
 
     except Exception as e:
         print(e)
