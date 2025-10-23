@@ -8,7 +8,7 @@ from datetime import date
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from datetime import datetime
-from django.db.models.functions import TruncDay
+from django.db.models.functions import ExtractHour
 from django.db.models.functions import ExtractWeekDay
 from django.db.models import Count
 from django.db.models import F
@@ -208,6 +208,73 @@ def get_sales_by_weekday(self, store_ids):
         raise
 
 
+
+
+
+@shared_task(bind=True)
+def get_sales_by_hour(self, store_ids):
+    today = datetime.now()
+
+    try:
+        # 🔹 Filtrar ventas del día actual (puedes cambiar a otro rango si quieres todo el año)
+        sales = (
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                created_at__year=today.year,  # solo hoy
+                is_canceled=False
+            )
+            .annotate(hour=ExtractHour("created_at"))
+            .values("store_id", "hour")
+            .annotate(total_amount=Sum("total"))
+            .order_by("store_id", "hour")
+        )
+
+        print(sales)
+
+        # 🔹 Inicializar estructura para 24 horas
+        store_sales = {store_id: [0] * 24 for store_id in store_ids}
+
+        # 🔹 Llenar datos de ventas por hora
+        for s in sales:
+            hour_index = s["hour"] or 0
+            store_sales[s["store_id"]][hour_index] = s["total_amount"] or 0
+
+        datasets = []
+
+        colors = ["blue", "red", "yellow", "purple"]
+        stores = Store.objects.filter(id__in=store_ids).only("id", "name")
+
+        # 🔹 Crear dataset por tienda
+        for i, store in enumerate(stores):
+            datasets.append({
+                "label": store.get_full_name(),
+                "data": store_sales[store.id],
+                "borderColor": colors[i % len(colors)],
+                "backgroundColor": colors[i % len(colors)]
+            })
+
+        # 🔹 Calcular promedio por hora entre tiendas
+        num_stores = len(store_sales)
+        hourly_averages = [
+            (sum(day[i] for day in store_sales.values()) / num_stores)
+            if num_stores > 0 else 0
+            for i in range(24)
+        ]
+
+        if len(store_ids) > 1:
+            datasets.append({
+                "label": "Promedio",
+                "data": hourly_averages,
+                "borderColor": "black",
+                "backgroundColor": "black"
+            })
+
+        return datasets
+
+    except Exception as e:
+        print(e)
+        self.update_state(state="FAILURE", meta={"error": str(e)})
+        raise
 
 
 @shared_task(bind=True)
