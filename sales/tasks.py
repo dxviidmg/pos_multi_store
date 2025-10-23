@@ -229,8 +229,6 @@ def get_sales_by_hour(self, store_ids):
             .order_by("store_id", "hour")
         )
 
-        print(sales)
-
         # 🔹 Inicializar estructura para 24 horas
         store_sales = {store_id: [0] * 24 for store_id in store_ids}
 
@@ -277,14 +275,48 @@ def get_sales_by_hour(self, store_ids):
         raise
 
 
+
+@shared_task(bind=True)
+def get_sales_percentage(self, store_ids):
+    today = datetime.now()
+
+    try:
+        sales = (
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                created_at__year=today.year,
+                is_canceled=False
+            )
+            .values("store_id")
+            .annotate(total_amount=Sum("total"))
+        )
+
+        # 🔹 Calcular el total general
+        total_general = sum(s["total_amount"] or 0 for s in sales)
+
+        # 🔹 Agregar el porcentaje a cada tienda
+        sales_with_percentage = {}
+        for s in sales:
+            total = s["total_amount"] or 0
+            percentage = (total / total_general * 100) if total_general > 0 else 0
+            store = Store.objects.get(id=s["store_id"])
+            sales_with_percentage[store.get_full_name()] = round(percentage, 2)
+            
+
+        print(sales_with_percentage)
+        return sales_with_percentage
+
+    except Exception as e:
+        print(e)
+        self.update_state(state="FAILURE", meta={"error": str(e)})
+        raise
+
+
 @shared_task(bind=True)
 def get_payment_methods_percentage(self, store_ids):
     today = datetime.now()
 
     try:
-        # 🔹 Filtrar ventas del año actual
-
-        # 🔹 Filtrar ventas del año actual y no canceladas
         sales = Sale.objects.filter(
             store_id__in=store_ids,
             created_at__year=today.year,
@@ -303,13 +335,13 @@ def get_payment_methods_percentage(self, store_ids):
         payment_method_dict = dict(Payment.PAYMENT_METHOD_CHOICES)
 
         # 🔹 Generar diccionario con nombres legibles y conteos
-        payment_counts = {
-            payment_method_dict.get(item['payment_method'], item['payment_method']): item['total']
+        payment_percent = {
+            payment_method_dict.get(item['payment_method'], item['payment_method']): int(item['total'] * 100 / sales.count())
             for item in method_counts
         }
 
 
-        return payment_counts
+        return payment_percent
 
     except Exception as e:
         print(e)
