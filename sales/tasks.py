@@ -9,6 +9,9 @@ from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from datetime import datetime
 from django.db.models.functions import TruncDay
+from django.db.models.functions import ExtractWeekDay
+
+
 
 @shared_task
 def delete_sales_duplicates():
@@ -140,41 +143,38 @@ def get_sales_by_month(self, store_ids):
 
 
 @shared_task(bind=True)
-def get_sales_by_day(self, store_ids):
+def get_sales_by_weekday(self, store_ids):
     today = datetime.now()
 
     try:
-        # 🔹 Filtrar ventas del mes actual (año y mes coinciden con "today")
+        # 🔹 Filtrar ventas del año actual
         sales = (
             Sale.objects.filter(
                 store_id__in=store_ids,
                 created_at__year=today.year,
                 is_canceled=False
             )
-            .annotate(day=TruncDay("created_at"))
-            .values("store_id", "day")
+            # Django: domingo=1 ... sábado=7  (dejamos domingo como índice 0)
+            .annotate(weekday=ExtractWeekDay("created_at") - 1)
+            .values("store_id", "weekday")
             .annotate(total_amount=Sum("total"))
-            .order_by("store_id", "day")
+            .order_by("store_id", "weekday")
         )
 
-        # 🔹 Determinar número de días del mes actual
-        import calendar
-        num_days = calendar.monthrange(today.year, today.month)[1]
-
-        # 🔹 Inicializar estructura de datos
-        store_sales = {store_id: [0] * num_days for store_id in store_ids}
+        # 🔹 Inicializar estructura para los 7 días (domingo=0 ... sábado=6)
+        store_sales = {store_id: [0] * 7 for store_id in store_ids}
 
         # 🔹 Llenar datos de ventas por día
         for s in sales:
-            day_index = s["day"].day - 1
-            store_sales[s["store_id"]][day_index] = s["total_amount"] or 0
+            weekday_index = s["weekday"] or 0  # por si algún valor es None
+            store_sales[s["store_id"]][weekday_index] = s["total_amount"] or 0
 
         datasets = []
 
         colors = ["red", "blue", "green", "yellow", "purple"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
 
-        # 🔹 Crear dataset para cada tienda
+        # 🔹 Crear dataset por tienda
         for i, store in enumerate(stores):
             datasets.append({
                 "label": store.get_full_name(),
@@ -183,18 +183,18 @@ def get_sales_by_day(self, store_ids):
                 "backgroundColor": colors[i % len(colors)]
             })
 
-        # 🔹 Calcular promedio diario entre tiendas
+        # 🔹 Calcular promedio semanal entre tiendas
         num_stores = len(store_sales)
-        daily_averages = [
+        weekly_averages = [
             (sum(day[i] for day in store_sales.values()) / num_stores)
             if num_stores > 0 else 0
-            for i in range(num_days)
+            for i in range(7)
         ]
 
         if len(store_ids) > 1:
             datasets.append({
                 "label": "Promedio",
-                "data": daily_averages,
+                "data": weekly_averages,
                 "borderColor": "black",
                 "backgroundColor": "black"
             })
