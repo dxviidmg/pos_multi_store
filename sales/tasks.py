@@ -149,7 +149,6 @@ def get_sales_by_day(self, store_ids):
             Sale.objects.filter(
                 store_id__in=store_ids,
                 created_at__year=today.year,
-                created_at__month=today.month,
                 is_canceled=False
             )
             .annotate(day=TruncDay("created_at"))
