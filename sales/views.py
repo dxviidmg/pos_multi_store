@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
 from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product, CashFlow
+from products.models import StoreProduct, Product, CashFlow, Store
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404
 from logs.models import StoreProductLog
 from rest_framework.exceptions import NotFound
 from datetime import datetime
-from .tasks import get_sales_duplicates_task
+from .tasks import get_sales_duplicates_task, get_sales_current_year
 
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.
@@ -546,3 +546,16 @@ class CancelSale(APIView):
                 {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
                 status=status.HTTP_200_OK,
             )
+        
+
+
+
+@method_decorator(get_store(), name="dispatch")
+class SalesDashboardAsyncView(APIView):
+    def get(self, request):
+        tenant = self.request.user.get_tenant()
+        stores = Store.objects.filter(tenant=tenant, store_type="T")
+        store_ids = list(stores.values_list("id", flat=True))
+        
+        task = get_sales_current_year.delay(store_ids)
+        return Response({"task": task.id})
