@@ -105,10 +105,9 @@ def get_sales_current_year(self, store_ids):
             month_index = s["month"].month - 1
             store_sales[s["store_id"]][month_index] = s["total_amount"] or 0
 
-        # 🔹 Crear datasets finales
         datasets = []
 
-        colors = ["red", "blue", "green", "yellow"]
+        colors = ["red", "blue", "green", "yellow", "purple"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
         for i, store in enumerate(stores):
             datasets.append({
@@ -117,6 +116,18 @@ def get_sales_current_year(self, store_ids):
                 "borderColor": colors[i],
                 "backgroundColor": colors[i]
             })
+
+        num_stores = len(store_sales)
+        monthly_averages = [
+            (sum(month[i] for month in store_sales.values()) / num_stores) if num_stores > 0 else 0
+            for i in range(12)
+        ]
+        datasets.append({
+            "label": "Promedio",
+            "data": monthly_averages,
+            "borderColor": "black",
+            "backgroundColor": "gray"
+        })
 
         return datasets
 
