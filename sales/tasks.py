@@ -8,6 +8,7 @@ from datetime import date
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from datetime import datetime
+from django.db.models.functions import TruncDay
 
 @shared_task
 def delete_sales_duplicates():
@@ -81,9 +82,8 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
 
 
 @shared_task(bind=True)
-def get_sales_current_year(self, store_ids):    
+def get_sales_by_month(self, store_ids):    
     today = datetime.now()
-
 
     try:
         sales = (
@@ -122,12 +122,83 @@ def get_sales_current_year(self, store_ids):
             (sum(month[i] for month in store_sales.values()) / num_stores) if num_stores > 0 else 0
             for i in range(12)
         ]
-        datasets.append({
-            "label": "Promedio",
-            "data": monthly_averages,
-            "borderColor": "black",
-            "backgroundColor": "gray"
-        })
+        if len(store_ids) > 1:
+            datasets.append({
+                "label": "Promedio",
+                "data": monthly_averages,
+                "borderColor": "black",
+                "backgroundColor": "black"
+            })
+
+        return datasets
+
+    except Exception as e:
+        print(e)
+        self.update_state(state="FAILURE", meta={"error": str(e)})
+        raise
+
+
+
+@shared_task(bind=True)
+def get_sales_by_day(self, store_ids):
+    today = datetime.now()
+
+    try:
+        # 🔹 Filtrar ventas del mes actual (año y mes coinciden con "today")
+        sales = (
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                created_at__year=today.year,
+                created_at__month=today.month,
+                is_canceled=False
+            )
+            .annotate(day=TruncDay("created_at"))
+            .values("store_id", "day")
+            .annotate(total_amount=Sum("total"))
+            .order_by("store_id", "day")
+        )
+
+        # 🔹 Determinar número de días del mes actual
+        import calendar
+        num_days = calendar.monthrange(today.year, today.month)[1]
+
+        # 🔹 Inicializar estructura de datos
+        store_sales = {store_id: [0] * num_days for store_id in store_ids}
+
+        # 🔹 Llenar datos de ventas por día
+        for s in sales:
+            day_index = s["day"].day - 1
+            store_sales[s["store_id"]][day_index] = s["total_amount"] or 0
+
+        datasets = []
+
+        colors = ["red", "blue", "green", "yellow", "purple"]
+        stores = Store.objects.filter(id__in=store_ids).only("id", "name")
+
+        # 🔹 Crear dataset para cada tienda
+        for i, store in enumerate(stores):
+            datasets.append({
+                "label": store.get_full_name(),
+                "data": store_sales[store.id],
+                "borderColor": colors[i % len(colors)],
+                "backgroundColor": colors[i % len(colors)]
+            })
+
+        # 🔹 Calcular promedio diario entre tiendas
+        num_stores = len(store_sales)
+        daily_averages = [
+            (sum(day[i] for day in store_sales.values()) / num_stores)
+            if num_stores > 0 else 0
+            for i in range(num_days)
+        ]
+
+        if len(store_ids) > 1:
+            datasets.append({
+                "label": "Promedio",
+                "data": daily_averages,
+                "borderColor": "black",
+                "backgroundColor": "black"
+            })
 
         return datasets
 

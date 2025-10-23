@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404
 from logs.models import StoreProductLog
 from rest_framework.exceptions import NotFound
 from datetime import datetime
-from .tasks import get_sales_duplicates_task, get_sales_current_year
+from .tasks import get_sales_by_month, get_sales_by_day
 
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.
@@ -557,5 +557,6 @@ class SalesDashboardAsyncView(APIView):
         stores = Store.objects.filter(tenant=tenant, store_type="T")
         store_ids = list(stores.values_list("id", flat=True))
         
-        task = get_sales_current_year.delay(store_ids)
-        return Response({"task": task.id})
+        task1 = get_sales_by_month.delay(store_ids)
+        task2 = get_sales_by_day.delay(store_ids)
+        return Response({"task1": task1.id, "task2": task2.id})
