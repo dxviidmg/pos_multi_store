@@ -4,7 +4,10 @@ from .models import Sale
 from django.utils.timezone import now
 from .serializers import SaleAuditSerializer
 from products.models import Store
-
+from datetime import date
+from django.db.models import Sum
+from django.db.models.functions import TruncMonth
+from datetime import datetime
 
 @shared_task
 def delete_sales_duplicates():
@@ -72,5 +75,52 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
         return list(serializer.data)
 
     except Exception as e:
+        self.update_state(state="FAILURE", meta={"error": str(e)})
+        raise
+
+
+
+@shared_task(bind=True)
+def get_sales_current_year(self, store_ids):    
+    today = datetime.now()
+
+
+    try:
+        sales = (
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                created_at__year=today.year,
+                is_canceled=False
+            )
+            .annotate(month=TruncMonth("created_at"))
+            .values("store_id", "month")
+            .annotate(total_amount=Sum("total"))
+            .order_by("store_id", "month")
+        )
+
+        # 🔹 Estructurar los resultados en un diccionario por tienda
+        store_sales = {store_id: [0] * 12 for store_id in store_ids}
+
+        for s in sales:
+            month_index = s["month"].month - 1
+            store_sales[s["store_id"]][month_index] = s["total_amount"] or 0
+
+        # 🔹 Crear datasets finales
+        datasets = []
+
+        colors = ["red", "blue", "green", "yellow"]
+        stores = Store.objects.filter(id__in=store_ids).only("id", "name")
+        for i, store in enumerate(stores):
+            datasets.append({
+                "label": store.get_full_name(),
+                "data": store_sales[store.id],
+                "borderColor": colors[i],
+                "backgroundColor": colors[i]
+            })
+
+        return datasets
+
+    except Exception as e:
+        print(e)
         self.update_state(state="FAILURE", meta={"error": str(e)})
         raise
