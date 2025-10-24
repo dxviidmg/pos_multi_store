@@ -11,8 +11,6 @@ def run():
         created_at__gte=datetime(2025, 10, 15)
     ).order_by("id")
 
-    print(len(store_products_logs))
-
     for index, store_products_log in enumerate(
         tqdm(store_products_logs, desc="Procesando", unit="item")
     ):
