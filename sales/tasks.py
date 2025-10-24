@@ -302,8 +302,6 @@ def get_sales_percentage(self, store_ids):
             store = Store.objects.get(id=s["store_id"])
             sales_with_percentage[store.get_full_name()] = round(percentage, 2)
             
-
-        print(sales_with_percentage)
         return sales_with_percentage
 
     except Exception as e:
@@ -336,11 +334,11 @@ def get_payment_methods_percentage(self, store_ids):
 
         # 🔹 Generar diccionario con nombres legibles y conteos
         payment_percent = {
-            payment_method_dict.get(item['payment_method'], item['payment_method']): int(item['total'] * 100 / sales.count())
+            payment_method_dict.get(item['payment_method'], item['payment_method']): round(item['total'] * 100 / sales.count(), 2)
             for item in method_counts
         }
 
-
+        payment_percent = dict(sorted(payment_percent.items()))
         return payment_percent
 
     except Exception as e:
