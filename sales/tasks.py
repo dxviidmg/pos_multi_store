@@ -111,7 +111,7 @@ def get_sales_by_month(self, store_ids):
 
         datasets = []
 
-        colors = ["blue", "red", "yellow", "purple"]
+        colors = ["blue", "red", "yellow", "green"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
         for i, store in enumerate(stores):
             datasets.append({
@@ -172,7 +172,7 @@ def get_sales_by_weekday(self, store_ids):
 
         datasets = []
 
-        colors = ["blue", "red", "yellow", "purple"]
+        colors = ["blue", "red", "yellow", "green"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
 
         # 🔹 Crear dataset por tienda
@@ -239,7 +239,7 @@ def get_sales_by_hour(self, store_ids):
 
         datasets = []
 
-        colors = ["blue", "red", "yellow", "purple"]
+        colors = ["blue", "red", "yellow", "green"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
 
         # 🔹 Crear dataset por tienda
