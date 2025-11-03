@@ -1,17 +1,14 @@
 from celery import shared_task
-from datetime import datetime
+from datetime import datetime, timedelta
 from .models import Sale, Payment
 from django.utils.timezone import now
 from .serializers import SaleAuditSerializer
 from products.models import Store
-from datetime import date
-from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from datetime import datetime
-from django.db.models.functions import ExtractHour
-from django.db.models.functions import ExtractWeekDay
+from django.db.models.functions import ExtractHour, ExtractWeekDay
 from django.db.models import Count
-from django.db.models import F
+from django.db.models.functions import TruncMonth
 
 
 @shared_task
@@ -25,20 +22,13 @@ def delete_sales_duplicates():
 
 
 @shared_task(bind=True)
-def get_sales_duplicates_task(self, store_ids, start_date, end_date):    
+def get_sales_duplicates_task(self, store_ids, start_date, end_date):
     try:
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "percent": 0,
-                "total": 0
-            }
-        )
-                
+        self.update_state(state="PROGRESS", meta={"percent": 0, "total": 0})
+
         sales = Sale.objects.filter(
-            store_id__in=store_ids,
-            created_at__date__range=(start_date, end_date)
+            store_id__in=store_ids, created_at__date__range=(start_date, end_date)
         )
 
         total = sales.count()
@@ -47,14 +37,9 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
             return []
 
         self.update_state(
-            state="PROGRESS",
-            meta={
-                "percent": 1,
-                "total": 0,
-                "total": total
-            }
+            state="PROGRESS", meta={"percent": 1, "total": 0, "total": total}
         )
-            
+
         ids = []
         update_every = max(total // 20, 1)
         for i, sale in enumerate(sales.iterator(), start=1):
@@ -84,21 +69,19 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
         raise
 
 
-
 @shared_task(bind=True)
-def get_sales_by_month(self, store_ids):    
+def get_sales_by_month(self, store_ids):
     today = datetime.now()
-
     try:
         sales = (
             Sale.objects.filter(
                 store_id__in=store_ids,
                 created_at__year=today.year,
-                is_canceled=False
+                is_canceled=False,
             )
             .annotate(month=TruncMonth("created_at"))
             .values("store_id", "month")
-            .annotate(total_amount=Sum("total"))
+            .annotate(sales_count=Count("id"))
             .order_by("store_id", "month")
         )
 
@@ -107,34 +90,45 @@ def get_sales_by_month(self, store_ids):
 
         for s in sales:
             month_index = s["month"].month - 1
-            store_sales[s["store_id"]][month_index] = s["total_amount"] or 0
+            store_sales[s["store_id"]][month_index] = s["sales_count"] or 0
 
         datasets = []
 
         colors = ["blue", "red", "yellow", "green"]
         stores = Store.objects.filter(id__in=store_ids).only("id", "name")
+
         for i, store in enumerate(stores):
-            datasets.append({
-                "label": store.get_full_name(),
-                "data": store_sales[store.id],
-                "borderColor": colors[i],
-                "backgroundColor": colors[i]
-            })
+            datasets.append(
+                {
+                    "label": store.get_full_name(),
+                    "data": store_sales[store.id],
+                    "borderColor": colors[i],
+                    "backgroundColor": colors[i],
+                }
+            )
 
         num_stores = len(store_sales)
         monthly_averages = [
-            (sum(month[i] for month in store_sales.values()) / num_stores) if num_stores > 0 else 0
+            (
+                (sum(month[i] for month in store_sales.values()) / num_stores)
+                if num_stores > 0
+                else 0
+            )
             for i in range(12)
         ]
+
         if len(store_ids) > 1:
-            datasets.append({
-                "label": "Promedio",
-                "data": monthly_averages,
-                "borderColor": "black",
-                "backgroundColor": "black"
-            })
+            datasets.append(
+                {
+                    "label": "Promedio",
+                    "data": monthly_averages,
+                    "borderColor": "black",
+                    "backgroundColor": "black",
+                }
+            )
 
         return datasets
+
 
     except Exception as e:
         print(e)
@@ -142,33 +136,32 @@ def get_sales_by_month(self, store_ids):
         raise
 
 
-
 @shared_task(bind=True)
 def get_sales_by_weekday(self, store_ids):
-    today = datetime.now()
+    now = datetime.now()
+    one_month_ago = now - timedelta(days=30)
 
     try:
-        # 🔹 Filtrar ventas del año actual
+        # 🔹 Filtrar ventas del último mes (no canceladas)
         sales = (
             Sale.objects.filter(
                 store_id__in=store_ids,
-                created_at__year=today.year,
-                is_canceled=False
+                created_at__range=[one_month_ago, now],
+                is_canceled=False,
             )
-            # Django: domingo=1 ... sábado=7  (dejamos domingo como índice 0)
             .annotate(weekday=ExtractWeekDay("created_at") - 1)
             .values("store_id", "weekday")
-            .annotate(total_amount=Sum("total"))
+            .annotate(sales_count=Count("id"))
             .order_by("store_id", "weekday")
         )
 
         # 🔹 Inicializar estructura para los 7 días (domingo=0 ... sábado=6)
         store_sales = {store_id: [0] * 7 for store_id in store_ids}
 
-        # 🔹 Llenar datos de ventas por día
+        # 🔹 Llenar datos de cantidad de ventas por día
         for s in sales:
             weekday_index = s["weekday"] or 0  # por si algún valor es None
-            store_sales[s["store_id"]][weekday_index] = s["total_amount"] or 0
+            store_sales[s["store_id"]][weekday_index] = s["sales_count"] or 0
 
         datasets = []
 
@@ -177,65 +170,69 @@ def get_sales_by_weekday(self, store_ids):
 
         # 🔹 Crear dataset por tienda
         for i, store in enumerate(stores):
-            datasets.append({
-                "label": store.get_full_name(),
-                "data": store_sales[store.id],
-                "borderColor": colors[i % len(colors)],
-                "backgroundColor": colors[i % len(colors)]
-            })
+            datasets.append(
+                {
+                    "label": store.get_full_name(),
+                    "data": store_sales[store.id],
+                    "borderColor": colors[i % len(colors)],
+                    "backgroundColor": colors[i % len(colors)],
+                }
+            )
 
         # 🔹 Calcular promedio semanal entre tiendas
         num_stores = len(store_sales)
         weekly_averages = [
-            (sum(day[i] for day in store_sales.values()) / num_stores)
-            if num_stores > 0 else 0
+            (
+                (sum(day[i] for day in store_sales.values()) / num_stores)
+                if num_stores > 0
+                else 0
+            )
             for i in range(7)
         ]
 
         if len(store_ids) > 1:
-            datasets.append({
-                "label": "Promedio",
-                "data": weekly_averages,
-                "borderColor": "black",
-                "backgroundColor": "black"
-            })
+            datasets.append(
+                {
+                    "label": "Promedio",
+                    "data": weekly_averages,
+                    "borderColor": "black",
+                    "backgroundColor": "black",
+                }
+            )
 
         return datasets
-
     except Exception as e:
         print(e)
         self.update_state(state="FAILURE", meta={"error": str(e)})
         raise
 
 
-
-
-
 @shared_task(bind=True)
 def get_sales_by_hour(self, store_ids):
-    today = datetime.now()
+    now = datetime.now()
+    one_month_ago = now - timedelta(days=30)
 
     try:
-        # 🔹 Filtrar ventas del día actual (puedes cambiar a otro rango si quieres todo el año)
+        # 🔹 Filtrar ventas de los últimos 30 días (no canceladas)
         sales = (
             Sale.objects.filter(
                 store_id__in=store_ids,
-                created_at__year=today.year,  # solo hoy
-                is_canceled=False
+                created_at__range=[one_month_ago, now],
+                is_canceled=False,
             )
             .annotate(hour=ExtractHour("created_at"))
             .values("store_id", "hour")
-            .annotate(total_amount=Sum("total"))
+            .annotate(sales_count=Count("id"))
             .order_by("store_id", "hour")
         )
 
         # 🔹 Inicializar estructura para 24 horas
         store_sales = {store_id: [0] * 24 for store_id in store_ids}
 
-        # 🔹 Llenar datos de ventas por hora
+        # 🔹 Llenar datos de cantidad de ventas por hora
         for s in sales:
             hour_index = s["hour"] or 0
-            store_sales[s["store_id"]][hour_index] = s["total_amount"] or 0
+            store_sales[s["store_id"]][hour_index] = s["sales_count"] or 0
 
         datasets = []
 
@@ -244,28 +241,35 @@ def get_sales_by_hour(self, store_ids):
 
         # 🔹 Crear dataset por tienda
         for i, store in enumerate(stores):
-            datasets.append({
-                "label": store.get_full_name(),
-                "data": store_sales[store.id],
-                "borderColor": colors[i % len(colors)],
-                "backgroundColor": colors[i % len(colors)]
-            })
+            datasets.append(
+                {
+                    "label": store.get_full_name(),
+                    "data": store_sales[store.id],
+                    "borderColor": colors[i % len(colors)],
+                    "backgroundColor": colors[i % len(colors)],
+                }
+            )
 
         # 🔹 Calcular promedio por hora entre tiendas
         num_stores = len(store_sales)
         hourly_averages = [
-            (sum(day[i] for day in store_sales.values()) / num_stores)
-            if num_stores > 0 else 0
+            (
+                (sum(day[i] for day in store_sales.values()) / num_stores)
+                if num_stores > 0
+                else 0
+            )
             for i in range(24)
         ]
 
         if len(store_ids) > 1:
-            datasets.append({
-                "label": "Promedio",
-                "data": hourly_averages,
-                "borderColor": "black",
-                "backgroundColor": "black"
-            })
+            datasets.append(
+                {
+                    "label": "Promedio",
+                    "data": hourly_averages,
+                    "borderColor": "black",
+                    "backgroundColor": "black",
+                }
+            )
 
         return datasets
 
@@ -275,33 +279,30 @@ def get_sales_by_hour(self, store_ids):
         raise
 
 
-
 @shared_task(bind=True)
 def get_sales_percentage(self, store_ids):
-    today = datetime.now()
-
+    now = datetime.now()
+    one_month_ago = now - timedelta(days=30)
     try:
         sales = (
             Sale.objects.filter(
-                store_id__in=store_ids,
-                created_at__year=today.year,
-                is_canceled=False
+                store_id__in=store_ids, created_at__range=[one_month_ago, now], is_canceled=False
             )
             .values("store_id")
-            .annotate(total_amount=Sum("total"))
+            .annotate(sales_count=Count("id"))
         )
 
         # 🔹 Calcular el total general
-        total_general = sum(s["total_amount"] or 0 for s in sales)
+        total_general = sum(s["sales_count"] or 0 for s in sales)
 
         # 🔹 Agregar el porcentaje a cada tienda
         sales_with_percentage = {}
         for s in sales:
-            total = s["total_amount"] or 0
+            total = s["sales_count"] or 0
             percentage = (total / total_general * 100) if total_general > 0 else 0
             store = Store.objects.get(id=s["store_id"])
             sales_with_percentage[store.get_full_name()] = round(percentage, 2)
-            
+
         return sales_with_percentage
 
     except Exception as e:
@@ -312,21 +313,19 @@ def get_sales_percentage(self, store_ids):
 
 @shared_task(bind=True)
 def get_payment_methods_percentage(self, store_ids):
-    today = datetime.now()
+    now = datetime.now()
+    one_month_ago = now - timedelta(days=30)
 
     try:
         sales = Sale.objects.filter(
-            store_id__in=store_ids,
-            created_at__year=today.year,
-            is_canceled=False
+            store_id__in=store_ids, created_at__range=[one_month_ago, now], is_canceled=False
         )
 
         # 🔹 Contar pagos por método
         method_counts = (
-            Payment.objects
-            .filter(sale__in=sales)
-            .values('payment_method')
-            .annotate(total=Count('id'))
+            Payment.objects.filter(sale__in=sales)
+            .values("payment_method")
+            .annotate(total=Count("id"))
         )
 
         # 🔹 Diccionario de códigos a nombres legibles
@@ -334,7 +333,9 @@ def get_payment_methods_percentage(self, store_ids):
 
         # 🔹 Generar diccionario con nombres legibles y conteos
         payment_percent = {
-            payment_method_dict.get(item['payment_method'], item['payment_method']): round(item['total'] * 100 / sales.count(), 2)
+            payment_method_dict.get(
+                item["payment_method"], item["payment_method"]
+            ): round(item["total"] * 100 / sales.count(), 2)
             for item in method_counts
         }
 
