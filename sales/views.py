@@ -94,6 +94,19 @@ class SaleViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             for product_data in store_products_data:
                 product_store = StoreProduct.objects.get(id=product_data["id"])
+                if product_store.stock < product_data["quantity"]:
+                    previous_stock = product_store.stock
+
+                    product_store.stock = product_data["quantity"]
+                    product_store.save()
+
+                    StoreProductLog.objects.create(
+                    store_product=product_store,
+                    user=self.request.user,
+                    previous_stock=previous_stock,
+                    updated_stock=product_data["quantity"],
+                    action="A")
+
                 previous_stock = product_store.stock
                 updated_stock = previous_stock - product_data["quantity"]
 
