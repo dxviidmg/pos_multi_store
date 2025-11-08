@@ -11,7 +11,8 @@ from .serializers import (
     StoreWorkerSerializer,
     DepartmentSerializer,
     StoreProductForStockSerializer,
-    StoreBaseSerializer
+    StoreBaseSerializer,
+    DistributionSerializer,
 )
 from .models import (
     StoreProduct,
@@ -22,6 +23,7 @@ from .models import (
     CashFlow,
     StoreWorker,
     Department,
+    Distribution,
 )
 from django.db.models import Q
 from rest_framework.views import APIView
@@ -44,7 +46,6 @@ from logs.models import StoreProductLog
 
 from django.http import JsonResponse
 from django.db.models import Sum
-
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -83,10 +84,8 @@ class StoreProductViewSet(viewsets.ModelViewSet):
                 filters["store"] = store
 
             queryset = StoreProduct.objects.filter(**filters).select_related("product")
-            
-            return queryset.order_by(
-                "product__brand__name", "product__name"
-            )
+
+            return queryset.order_by("product__brand__name", "product__name")
 
         # --- Búsqueda general ---
         product_filters = Q(brand__tenant=tenant)
@@ -147,18 +146,21 @@ class TransferViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         store = self.request.store
+        print('hola')
 
-        return Transfer.objects.filter(
-            Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
-        ).order_by('-id')
+    def get_queryset(self):
+        store = self.request.store
+        queryset = Transfer.objects.all().order_by("-id")
 
-#    def create(self, request, *args, **kwargs):
-#        task = create_transfer_task.delay(request.data)
-#        return Response(
-#            {"task_id": task.id, "status": "processing"},
-#            status=status.HTTP_202_ACCEPTED,
-#        )
+        # Si NO es un GET a detalle (es decir, es listado)
+        if self.action == "list":
+            queryset = queryset.filter(
+                Q(origin_store=store) | Q(destination_store=store),
+                transfer_datetime=None,
+                distribution=None,
+            )
 
+        return queryset
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
@@ -194,6 +196,7 @@ class StoreViewSet(viewsets.ModelViewSet):
         if self.request.GET.get("start_date"):
             return StoreCashSummarySerializer
         return StoreBaseSerializer
+
     def get_serializer(self, *args, **kwargs):
         kwargs.setdefault("context", {}).update(
             {"start_date": self.request.GET.get("start_date", None)}
@@ -298,7 +301,7 @@ class ConfirmProductTransfersView(APIView):
                         updated_stock=destination_store_product.stock,
                         action="E",  # Acción: Entrada
                         movement="TR",  # Movimiento: Transferencia recibida
-                        store_related=origin_store
+                        store_related=origin_store,
                     )
                 )
 
@@ -317,7 +320,7 @@ class ConfirmProductTransfersView(APIView):
                         updated_stock=origin_store_product.stock,
                         action="S",  # Acción: Salida
                         movement="TR",  # Movimiento: Transferencia enviada
-                        store_related=destination_store
+                        store_related=destination_store,
                     )
                 )
 
@@ -336,79 +339,65 @@ class ConfirmProductTransfersView(APIView):
 @method_decorator(get_store(), name="dispatch")
 class ConfirmDistributionView(APIView):
     def post(self, request):
-        products = request.data.get("products")
-        destination_store_id = request.data.get("destination_store")
-        origin_store = self.request.store
+        print(request.data)
+        id = request.data.get("id")
 
-        if not products or not destination_store_id:
-            return Response(
-                {"status": "Missing required data"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        distribution = Distribution.objects.get(id=id)
+        transfers = distribution.transfers.all()
 
         logs = []  # Lista para almacenar los logs de StoreProductLog
 
-        for product_data in products:
-            product_id = product_data["product"]["id"]
-            quantity = product_data.get("quantity")
-            if not product_id or quantity is None or quantity <= 0:
-                return Response(
-                    {"status": "Id o cantidad invalida"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        for transfer in transfers:
 
-            try:
-                # Obtener y actualizar el stock en la tienda destino
-                destination_store_product = StoreProduct.objects.get(
-                    product=product_id, store=destination_store_id
-                )
-                previous_dest_stock = destination_store_product.stock
-                destination_store_product.stock += quantity
-                destination_store_product.save()
+            # Obtener y actualizar el stock en la tienda destino
+            destination_store_product = StoreProduct.objects.get(
+                product=transfer.product, store=transfer.destination_store
+            )
+            previous_dest_stock = destination_store_product.stock
+            destination_store_product.stock += transfer.quantity
+            destination_store_product.save()
 
-                # Log para la tienda destino
-                logs.append(
-                    StoreProductLog(
-                        store_product=destination_store_product,
-                        user=request.user,
-                        previous_stock=previous_dest_stock,
-                        updated_stock=destination_store_product.stock,
-                        action="E",  # Acción: Entrada
-                        movement="DI",  # Movimiento: Distribución recibida
-                        store_related=origin_store
-                    )
+            # Log para la tienda destino
+            logs.append(
+                StoreProductLog(
+                    store_product=destination_store_product,
+                    user=request.user,
+                    previous_stock=previous_dest_stock,
+                    updated_stock=destination_store_product.stock,
+                    action="E",  # Acción: Entrada
+                    movement="DI",  # Movimiento: Distribución recibida
+                    store_related=transfer.origin_store,
                 )
+            )
 
-                # Obtener y actualizar el stock en la tienda origen
-                origin_store_product = StoreProduct.objects.get(
-                    product=product_id, store=origin_store.id
-                )
-                if origin_store_product.stock < quantity:
-                    return Response(
-                        {"status": f"Insufficient stock for product {product_id}"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                previous_origin_stock = origin_store_product.stock
-                origin_store_product.stock -= quantity
-                origin_store_product.save()
+            # Obtener y actualizar el stock en la tienda origen
+            origin_store_product = StoreProduct.objects.get(
+                product=transfer.product, store=transfer.origin_store
+            )
+            previous_origin_stock = origin_store_product.stock
+            origin_store_product.stock -= transfer.quantity
+            origin_store_product.save()
 
-                # Log para la tienda origen
-                logs.append(
-                    StoreProductLog(
-                        store_product=origin_store_product,
-                        user=request.user,
-                        previous_stock=previous_origin_stock,
-                        updated_stock=origin_store_product.stock,
-                        action="S",  # Acción: Salida
-                        movement="DI",  # Movimiento: Distribución enviada
-                        store_related=destination_store_product.store
-                    )
+            # Log para la tienda origen
+            logs.append(
+                StoreProductLog(
+                    store_product=origin_store_product,
+                    user=request.user,
+                    previous_stock=previous_origin_stock,
+                    updated_stock=origin_store_product.stock,
+                    action="S",  # Acción: Salida
+                    movement="DI",  # Movimiento: Distribución enviada
+                    store_related=destination_store_product.store,
                 )
+            )
+            
 
-            except StoreProduct.DoesNotExist:
-                return Response(
-                    {"status": "Product stock not found in one of the stores"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+                        # Update the transfer timestamp
+            transfer.transfer_datetime = datetime.now()
+            transfer.save()
+
+        distribution.transfer_datetime = datetime.now()
+        distribution.save()
 
         # Guardar todos los logs en una sola operación
         StoreProductLog.objects.bulk_create(logs)
@@ -570,12 +559,12 @@ class ProductImportValidationView(APIView):
                 brand = data_row["brand"]
                 data_row["excel_row"] = _ + 2
 
-                if not code or code == '':
+                if not code or code == "":
                     data_row["status"] = "Sin código"
                     data.append(data_row)
                     continue
 
-                if not brand or brand == '':
+                if not brand or brand == "":
                     data_row["status"] = "Sin marca"
                     data.append(data_row)
                     continue
@@ -821,7 +810,9 @@ class ProductReassignView(APIView):
 class ProductUpperCodeView(APIView):
     def post(self, request):
         tenant = self.request.user.get_tenant()
-        products = Product.objects.filter(brand__tenant=tenant).filter(Q(code__regex=r"[a-z]") | Q(code__contains="'"))
+        products = Product.objects.filter(brand__tenant=tenant).filter(
+            Q(code__regex=r"[a-z]") | Q(code__contains="'")
+        )
         products_to_update = []
         for product in products:
             product.code = product.code.upper().replace("'", "-")
@@ -842,7 +833,9 @@ class CashFlowViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         store = self.request.store
         date = self.request.GET.get("date")
-        return CashFlow.objects.filter(store=store, created_at__date=date).order_by('id')
+        return CashFlow.objects.filter(store=store, created_at__date=date).order_by(
+            "id"
+        )
 
     @action(detail=False, methods=["get"])
     def choices(self, request):
@@ -1097,6 +1090,7 @@ class ImportCanIcludeQuantityView(APIView):
             return Response(True, status=status.HTTP_200_OK)
         return Response(False, status=status.HTTP_200_OK)
 
+
 @method_decorator(get_store(), name="dispatch")
 class StockInOtherStores(APIView):
     def get(self, request):
@@ -1105,15 +1099,20 @@ class StockInOtherStores(APIView):
         store = request.store
         code = request.GET.get("code", "")
 
-        product = Product.objects.select_related("brand").get(code=code, brand__tenant=tenant)
+        product = Product.objects.select_related("brand").get(
+            code=code, brand__tenant=tenant
+        )
         store_product = StoreProduct.objects.get(store=store, product=product)
 
-        store_type_filter = {} if tenant.displays_stock_in_storages else {"store__store_type": "T"}
+        store_type_filter = (
+            {} if tenant.displays_stock_in_storages else {"store__store_type": "T"}
+        )
 
         sps = (
             StoreProduct.objects.filter(product=product, **store_type_filter)
             .exclude(id=store_product.id)
-            .select_related("store").order_by('-store__store_type', 'store__name')
+            .select_related("store")
+            .order_by("-store__store_type", "store__name")
         )
 
         data = [
@@ -1126,7 +1125,60 @@ class StockInOtherStores(APIView):
         ]
 
         return Response(data, status=status.HTTP_200_OK)
-    
+
 
 def ping(request):
     return JsonResponse({"status": "alive"})
+
+
+@method_decorator(get_store(), name="dispatch")
+class DistributionViewSet(viewsets.ModelViewSet):
+    serializer_class = DistributionSerializer
+
+    def get_queryset(self):
+        store = self.request.store
+
+        return Distribution.objects.filter(
+            Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
+        ).order_by("-id")
+
+    def perform_create(self, serializer):
+        origin_store = self.request.store
+        print(origin_store)
+        distribution_instance = serializer.save(origin_store=origin_store)
+
+        products = self.request.data.get("products")
+        destination_store_id = self.request.data.get("destination_store")
+
+        if not products or not destination_store_id:
+            return Response(
+                {"status": "Missing required data"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        #        destination_store = Store.objects.get(id=destination_store_id)
+        for product_data in products:
+            product_id = product_data["product"]["id"]
+            quantity = product_data.get("quantity")
+            if not product_id or quantity is None or quantity <= 0:
+                return Response(
+                    {"status": "Id o cantidad invalida"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                data_transfer = {
+                    "distribution": distribution_instance,
+                    "origin_store": origin_store,
+                    "destination_store_id": destination_store_id,
+                    "product_id": product_id,
+                    "quantity": quantity,
+                }
+                Transfer.objects.create(**data_transfer)
+
+            except StoreProduct.DoesNotExist:
+                return Response(
+                    {"status": "Product stock not found in one of the stores"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        return distribution_instance

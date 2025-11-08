@@ -157,7 +157,6 @@ class StoreProduct(models.Model):
         transfers = self.store.transfers_from.filter(
             product=self.product, transfer_datetime=None
         )
-
         stock_reserved_in_transfers = sum(transfer.quantity for transfer in transfers)
         stock_reserved_in_reservations = (
             self.store.sales
@@ -165,15 +164,28 @@ class StoreProduct(models.Model):
             .aggregate(total_quantity=Sum('products_sale__quantity'))['total_quantity'] or 0
         )
 
-
-
         return stock_reserved_in_transfers + stock_reserved_in_reservations
 
     def calculate_available_stock(self):
         return self.stock - self.calculate_reserved_stock()
 
+class Distribution(CreatedAtModel):
+    origin_store = models.ForeignKey(
+        Store, related_name="distributions_from", on_delete=models.CASCADE
+    )
+    destination_store = models.ForeignKey(
+        Store, related_name="distributions_to", on_delete=models.CASCADE
+    )
+    transfer_datetime = models.DateTimeField(null=True, blank=True)
+
+
+    def __str__(self):
+        return f"Distribución de {self.origin_store.get_full_name()} a {self.destination_store.get_full_name()}"
 
 class Transfer(CreatedAtModel):
+    distribution = models.ForeignKey(
+        Distribution, related_name="transfers", on_delete=models.CASCADE, null=True, blank=True
+    )
     origin_store = models.ForeignKey(
         Store, related_name="transfers_from", on_delete=models.CASCADE
     )
@@ -185,7 +197,7 @@ class Transfer(CreatedAtModel):
     transfer_datetime = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"Transfer of {self.quantity} {self.product.name} from {self.origin_store.name} to {self.destination_store.name}"
+        return f"Transferencia de {self.quantity}x{self.product.name} de {self.origin_store.name} a {self.destination_store.name}"
 
 
 
