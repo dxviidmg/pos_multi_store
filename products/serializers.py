@@ -7,7 +7,7 @@ from .models import (
     Brand,
     CashFlow,
     StoreWorker,
-    Department
+    Department, Distribution
 )
 from django.core.exceptions import ValidationError
 from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary_by_department, calculate_total_sales_by_seller
@@ -165,6 +165,7 @@ class StoreProductForStockSerializer(serializers.ModelSerializer):
 class TransferSerializer(serializers.ModelSerializer):
     product_code = serializers.SerializerMethodField()
     product_description = serializers.SerializerMethodField()
+    editable_product_max_stock = serializers.SerializerMethodField()
     description = serializers.SerializerMethodField()
 
     def get_product_code(self, obj):
@@ -181,6 +182,11 @@ class TransferSerializer(serializers.ModelSerializer):
         elif store == obj.origin_store:
             return "Le proveere este producto a " + obj.destination_store.__str__()
         return "No tengo gerencia entre traspaso"
+
+    def get_editable_product_max_stock(self, obj):
+        store_product = StoreProduct.objects.get(product=obj.product, store=obj.origin_store)
+        
+        return obj.quantity + store_product.calculate_available_stock()
 
     class Meta:
         model = Transfer
@@ -293,3 +299,17 @@ class StoreProductAuditSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreProduct
         fields = ["id", "product_code", "product_name", "store_name", "stock"]
+
+
+
+class DistributionSerializer(serializers.ModelSerializer):
+    origin_store = serializers.PrimaryKeyRelatedField(read_only=True)
+    transfers = TransferSerializer(read_only=True, many=True)
+    description = serializers.SerializerMethodField()
+
+    def get_description(self, obj):
+        return obj.__str__()
+    
+    class Meta:
+        model = Distribution
+        fields = "__all__"
