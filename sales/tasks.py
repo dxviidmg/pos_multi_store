@@ -160,8 +160,8 @@ def get_sales_by_weekday(self, store_ids):
 
         # 🔹 Llenar datos de cantidad de ventas por día
         for s in sales:
-            weekday_index = s["weekday"]/4 or 0  # por si algún valor es None
-            store_sales[s["store_id"]][weekday_index] = s["sales_count"] or 0
+            weekday_index = s["weekday"] or 0  # por si algún valor es None
+            store_sales[s["store_id"]][weekday_index] = s["sales_count"]/4 or 0
 
         datasets = []
 
