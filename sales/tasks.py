@@ -139,7 +139,7 @@ def get_sales_by_month(self, store_ids):
 @shared_task(bind=True)
 def get_sales_by_weekday(self, store_ids):
     now = datetime.now()
-    one_month_ago = now - timedelta(days=30)
+    one_month_ago = now - timedelta(days=28)
 
     try:
         # 🔹 Filtrar ventas del último mes (no canceladas)
@@ -160,7 +160,7 @@ def get_sales_by_weekday(self, store_ids):
 
         # 🔹 Llenar datos de cantidad de ventas por día
         for s in sales:
-            weekday_index = s["weekday"] or 0  # por si algún valor es None
+            weekday_index = s["weekday"]/4 or 0  # por si algún valor es None
             store_sales[s["store_id"]][weekday_index] = s["sales_count"] or 0
 
         datasets = []
@@ -210,7 +210,7 @@ def get_sales_by_weekday(self, store_ids):
 @shared_task(bind=True)
 def get_sales_by_hour(self, store_ids):
     now = datetime.now()
-    one_month_ago = now - timedelta(days=30)
+    one_month_ago = now - timedelta(days=28)
 
     try:
         # 🔹 Filtrar ventas de los últimos 30 días (no canceladas)
@@ -232,7 +232,7 @@ def get_sales_by_hour(self, store_ids):
         # 🔹 Llenar datos de cantidad de ventas por hora
         for s in sales:
             hour_index = s["hour"] or 0
-            store_sales[s["store_id"]][hour_index] = s["sales_count"] or 0
+            store_sales[s["store_id"]][hour_index] = s["sales_count"]/4 or 0
 
         datasets = []
 
@@ -261,6 +261,8 @@ def get_sales_by_hour(self, store_ids):
             for i in range(24)
         ]
 
+        print(hourly_averages)
+
         if len(store_ids) > 1:
             datasets.append(
                 {
@@ -282,7 +284,7 @@ def get_sales_by_hour(self, store_ids):
 @shared_task(bind=True)
 def get_sales_percentage(self, store_ids):
     now = datetime.now()
-    one_month_ago = now - timedelta(days=30)
+    one_month_ago = now - timedelta(days=28)
     try:
         sales = (
             Sale.objects.filter(
