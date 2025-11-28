@@ -4,7 +4,7 @@ from tenants.models import Tenant, CreatedAtModel
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
-
+from django.db.models import Q
 
 class Base(models.Model):
     name = models.CharField(max_length=30)
@@ -62,8 +62,6 @@ class Store(Base):
     def get_store_printer(self):
         store_printer = self.printer.filter(store=self).first()
 
-
-
         if store_printer:
             return store_printer.id
         return False
@@ -89,6 +87,15 @@ class Store(Base):
     def count_workers(self):
         return self.workers.all().count()
 
+    def count_pending_distributions(self):
+        return Distribution.objects.filter(
+            Q(origin_store=self) | Q(destination_store=self), transfer_datetime=None
+        ).count()
+    
+    def count_pending_transfers(self):
+        return Transfer.objects.filter(
+            Q(origin_store=self) | Q(destination_store=self), transfer_datetime=None, distribution=None
+        ).count()
 
 class Product(Base):
     def path(self, filename):

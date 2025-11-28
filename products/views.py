@@ -146,10 +146,6 @@ class TransferViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         store = self.request.store
-        print('hola')
-
-    def get_queryset(self):
-        store = self.request.store
         queryset = Transfer.objects.all().order_by("-id")
 
         # Si NO es un GET a detalle (es decir, es listado)
@@ -339,17 +335,12 @@ class ConfirmProductTransfersView(APIView):
 @method_decorator(get_store(), name="dispatch")
 class ConfirmDistributionView(APIView):
     def post(self, request):
-        print(request.data)
         id = request.data.get("id")
-
         distribution = Distribution.objects.get(id=id)
         transfers = distribution.transfers.all()
-
-        logs = []  # Lista para almacenar los logs de StoreProductLog
+        logs = []
 
         for transfer in transfers:
-
-            # Obtener y actualizar el stock en la tienda destino
             destination_store_product = StoreProduct.objects.get(
                 product=transfer.product, store=transfer.destination_store
             )
@@ -1144,7 +1135,6 @@ class DistributionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         origin_store = self.request.store
-        print(origin_store)
         distribution_instance = serializer.save(origin_store=origin_store)
 
         products = self.request.data.get("products")

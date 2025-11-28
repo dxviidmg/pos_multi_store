@@ -261,8 +261,6 @@ def get_sales_by_hour(self, store_ids):
             for i in range(24)
         ]
 
-        print(hourly_averages)
-
         if len(store_ids) > 1:
             datasets.append(
                 {
