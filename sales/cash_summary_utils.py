@@ -52,6 +52,7 @@ def calculate_cash_summary(store, date=None, start_date=None, end_date=None):
     for p in payments_grouped:
         payments_dict[p["payment_method"]] = p["total_amount"]
 
+    
     # --- Construcción de resultados ---
     cash_summary = [
         {
@@ -101,6 +102,16 @@ def calculate_cash_summary(store, date=None, start_date=None, end_date=None):
             {
                 "name": "Ventas canceladas",
                 "amount": sales_canceled.count(),
+                "total_data": True,
+            },
+            {
+                "name": "Distribuciones pendientes",
+                "amount": store.count_pending_distributions(),
+                "total_data": True,
+            },
+            {
+                "name": "Traspasos pendientes",
+                "amount": store.count_pending_transfers(),
                 "total_data": True,
             },
         ]
