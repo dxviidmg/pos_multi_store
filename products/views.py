@@ -46,7 +46,7 @@ from logs.models import StoreProductLog
 
 from django.http import JsonResponse
 from django.db.models import Sum
-
+import time
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
@@ -304,6 +304,24 @@ class ConfirmProductTransfersView(APIView):
                 # Actualizar el stock en la tienda origen
                 origin_store_product = StoreProduct.objects.get(**origin_stock_filter)
                 previous_origin_stock = origin_store_product.stock
+                if previous_origin_stock < transfer_info["quantity"]:
+                    origin_store_product.stock = transfer_info["quantity"]
+                    logs.append(
+                        StoreProductLog(
+                        store_product=origin_store_product,
+                        user=request.user,
+                        previous_stock=previous_origin_stock,
+                        updated_stock=transfer_info["quantity"],
+                        action="A",  # Acción: Salida
+                        movement="MA",  # Movimiento: Transferencia enviada
+                        store_related=destination_store,
+                        )
+                    )
+                    time.sleep(2)
+                    origin_store_product.save()
+
+
+                    
                 origin_store_product.stock -= transfer_info["quantity"]
                 origin_store_product.save()
 
