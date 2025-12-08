@@ -10,17 +10,6 @@ from django.db.models.functions import ExtractHour, ExtractWeekDay
 from django.db.models import Count
 from django.db.models.functions import TruncMonth
 
-
-@shared_task
-def delete_sales_duplicates():
-    today = now().date()
-
-    sales = Sale.objects.filter(created_at__date=today)
-
-    for sale in sales:
-        sale.revert_stock_and_delete()
-
-
 @shared_task(bind=True)
 def get_sales_duplicates_task(self, store_ids, start_date, end_date):
     try:
