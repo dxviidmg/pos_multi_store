@@ -199,13 +199,3 @@ CELERY_RESULT_BACKEND = config('REDIS_URL')
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
-
-
-from celery.schedules import crontab
-
-#CELERY_BEAT_SCHEDULE = {
-#    "delete-sales-duplicated": {
-#        "task": "sales.tasks.delete_sales_duplicates",
-#        "schedule": crontab(minute="0, 30"),
-#    },
-#}

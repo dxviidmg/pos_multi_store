@@ -303,25 +303,7 @@ class ConfirmProductTransfersView(APIView):
 
                 # Actualizar el stock en la tienda origen
                 origin_store_product = StoreProduct.objects.get(**origin_stock_filter)
-                previous_origin_stock = origin_store_product.stock
-                if previous_origin_stock < transfer_info["quantity"]:
-                    origin_store_product.stock = transfer_info["quantity"]
-                    logs.append(
-                        StoreProductLog(
-                        store_product=origin_store_product,
-                        user=request.user,
-                        previous_stock=previous_origin_stock,
-                        updated_stock=transfer_info["quantity"],
-                        action="A",  # Acción: Salida
-                        movement="MA",  # Movimiento: Transferencia enviada
-                        store_related=destination_store,
-                        )
-                    )
-                    time.sleep(2)
-                    origin_store_product.save()
-
-
-                    
+                previous_origin_stock = origin_store_product.stock                    
                 origin_store_product.stock -= transfer_info["quantity"]
                 origin_store_product.save()
 
@@ -350,6 +332,7 @@ class ConfirmProductTransfersView(APIView):
         return Response({"status": "Transfer confirmed"}, status=status.HTTP_200_OK)
 
 
+#
 @method_decorator(get_store(), name="dispatch")
 class ConfirmDistributionView(APIView):
     def post(self, request):
@@ -384,6 +367,19 @@ class ConfirmDistributionView(APIView):
                 product=transfer.product, store=transfer.origin_store
             )
             previous_origin_stock = origin_store_product.stock
+            if previous_origin_stock < transfer.quantity:
+                origin_store_product.stock = transfer.quantity
+                StoreProductLog.objects.create(
+                    store_product=origin_store_product,
+                    user=request.user,
+                    previous_stock=previous_origin_stock,
+                    updated_stock=transfer.quantity,
+                    action="A",   # Salida
+                    movement="MA" # Transferencia enviada
+                )
+                origin_store_product.save()
+                time.sleep(2)
+
             origin_store_product.stock -= transfer.quantity
             origin_store_product.save()
 
@@ -399,9 +395,6 @@ class ConfirmDistributionView(APIView):
                     store_related=destination_store_product.store,
                 )
             )
-            
-
-                        # Update the transfer timestamp
             transfer.transfer_datetime = datetime.now()
             transfer.save()
 
