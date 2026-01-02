@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from datetime import date
-
+from .utils import render_redeploy
 
 # Create your views here.
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -41,6 +41,29 @@ class TenantInfoView(APIView):
                 "notices": notices,
                 "product_count": tenant.count_products(),
                 "supports_departments": tenant.supports_departments,
+            },
+            status=status.HTTP_200_OK,
+        )
+    
+
+
+class RenderRedeployView(APIView):
+    def get(self, request):
+        result = render_redeploy()
+
+        if not result.get("success"):
+            return Response(
+                data={
+                    "success": False,
+                    "error": result.get("error", "Unknown error"),
+                },
+                status=result.get("status_code", status.HTTP_500_INTERNAL_SERVER_ERROR),
+            )
+
+        return Response(
+            data={
+                "success": True,
+                "deploy": result.get("data"),
             },
             status=status.HTTP_200_OK,
         )
