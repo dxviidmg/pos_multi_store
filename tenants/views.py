@@ -49,18 +49,21 @@ class TenantInfoView(APIView):
 
 class RenderRedeployView(APIView):
     def get(self, request):
-        r = render_redeploy()
+        result = render_redeploy()
 
-        print(type(r))
-        if isinstance(r, str):
+        if not result.get("success"):
             return Response(
-                data={'error': r},
+                data={
+                    "success": False,
+                    "error": result.get("error", "Unknown error"),
+                },
+                status=result.get("status_code", status.HTTP_500_INTERNAL_SERVER_ERROR),
             )
+
         return Response(
-            data=r.json() if r.status_code == 200 else {},
-            status=r.status_code
+            data={
+                "success": True,
+                "deploy": result.get("data"),
+            },
+            status=status.HTTP_200_OK,
         )
-
-
-
-
