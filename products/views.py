@@ -834,8 +834,9 @@ class CashFlowViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         store = self.request.store
-        date = self.request.GET.get("date")
-        return CashFlow.objects.filter(store=store, created_at__date=date).order_by(
+        start_date = self.request.GET.get("start_date")
+        end_date = self.request.GET.get("end_date")
+        return CashFlow.objects.filter(store=store, created_at__date__range=(start_date, end_date)).order_by(
             "id"
         )
 
