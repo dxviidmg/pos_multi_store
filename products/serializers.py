@@ -104,7 +104,9 @@ class StoreBaseSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     store_type_display = serializers.SerializerMethodField()
     manager_username = serializers.SerializerMethodField()
+    workers_count = serializers.IntegerField(source='count_workers', read_only=True)
 
+    
     def get_tenant_name(self, obj):
         return obj.tenant.name
     
@@ -208,6 +210,7 @@ class StoreSerializer(StoreBaseSerializer):
     
     def get_pending_transfers_count(self, obj):
         return obj.transfers_from.filter(transfer_datetime=None).count() + obj.transfers_to.filter(transfer_datetime=None).count()
+    
 
     class Meta:
         model = Store
