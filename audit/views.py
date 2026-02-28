@@ -47,11 +47,22 @@ class Audit2AsyncView(APIView):
 class TaskResultView(APIView):
     def get(self, request, task_id):
         result = AsyncResult(task_id)
-        return JsonResponse(
-            {
-                "task_id": task_id,
-                "status": result.status,
-                "result": result.result if result.ready() else None,
-                "info": result.info if result.info else {}
-            }
-        )
+        
+        response_data = {
+            "task_id": task_id,
+            "status": result.status,
+        }
+        
+        if result.ready():
+            if result.successful():
+                response_data["result"] = result.result
+            else:
+                error_info = result.info
+                response_data["error"] = {
+                    "type": type(error_info).__name__,
+                    "message": str(error_info)
+                } if error_info else "Unknown error"
+        else:
+            response_data["info"] = result.info if result.info else {}
+        
+        return JsonResponse(response_data)
