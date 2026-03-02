@@ -566,10 +566,11 @@ class CancelSale(APIView):
 @method_decorator(get_store(), name="dispatch")
 class SalesDashboardAsyncView(APIView):
     def get(self, request):
+        year = request.query_params.get('year')
         tenant = self.request.user.get_tenant()
         stores = Store.objects.filter(tenant=tenant, store_type="T")
         store_ids = list(stores.values_list("id", flat=True))
         
-        task = get_sales_for_dashboard.delay(store_ids)
+        task = get_sales_for_dashboard.delay(store_ids, year)
         
         return Response({"task": task.id})
