@@ -57,7 +57,7 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
 
 
 @shared_task(bind=True)
-def get_sales_for_dashboard(self, store_ids):
+def get_sales_for_dashboard(self, store_ids, year):
     try:
         # 🔒 Asegurar que store_ids sea lista de ints (por si mandan QuerySet)
         if isinstance(store_ids, QuerySet):
@@ -65,13 +65,11 @@ def get_sales_for_dashboard(self, store_ids):
 
         store_ids = [int(sid) for sid in store_ids]
 
-        today = now()
-
         sales = (
             Sale.objects
             .filter(
                 store_id__in=store_ids,
-                created_at__year=today.year,
+                created_at__year=year,
                 is_canceled=False
             )
             .only("store_id", "created_at")
@@ -85,6 +83,7 @@ def get_sales_for_dashboard(self, store_ids):
                 "store_id": sale.store_id,
                 "store_name": stores.get(sale.store_id, ""),
                 "created_at": sale.created_at.isoformat(),
+                "total": float(sale.total),
             }
             for sale in sales
         ]
