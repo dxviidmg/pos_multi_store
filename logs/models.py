@@ -29,6 +29,13 @@ class StoreProductLog(CreatedAtModel):
     action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
     movement = models.CharField(max_length=2, choices=MOVEMENT_CHOICES, default="MA")
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['store_product', 'created_at']),
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['action', 'movement', 'created_at']),
+        ]
+
     def __str__(self):
         return "{} {} {} {} {}".format(
             self.store_product,

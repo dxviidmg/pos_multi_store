@@ -226,6 +226,13 @@ class Transfer(CreatedAtModel):
     quantity = models.IntegerField()
     transfer_datetime = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['origin_store', 'transfer_datetime']),
+            models.Index(fields=['destination_store', 'transfer_datetime']),
+            models.Index(fields=['product', 'origin_store', 'transfer_datetime']),
+        ]
+
     def __str__(self):
         return f"Transferencia de {self.quantity}x{self.product.name} de {self.origin_store.name} a {self.destination_store.name}"
 

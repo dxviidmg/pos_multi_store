@@ -86,12 +86,23 @@ class SaleViewSet(viewsets.ModelViewSet):
         if (first_name or last_name) and "created_at__date" in query:
             query.pop("created_at__date")
 
-        return Sale.objects.filter(**query).select_related(
+        queryset = Sale.objects.filter(**query).select_related(
             "store", "seller", "client"
         ).prefetch_related(
             "products_sale__product__brand",
             "payments"
-        ).order_by("-id")
+        )
+        
+        # Optimizar para listado
+        if self.action == 'list':
+            queryset = queryset.only(
+                'id', 'total', 'created_at', 'reservation_in_progress', 'is_canceled',
+                'store__id', 'store__name',
+                'seller__id', 'seller__username',
+                'client__id', 'client__first_name', 'client__last_name'
+            )
+        
+        return queryset.order_by("-id")
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")

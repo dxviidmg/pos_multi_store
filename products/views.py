@@ -253,6 +253,15 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.annotate(
                 total_stock=Sum("product_stores__stock")
             ).filter(total_stock__lte=max_stock)
+        
+        # Optimizar campos según acción
+        if self.action == 'list':
+            # Solo campos necesarios para listado
+            queryset = queryset.only(
+                'id', 'code', 'name', 'unit_price', 'cost',
+                'brand__id', 'brand__name',
+                'department__id', 'department__name'
+            )
 
         return queryset.order_by("brand__name", "name")
 
@@ -497,7 +506,13 @@ class BrandViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return Brand.objects.filter(tenant=tenant)
+        queryset = Brand.objects.filter(tenant=tenant)
+        
+        # Optimizar para listado
+        if self.action == 'list':
+            queryset = queryset.only('id', 'name', 'tenant_id')
+        
+        return queryset
 
     def perform_create(self, serializer):
         tenant = self.request.user.get_tenant()
@@ -510,7 +525,13 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return Department.objects.filter(tenant=tenant)
+        queryset = Department.objects.filter(tenant=tenant)
+        
+        # Optimizar para listado
+        if self.action == 'list':
+            queryset = queryset.only('id', 'name', 'tenant_id')
+        
+        return queryset
 
     def perform_create(self, serializer):
         tenant = self.request.user.get_tenant()
