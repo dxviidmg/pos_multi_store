@@ -98,19 +98,20 @@ class SaleViewSet(viewsets.ModelViewSet):
         # Usar una transacción para asegurar la atomicidad
         with transaction.atomic():
             for product_data in store_products_data:
-                product_store = StoreProduct.objects.get(id=product_data["id"])
+                product_store = StoreProduct.objects.select_for_update().get(id=product_data["id"])
+                
                 if product_store.stock < product_data["quantity"]:
                     previous_stock = product_store.stock
-
                     product_store.stock = product_data["quantity"]
                     product_store.save()
 
                     StoreProductLog.objects.create(
-                    store_product=product_store,
-                    user=self.request.user,
-                    previous_stock=previous_stock,
-                    updated_stock=product_data["quantity"],
-                    action="A")
+                        store_product=product_store,
+                        user=self.request.user,
+                        previous_stock=previous_stock,
+                        updated_stock=product_data["quantity"],
+                        action="A"
+                    )
 
                 previous_stock = product_store.stock
                 updated_stock = previous_stock - product_data["quantity"]
@@ -225,7 +226,7 @@ class SaleViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
 
                 for product_sale in sale_instance.products_sale.all():
-                    product_store = StoreProduct.objects.get(
+                    product_store = StoreProduct.objects.select_for_update().get(
                         store=store, product=product_sale.product
                     )
                     previous_stock = product_store.stock
@@ -406,7 +407,7 @@ class ImportSales(APIView):
 
                 # Obtener el producto y la relación StoreProduct
                 product = Product.objects.get(code=code, brand__tenant=tenant)
-                store_product = StoreProduct.objects.get(product=product, store=store)
+                store_product = StoreProduct.objects.select_for_update().get(product=product, store=store)
 
                 previous_stock = store_product.stock
                 updated_stock = previous_stock - quantity
@@ -510,8 +511,8 @@ class CancelSale(APIView):
                 product_sale.quantity -= quantity_to_cancel
                 product_sale.save()
 
-                store_product = get_object_or_404(
-                    StoreProduct, store=sale.store, product=product_sale.product
+                store_product = StoreProduct.objects.select_for_update().get(
+                    store=sale.store, product=product_sale.product
                 )
 
                 previous_stock = store_product.stock

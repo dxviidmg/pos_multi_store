@@ -283,7 +283,7 @@ class ConfirmProductTransfersView(APIView):
 
             try:
                 # Actualizar el stock en la tienda destino
-                destination_store_product = StoreProduct.objects.get(
+                destination_store_product = StoreProduct.objects.select_for_update().get(
                     **destination_stock_filter
                 )
                 previous_dest_stock = destination_store_product.stock
@@ -304,7 +304,7 @@ class ConfirmProductTransfersView(APIView):
                 )
 
                 # Actualizar el stock en la tienda origen
-                origin_store_product = StoreProduct.objects.get(**origin_stock_filter)
+                origin_store_product = StoreProduct.objects.select_for_update().get(**origin_stock_filter)
                 previous_origin_stock = origin_store_product.stock                    
                 origin_store_product.stock -= transfer_info["quantity"]
                 origin_store_product.save()
@@ -344,7 +344,7 @@ class ConfirmDistributionView(APIView):
         logs = []
 
         for transfer in transfers:
-            destination_store_product = StoreProduct.objects.get(
+            destination_store_product = StoreProduct.objects.select_for_update().get(
                 product=transfer.product, store=transfer.destination_store
             )
             previous_dest_stock = destination_store_product.stock
@@ -365,7 +365,7 @@ class ConfirmDistributionView(APIView):
             )
 
             # Obtener y actualizar el stock en la tienda origen
-            origin_store_product = StoreProduct.objects.get(
+            origin_store_product = StoreProduct.objects.select_for_update().get(
                 product=transfer.product, store=transfer.origin_store
             )
             previous_origin_stock = origin_store_product.stock
@@ -443,7 +443,7 @@ class AddProductsView(APIView):
         user = request.user
 
         for store_product_data in store_products_data:
-            store_product = StoreProduct.objects.get(id=store_product_data["id"])
+            store_product = StoreProduct.objects.select_for_update().get(id=store_product_data["id"])
             previous_stock = store_product.stock
             updated_stock = store_product.stock + store_product_data["quantity"]
             store_product.stock = updated_stock
@@ -1050,7 +1050,7 @@ class ImportStoreProductView(APIView):
 
                 # Obtener el producto y la relación StoreProduct
                 product = Product.objects.get(code=code, brand__tenant=tenant)
-                store_product = StoreProduct.objects.get(product=product, store=store)
+                store_product = StoreProduct.objects.select_for_update().get(product=product, store=store)
 
                 previous_stock = store_product.stock
                 updated_stock = previous_stock + quantity if action == "E" else quantity
