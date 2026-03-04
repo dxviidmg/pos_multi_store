@@ -59,34 +59,40 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
 @shared_task(bind=True)
 def get_sales_for_dashboard(self, store_ids, year):
     try:
-        # 🔒 Asegurar que store_ids sea lista de ints (por si mandan QuerySet)
+        self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100})
         if isinstance(store_ids, QuerySet):
             store_ids = list(store_ids.values_list("id", flat=True))
 
         store_ids = [int(sid) for sid in store_ids]
 
-        sales = (
-            Sale.objects
-            .filter(
-                store_id__in=store_ids,
-                created_at__year=year,
-                is_canceled=False
-            )
-            .only("store_id", "created_at")
-        )
+        self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100})
 
+        # Traer stores primero (más rápido)
         stores_qs = Store.objects.filter(id__in=store_ids).only("id", "name")
         stores = {s.id: s.get_full_name() for s in stores_qs}
 
+        self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100})
+
+        # Usar values() en lugar de only() para evitar instancias de modelo
+        sales = Sale.objects.filter(
+            store_id__in=store_ids,
+            created_at__year=year,
+            is_canceled=False
+        ).values("store_id", "created_at", "total")
+
+        self.update_state(state='PROGRESS', meta={'current': 70, 'total': 100})
+
         sales_data = [
             {
-                "store_id": sale.store_id,
-                "store_name": stores.get(sale.store_id, ""),
-                "created_at": sale.created_at.isoformat(),
-                "total": float(sale.total),
+                "store_id": sale["store_id"],
+                "store_name": stores.get(sale["store_id"], ""),
+                "created_at": sale["created_at"].isoformat(),
+                "total": float(sale["total"]),
             }
             for sale in sales
         ]
+
+        self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100})
 
         response = {
             "stores": [
@@ -96,12 +102,8 @@ def get_sales_for_dashboard(self, store_ids, year):
             "sales": sales_data
         }
 
-        # 🔒 Validación extra (opcional pero útil para debug)
-        json.dumps(response)
-
         return response
 
     except Exception as e:
         print(e)
-#        self.update_state(state="FAILURE", meta={"error": str(e)})
         raise
