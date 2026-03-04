@@ -43,7 +43,16 @@ from rest_framework.response import Response
 from rest_framework import viewsets
 from django.contrib.auth.models import User
 from .utils import is_list_in_another, is_positive_number
+from .import_utils import (
+    validate_excel_columns,
+    rename_product_columns,
+    validate_store_product_columns,
+    rename_store_product_columns,
+    validate_quantities,
+    clean_row_data,
+)
 from logs.models import StoreProductLog
+from core.constants import LogAction, LogMovement
 
 from django.http import JsonResponse
 from django.db.models import Sum
@@ -78,8 +87,19 @@ def validate_excel_file(file_obj):
     return True
 
 
-def annotate_stock_info(queryset):
-    """Agrega anotaciones de stock reservado y disponible al queryset"""
+from typing import Optional
+from django.db.models import QuerySet
+
+
+def annotate_stock_info(queryset: QuerySet) -> QuerySet:
+    """Agrega anotaciones de stock reservado y disponible al queryset
+    
+    Args:
+        queryset: QuerySet de StoreProduct
+        
+    Returns:
+        QuerySet con anotaciones 'reserved_stock' y 'available_stock'
+    """
     from sales.models import ProductSale
     
     # Subquery para stock reservado en transferencias
@@ -202,11 +222,11 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         # Registrar un log si el stock cambia
         if original_stock != updated_stock:
             StoreProductLog.objects.create(
-                store_product=instance,
+                store_product=store_product,
                 user=self.request.user,
                 previous_stock=original_stock,
                 updated_stock=updated_stock,
-                action="A",
+                action=LogAction.AJUSTE,
             )
 
 
@@ -598,41 +618,6 @@ class InvestmentsView(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ProductImportValidationView(APIView):
-    def validate_columns(self, df, import_stock):
-        expected_columns = [
-            "Código",
-            "Marca",
-            "Departamento",
-            "Nombre",
-            "Costo",
-            "Precio unitario",
-            "Precio mayoreo",
-            "Cantidad minima mayoreo",
-            "Precio Mayoreo en descuento de clientes",
-        ]
-
-        if import_stock == "Y":
-            expected_columns += ["Cantidad"]
-
-        if not is_list_in_another(expected_columns, list(df.columns)):
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Marca": "brand",
-                "Departamento": "departament",
-                "Nombre": "name",
-                "Costo": "cost",
-                "Precio unitario": "unit_price",
-                "Precio mayoreo": "wholesale_price",
-                "Cantidad minima mayoreo": "min_wholesale_quantity",
-                "Precio Mayoreo en descuento de clientes": "wholesale_price_on_client_discount",
-                "Cantidad": "quantity",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
         if not file_obj:
@@ -660,8 +645,8 @@ class ProductImportValidationView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            self.validate_columns(df, import_stock)
-            df = self.rename_columns(df)
+            validate_excel_columns(df, import_stock)
+            df = rename_product_columns(df)
 
             if df.empty:
                 raise ValueError("El excel esta vacio")
@@ -669,10 +654,7 @@ class ProductImportValidationView(APIView):
             data, codes = [], dict()
 
             for _, data_row in enumerate(df.to_dict(orient="records")):
-                data_row = {
-                    key: value.strip() if isinstance(value, str) else value
-                    for key, value in data_row.items()
-                }
+                data_row = clean_row_data(data_row)
 
                 data_row["status"] = "Exitoso"
                 code = data_row["code"]
@@ -767,41 +749,6 @@ class ProductImportValidationView(APIView):
 
 
 class ProductImport(APIView):
-    def validate_columns(self, df, import_stock):
-        expected_columns = [
-            "Código",
-            "Marca",
-            "Departamento",
-            "Nombre",
-            "Costo",
-            "Precio unitario",
-            "Precio mayoreo",
-            "Cantidad minima mayoreo",
-            "Precio Mayoreo en descuento de clientes",
-        ]
-
-        if import_stock == "Y":
-            expected_columns += ["Cantidad"]
-
-        if not is_list_in_another(expected_columns, list(df.columns)):
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Marca": "brand",
-                "Nombre": "name",
-                "Costo": "cost",
-                "Precio unitario": "unit_price",
-                "Precio mayoreo": "wholesale_price",
-                "Cantidad minima mayoreo": "min_wholesale_quantity",
-                "Precio Mayoreo en descuento de clientes": "wholesale_price_on_client_discount",
-                "Departamento": "department",
-                "Cantidad": "quantity",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -827,8 +774,8 @@ class ProductImport(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            self.validate_columns(df, import_stock)
-            df = self.rename_columns(df)
+            validate_excel_columns(df, import_stock)
+            df = rename_product_columns(df)
 
             brand_cache = {}
             department_cache = {}
@@ -836,10 +783,7 @@ class ProductImport(APIView):
             logs = []
             for data_row in df.to_dict(orient="records"):
 
-                data_row = {
-                    key: value.strip() if isinstance(value, str) else value
-                    for key, value in data_row.items()
-                }
+                data_row = clean_row_data(data_row)
 
                 quantity = data_row.pop("quantity")
                 brand_name = data_row["brand"]
@@ -1051,21 +995,6 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductImportValidationView(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -1091,16 +1020,9 @@ class StoreProductImportValidationView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            self.validate_columns(df)
-
-            df = self.rename_columns(df)
-
-            all_integers = df["quantity"].apply(lambda x: isinstance(x, int)).all()
-
-            if not all_integers:
-                raise ValueError(
-                    "No todos los datos en la columna Cantidad son números"
-                )
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
+            validate_quantities(df)
 
             data = []
 
@@ -1146,21 +1068,6 @@ class StoreProductImportValidationView(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ImportStoreProductView(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -1191,8 +1098,8 @@ class ImportStoreProductView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            self.validate_columns(df)
-            df = self.rename_columns(df)
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
 
             logs = []  # Lista para almacenar registros de StoreProductLog
 

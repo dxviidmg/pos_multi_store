@@ -15,6 +15,11 @@ from logs.models import StoreProductLog
 from rest_framework.exceptions import NotFound
 from datetime import datetime
 from .tasks import get_sales_for_dashboard
+from products.import_utils import (
+    validate_store_product_columns,
+    rename_store_product_columns,
+    validate_quantities,
+)
 
 # Límites para archivos Excel
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -321,21 +326,6 @@ class CashSummary(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ImportSalesValidation(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -361,16 +351,9 @@ class ImportSalesValidation(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            self.validate_columns(df)
-
-            df = self.rename_columns(df)
-
-            all_integers = df["quantity"].apply(lambda x: isinstance(x, int)).all()
-
-            if not all_integers:
-                raise ValueError(
-                    "No todos los datos en la columna Cantidad son números"
-                )
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
+            validate_quantities(df)
 
             data = []
             product_quantities = (
@@ -426,21 +409,6 @@ class ImportSalesValidation(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ImportSales(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -467,8 +435,8 @@ class ImportSales(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            self.validate_columns(df)
-            df = self.rename_columns(df)
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
 
             logs = []  # Lista para almacenar registros de StoreProductLog
 
