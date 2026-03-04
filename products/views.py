@@ -36,7 +36,8 @@ from django.utils.decorators import method_decorator
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from django.db.models import Sum
+from django.db.models import Sum, OuterRef, Subquery, IntegerField, F
+from django.db.models.functions import Coalesce
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets
@@ -76,6 +77,39 @@ def validate_excel_file(file_obj):
     
     return True
 
+
+def annotate_stock_info(queryset):
+    """Agrega anotaciones de stock reservado y disponible al queryset"""
+    from sales.models import ProductSale
+    
+    # Subquery para stock reservado en transferencias
+    reserved_transfers = Transfer.objects.filter(
+        product=OuterRef('product'),
+        origin_store=OuterRef('store'),
+        transfer_datetime__isnull=True,
+        distribution__isnull=True
+    ).values('product', 'origin_store').annotate(
+        total=Sum('quantity')
+    ).values('total')
+    
+    # Subquery para stock reservado en ventas
+    reserved_sales = ProductSale.objects.filter(
+        product=OuterRef('product'),
+        sale__store=OuterRef('store'),
+        sale__reservation_in_progress=True
+    ).values('product', 'sale__store').annotate(
+        total=Sum('quantity')
+    ).values('total')
+    
+    return queryset.annotate(
+        reserved_stock=Coalesce(
+            Subquery(reserved_transfers, output_field=IntegerField()), 0
+        ) + Coalesce(
+            Subquery(reserved_sales, output_field=IntegerField()), 0
+        ),
+        available_stock=F('stock') - F('reserved_stock')
+    )
+
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
@@ -112,6 +146,10 @@ class StoreProductViewSet(viewsets.ModelViewSet):
             queryset = StoreProduct.objects.filter(**filters).select_related(
                 "product", "product__brand", "product__department", "store"
             )
+            
+            # Agregar anotaciones de stock si es necesario
+            if self.get_serializer_class() == StoreProductSerializer:
+                queryset = annotate_stock_info(queryset)
 
             return queryset.order_by("product__brand__name", "product__name")
 
@@ -139,11 +177,15 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         if max_stock:
             storeproduct_filters &= Q(stock__lte=max_stock)
 
-        return (
-            StoreProduct.objects.filter(storeproduct_filters)
-            .select_related("product", "product__brand", "product__department", "store")
-            .order_by("product__brand__name", "product__name")
+        queryset = StoreProduct.objects.filter(storeproduct_filters).select_related(
+            "product", "product__brand", "product__department", "store"
         )
+        
+        # Agregar anotaciones de stock si es necesario
+        if self.get_serializer_class() == StoreProductSerializer:
+            queryset = annotate_stock_info(queryset)
+        
+        return queryset.order_by("product__brand__name", "product__name")
 
     def perform_update(self, serializer):
         instance = (
@@ -1210,12 +1252,15 @@ class StockInOtherStores(APIView):
             .select_related("store")
             .order_by("-store__store_type", "store__name")
         )
+        
+        # Agregar anotaciones de stock
+        sps = annotate_stock_info(sps)
 
         data = [
             {
                 "store_id": sp.store.id,
                 "store_name": sp.store.get_full_name(),
-                "available_stock": sp.calculate_available_stock(),
+                "available_stock": sp.available_stock,
             }
             for sp in sps
         ]

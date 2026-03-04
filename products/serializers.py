@@ -13,6 +13,8 @@ from django.core.exceptions import ValidationError
 from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary_by_department, calculate_total_sales_by_seller
 from datetime import datetime, date
 from django.contrib.auth.models import User
+from django.db.models import Sum, Q, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 
 
 
@@ -132,18 +134,12 @@ class StoreProductBaseSerializer(serializers.ModelSerializer):
 
 
 class StoreProductSerializer(StoreProductBaseSerializer):
-    available_stock = serializers.SerializerMethodField()
-    reserved_stock = serializers.SerializerMethodField()
+    available_stock = serializers.IntegerField(read_only=True)
+    reserved_stock = serializers.IntegerField(read_only=True)
     store = StoreBaseSerializer(read_only=True)
 
     def get_product_description(self, obj):
         return obj.product.get_description()
-
-    def get_available_stock(self, obj):
-        return obj.calculate_available_stock()
-
-    def get_reserved_stock(self, obj):
-        return obj.calculate_reserved_stock()
 
 
 
