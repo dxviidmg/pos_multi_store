@@ -100,6 +100,17 @@ class SaleViewSet(viewsets.ModelViewSet):
             for product_data in store_products_data:
                 product_store = StoreProduct.objects.select_for_update().get(id=product_data["id"])
                 
+                # Validar stock disponible
+                available_stock = product_store.calculate_available_stock()
+                if available_stock < product_data["quantity"]:
+                    return Response(
+                        {
+                            "detail": f"Stock insuficiente para {product_store.product.name}. "
+                                     f"Disponible: {available_stock}, Solicitado: {product_data['quantity']}"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                
                 if product_store.stock < product_data["quantity"]:
                     previous_stock = product_store.stock
                     product_store.stock = product_data["quantity"]

@@ -305,7 +305,18 @@ class ConfirmProductTransfersView(APIView):
 
                 # Actualizar el stock en la tienda origen
                 origin_store_product = StoreProduct.objects.select_for_update().get(**origin_stock_filter)
-                previous_origin_stock = origin_store_product.stock                    
+                previous_origin_stock = origin_store_product.stock
+                
+                # Validar stock suficiente
+                if previous_origin_stock < transfer_info["quantity"]:
+                    return Response(
+                        {
+                            "status": f"Stock insuficiente en tienda origen para {transfer.product.name}. "
+                                     f"Disponible: {previous_origin_stock}, Solicitado: {transfer_info['quantity']}"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                
                 origin_store_product.stock -= transfer_info["quantity"]
                 origin_store_product.save()
 
@@ -369,6 +380,8 @@ class ConfirmDistributionView(APIView):
                 product=transfer.product, store=transfer.origin_store
             )
             previous_origin_stock = origin_store_product.stock
+            
+            # Validar y ajustar stock si es necesario
             if previous_origin_stock < transfer.quantity:
                 origin_store_product.stock = transfer.quantity
                 StoreProductLog.objects.create(
@@ -376,11 +389,11 @@ class ConfirmDistributionView(APIView):
                     user=request.user,
                     previous_stock=previous_origin_stock,
                     updated_stock=transfer.quantity,
-                    action="A",   # Salida
-                    movement="MA" # Transferencia enviada
+                    action="A",
+                    movement="MA"
                 )
                 origin_store_product.save()
-                time.sleep(2)
+                previous_origin_stock = transfer.quantity
 
             origin_store_product.stock -= transfer.quantity
             origin_store_product.save()

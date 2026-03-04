@@ -165,9 +165,23 @@ class StoreProduct(models.Model):
         indexes = [
             models.Index(fields=["store", "product"]),
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(stock__gte=0),
+                name='stock_non_negative'
+            )
+        ]
         
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
+    
+    def clean(self):
+        if self.stock < 0:
+            raise ValidationError({'stock': 'El stock no puede ser negativo'})
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def calculate_reserved_stock(self):
         transfers = self.store.transfers_from.filter(
