@@ -77,13 +77,13 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         # --- Búsqueda directa por código ---
         if code:
-            # Combinar las dos consultas en una sola
-
             filters = {"product__code": code, "product__brand__tenant": tenant}
             if all_stores == "N":
                 filters["store"] = store
 
-            queryset = StoreProduct.objects.filter(**filters).select_related("product")
+            queryset = StoreProduct.objects.filter(**filters).select_related(
+                "product", "product__brand", "product__department", "store"
+            )
 
             return queryset.order_by("product__brand__name", "product__name")
 
@@ -113,7 +113,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         return (
             StoreProduct.objects.filter(storeproduct_filters)
-            .prefetch_related("product")
+            .select_related("product", "product__brand", "product__department", "store")
             .order_by("product__brand__name", "product__name")
         )
 
@@ -146,7 +146,9 @@ class TransferViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         store = self.request.store
-        queryset = Transfer.objects.all().order_by("-id")
+        queryset = Transfer.objects.select_related(
+            "origin_store", "destination_store", "product", "product__brand", "distribution"
+        ).order_by("-id")
 
         # Si NO es un GET a detalle (es decir, es listado)
         if self.action == "list":
@@ -175,7 +177,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         if department_id and department_id != "":
             filters &= Q(department__id=department_id)
 
-        queryset = Product.objects.filter(filters).select_related("brand")
+        queryset = Product.objects.filter(filters).select_related("brand", "department")
 
         if max_stock:
             queryset = queryset.annotate(
@@ -1105,7 +1107,9 @@ class StockInOtherStores(APIView):
         product = Product.objects.select_related("brand").get(
             code=code, brand__tenant=tenant
         )
-        store_product = StoreProduct.objects.get(store=store, product=product)
+        store_product = StoreProduct.objects.select_related("store").get(
+            store=store, product=product
+        )
 
         store_type_filter = (
             {} if tenant.displays_stock_in_storages else {"store__store_type": "T"}
@@ -1143,6 +1147,8 @@ class DistributionViewSet(viewsets.ModelViewSet):
 
         return Distribution.objects.filter(
             Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
+        ).select_related("origin_store", "destination_store").prefetch_related(
+            "transfers__product__brand"
         ).order_by("-id")
 
     def perform_create(self, serializer):

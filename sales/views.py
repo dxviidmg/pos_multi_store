@@ -61,7 +61,12 @@ class SaleViewSet(viewsets.ModelViewSet):
         if (first_name or last_name) and "created_at__date" in query:
             query.pop("created_at__date")
 
-        return Sale.objects.filter(**query).order_by("-id")
+        return Sale.objects.filter(**query).select_related(
+            "store", "seller", "client"
+        ).prefetch_related(
+            "products_sale__product__brand",
+            "payments"
+        ).order_by("-id")
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
