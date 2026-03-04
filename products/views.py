@@ -48,6 +48,34 @@ from django.http import JsonResponse
 from django.db.models import Sum
 import time
 
+# Configuración de límites para archivos Excel
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_ROWS = 10000  # Máximo 10,000 filas
+ALLOWED_EXTENSIONS = ['.xlsx', '.xls']
+ALLOWED_MIME_TYPES = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel'
+]
+
+
+def validate_excel_file(file_obj):
+    """Valida tamaño, tipo y formato de archivo Excel"""
+    # Validar tamaño
+    if file_obj.size > MAX_FILE_SIZE:
+        raise ValueError(f"Archivo muy grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024}MB")
+    
+    # Validar extensión
+    import os
+    ext = os.path.splitext(file_obj.name)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Extensión no permitida. Use: {', '.join(ALLOWED_EXTENSIONS)}")
+    
+    # Validar MIME type
+    if hasattr(file_obj, 'content_type') and file_obj.content_type not in ALLOWED_MIME_TYPES:
+        raise ValueError("Tipo de archivo no válido")
+    
+    return True
+
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
@@ -549,6 +577,11 @@ class ProductImportValidationView(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         create_brands = request.data.get("create_brands")
         create_departments = request.data.get("create_departments")
         departments_mandatory = request.data.get("departments_mandatory")
@@ -556,7 +589,14 @@ class ProductImportValidationView(APIView):
 
         tenant = request.user.get_tenant()
         try:
-            df = pd.read_excel(file_obj).replace({np.nan: None})
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS).replace({np.nan: None})
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             self.validate_columns(df, import_stock)
             df = self.rename_columns(df)
 
@@ -707,11 +747,23 @@ class ProductImport(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         tenant = self.request.user.get_tenant()
         import_stock = request.data.get("import_stock")
 
         try:
-            df = pd.read_excel(file_obj).replace({np.nan: None})
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS).replace({np.nan: None})
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             self.validate_columns(df, import_stock)
             df = self.rename_columns(df)
 
@@ -959,11 +1011,23 @@ class StoreProductImportValidationView(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         store = self.request.store
         tenant = self.request.user.get_tenant()
 
         try:
-            df = pd.read_excel(file_obj)
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS)
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             self.validate_columns(df)
 
             df = self.rename_columns(df)
@@ -1042,6 +1106,11 @@ class ImportStoreProductView(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         tenant = self.request.user.get_tenant()
         store = self.request.store
         seller = self.request.user
@@ -1051,7 +1120,14 @@ class ImportStoreProductView(APIView):
             raise ValueError("ERROR EN ACTION")
 
         try:
-            df = pd.read_excel(file_obj)
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS)
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             self.validate_columns(df)
             df = self.rename_columns(df)
 
