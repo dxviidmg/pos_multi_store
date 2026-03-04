@@ -63,6 +63,9 @@ class TaskResultView(APIView):
                     "message": str(error_info)
                 } if error_info else "Unknown error"
         else:
-            response_data["info"] = result.info if result.info else {}
+            info = result.info or {}
+            response_data["info"] = info
+            if "percent" in info:
+                response_data["percent"] = info["percent"]
         
         return JsonResponse(response_data)
