@@ -15,6 +15,14 @@ class Sale(CreatedAtModel):
     is_canceled = models.BooleanField(default=False)
     reason_cancel = models.CharField(max_length=50, null=True, blank=True)
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['store', 'created_at', 'reservation_in_progress']),
+            models.Index(fields=['store', 'seller', 'created_at']),
+            models.Index(fields=['client', 'created_at']),
+            models.Index(fields=['is_canceled', 'created_at']),
+        ]
+    
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)
 

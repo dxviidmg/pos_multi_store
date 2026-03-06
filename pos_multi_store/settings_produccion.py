@@ -1,7 +1,7 @@
 from .settings import *
 from decouple import Config, RepositoryEnv
 
-config = Config(RepositoryEnv(".env_prod"))
+config = Config(RepositoryEnv(".env.prod"))
 
 AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME')
 

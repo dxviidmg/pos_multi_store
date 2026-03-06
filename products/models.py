@@ -20,11 +20,21 @@ class Base(models.Model):
 class Brand(Base):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_index=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "name"]),
+        ]
+
     def count_products(self):
         return self.products.count()
 
 class Department(Base):
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "name"]),
+        ]
 
     def count_products(self):
         return self.products.count()
@@ -67,19 +77,17 @@ class Store(Base):
         return False
 
     def get_investment(self):
-        store_products = self.store_products.all()
-        store_investment = 0
-        for store_product in store_products:
-            if store_product.stock == 0:
-                continue
-
-            store_investment_by_product = (
-                store_product.stock * store_product.product.cost
+        from django.db.models import F, DecimalField
+        from django.db.models.functions import Coalesce
+        
+        result = self.store_products.filter(stock__gt=0).aggregate(
+            total=Coalesce(
+                Sum(F('stock') * F('product__cost'), output_field=DecimalField()),
+                0,
+                output_field=DecimalField()
             )
-
-            store_investment += store_investment_by_product
-
-        return store_investment
+        )
+        return result['total']
 
     def count_products(self):
         return self.store_products.all().count()
@@ -104,10 +112,10 @@ class Product(Base):
             filename,
         )
 
-    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="products")
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="products", null=True, blank=True)
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="products", db_index=True)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="products", null=True, blank=True, db_index=True)
     code = models.CharField(max_length=20, db_index=True)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, db_index=True)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     wholesale_price = models.DecimalField(
@@ -141,6 +149,8 @@ class Product(Base):
     class Meta:
         indexes = [
             models.Index(fields=["code", "brand"]),
+            models.Index(fields=["brand", "name"]),
+            models.Index(fields=["brand", "department"]),
         ]
 
 class StoreProduct(models.Model):
@@ -156,9 +166,23 @@ class StoreProduct(models.Model):
         indexes = [
             models.Index(fields=["store", "product"]),
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(stock__gte=0),
+                name='stock_non_negative'
+            )
+        ]
         
     def __str__(self):
         return self.product.__str__() + " " + self.store.__str__()
+    
+    def clean(self):
+        if self.stock < 0:
+            raise ValidationError({'stock': 'El stock no puede ser negativo'})
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def calculate_reserved_stock(self):
         transfers = self.store.transfers_from.filter(
@@ -202,6 +226,13 @@ class Transfer(CreatedAtModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.IntegerField()
     transfer_datetime = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['origin_store', 'transfer_datetime']),
+            models.Index(fields=['destination_store', 'transfer_datetime']),
+            models.Index(fields=['product', 'origin_store', 'transfer_datetime']),
+        ]
 
     def __str__(self):
         return f"Transferencia de {self.quantity}x{self.product.name} de {self.origin_store.name} a {self.destination_store.name}"

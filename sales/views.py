@@ -15,6 +15,36 @@ from logs.models import StoreProductLog
 from rest_framework.exceptions import NotFound
 from datetime import datetime
 from .tasks import get_sales_for_dashboard
+from products.import_utils import (
+    validate_store_product_columns,
+    rename_store_product_columns,
+    validate_quantities,
+)
+
+# Límites para archivos Excel
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_ROWS = 10000
+ALLOWED_EXTENSIONS = ['.xlsx', '.xls']
+ALLOWED_MIME_TYPES = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel'
+]
+
+
+def validate_excel_file(file_obj):
+    """Valida tamaño, tipo y formato de archivo Excel"""
+    if file_obj.size > MAX_FILE_SIZE:
+        raise ValueError(f"Archivo muy grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024}MB")
+    
+    import os
+    ext = os.path.splitext(file_obj.name)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Extensión no permitida. Use: {', '.join(ALLOWED_EXTENSIONS)}")
+    
+    if hasattr(file_obj, 'content_type') and file_obj.content_type not in ALLOWED_MIME_TYPES:
+        raise ValueError("Tipo de archivo no válido")
+    
+    return True
 
 @method_decorator(get_store(), name="dispatch")
 # Create your views here.
@@ -61,7 +91,23 @@ class SaleViewSet(viewsets.ModelViewSet):
         if (first_name or last_name) and "created_at__date" in query:
             query.pop("created_at__date")
 
-        return Sale.objects.filter(**query).order_by("-id")
+        queryset = Sale.objects.filter(**query).select_related(
+            "store", "seller", "client"
+        ).prefetch_related(
+            "products_sale__product__brand",
+            "payments"
+        )
+        
+        # Optimizar para listado
+        if self.action == 'list':
+            queryset = queryset.only(
+                'id', 'total', 'created_at', 'reservation_in_progress', 'is_canceled',
+                'store__id', 'store__name',
+                'seller__id', 'seller__username',
+                'client__id', 'client__first_name', 'client__last_name'
+            )
+        
+        return queryset.order_by("-id")
 
     def perform_create(self, serializer):
         store_products_data = self.request.data.get("store_products")
@@ -93,19 +139,31 @@ class SaleViewSet(viewsets.ModelViewSet):
         # Usar una transacción para asegurar la atomicidad
         with transaction.atomic():
             for product_data in store_products_data:
-                product_store = StoreProduct.objects.get(id=product_data["id"])
+                product_store = StoreProduct.objects.select_for_update().get(id=product_data["id"])
+                
+                # Validar stock disponible
+                available_stock = product_store.calculate_available_stock()
+                if available_stock < product_data["quantity"]:
+                    return Response(
+                        {
+                            "detail": f"Stock insuficiente para {product_store.product.name}. "
+                                     f"Disponible: {available_stock}, Solicitado: {product_data['quantity']}"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                
                 if product_store.stock < product_data["quantity"]:
                     previous_stock = product_store.stock
-
                     product_store.stock = product_data["quantity"]
                     product_store.save()
 
                     StoreProductLog.objects.create(
-                    store_product=product_store,
-                    user=self.request.user,
-                    previous_stock=previous_stock,
-                    updated_stock=product_data["quantity"],
-                    action="A")
+                        store_product=product_store,
+                        user=self.request.user,
+                        previous_stock=previous_stock,
+                        updated_stock=product_data["quantity"],
+                        action="A"
+                    )
 
                 previous_stock = product_store.stock
                 updated_stock = previous_stock - product_data["quantity"]
@@ -220,7 +278,7 @@ class SaleViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
 
                 for product_sale in sale_instance.products_sale.all():
-                    product_store = StoreProduct.objects.get(
+                    product_store = StoreProduct.objects.select_for_update().get(
                         store=store, product=product_sale.product
                     )
                     previous_stock = product_store.stock
@@ -268,21 +326,6 @@ class CashSummary(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ImportSalesValidation(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -291,21 +334,26 @@ class ImportSalesValidation(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         store = self.request.store
         tenant = self.request.user.get_tenant()
 
         try:
-            df = pd.read_excel(file_obj)
-            self.validate_columns(df)
-
-            df = self.rename_columns(df)
-
-            all_integers = df["quantity"].apply(lambda x: isinstance(x, int)).all()
-
-            if not all_integers:
-                raise ValueError(
-                    "No todos los datos en la columna Cantidad son números"
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS)
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
+            validate_quantities(df)
 
             data = []
             product_quantities = (
@@ -361,21 +409,6 @@ class ImportSalesValidation(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ImportSales(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -384,14 +417,26 @@ class ImportSales(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         tenant = self.request.user.get_tenant()
         store = self.request.store
         seller = self.request.user
 
         try:
-            df = pd.read_excel(file_obj)
-            self.validate_columns(df)
-            df = self.rename_columns(df)
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS)
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
 
             logs = []  # Lista para almacenar registros de StoreProductLog
 
@@ -401,7 +446,7 @@ class ImportSales(APIView):
 
                 # Obtener el producto y la relación StoreProduct
                 product = Product.objects.get(code=code, brand__tenant=tenant)
-                store_product = StoreProduct.objects.get(product=product, store=store)
+                store_product = StoreProduct.objects.select_for_update().get(product=product, store=store)
 
                 previous_stock = store_product.stock
                 updated_stock = previous_stock - quantity
@@ -505,8 +550,8 @@ class CancelSale(APIView):
                 product_sale.quantity -= quantity_to_cancel
                 product_sale.save()
 
-                store_product = get_object_or_404(
-                    StoreProduct, store=sale.store, product=product_sale.product
+                store_product = StoreProduct.objects.select_for_update().get(
+                    store=sale.store, product=product_sale.product
                 )
 
                 previous_stock = store_product.stock

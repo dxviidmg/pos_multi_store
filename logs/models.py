@@ -2,21 +2,10 @@ from django.db import models
 from django.contrib.auth.models import User
 from tenants.models import CreatedAtModel
 from products.models import StoreProduct, Store
+from core.constants import LogAction, LogMovement
 
 
 class StoreProductLog(CreatedAtModel):
-    ACTIONS_CHOICES = [("E", "Entrada"), ("S", "Salida"), ("A", "Ajuste"), ("N", "NA")]
-
-    MOVEMENT_CHOICES = [
-        ("MA", "Manual"),
-        ("IM", "Importación"),
-        ("DI", "Distribución"),
-        ("TR", "Transferencia"),
-        ("DE", "Devolucíon"),
-        ("VE", "Venta"),
-        ("AP", "Apartado"),
-    ]
-
     store_product = models.ForeignKey(
         StoreProduct, on_delete=models.CASCADE, related_name="store_product_logs"
     )
@@ -26,8 +15,15 @@ class StoreProductLog(CreatedAtModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     previous_stock = models.IntegerField()
     updated_stock = models.IntegerField()
-    action = models.CharField(max_length=1, choices=ACTIONS_CHOICES)
-    movement = models.CharField(max_length=2, choices=MOVEMENT_CHOICES, default="MA")
+    action = models.CharField(max_length=1, choices=LogAction.choices)
+    movement = models.CharField(max_length=2, choices=LogMovement.choices, default=LogMovement.MANUAL)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['store_product', 'created_at']),
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['action', 'movement', 'created_at']),
+        ]
 
     def __str__(self):
         return "{} {} {} {} {}".format(

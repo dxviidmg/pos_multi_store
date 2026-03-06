@@ -36,17 +36,99 @@ from django.utils.decorators import method_decorator
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from django.db.models import Sum
+from django.db.models import Sum, OuterRef, Subquery, IntegerField, F
+from django.db.models.functions import Coalesce
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets
 from django.contrib.auth.models import User
 from .utils import is_list_in_another, is_positive_number
+from .import_utils import (
+    validate_excel_columns,
+    rename_product_columns,
+    validate_store_product_columns,
+    rename_store_product_columns,
+    validate_quantities,
+    clean_row_data,
+)
 from logs.models import StoreProductLog
+from core.constants import LogAction, LogMovement
 
 from django.http import JsonResponse
 from django.db.models import Sum
 import time
+
+# Configuración de límites para archivos Excel
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_ROWS = 10000  # Máximo 10,000 filas
+ALLOWED_EXTENSIONS = ['.xlsx', '.xls']
+ALLOWED_MIME_TYPES = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel'
+]
+
+
+def validate_excel_file(file_obj):
+    """Valida tamaño, tipo y formato de archivo Excel"""
+    # Validar tamaño
+    if file_obj.size > MAX_FILE_SIZE:
+        raise ValueError(f"Archivo muy grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024}MB")
+    
+    # Validar extensión
+    import os
+    ext = os.path.splitext(file_obj.name)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Extensión no permitida. Use: {', '.join(ALLOWED_EXTENSIONS)}")
+    
+    # Validar MIME type
+    if hasattr(file_obj, 'content_type') and file_obj.content_type not in ALLOWED_MIME_TYPES:
+        raise ValueError("Tipo de archivo no válido")
+    
+    return True
+
+
+from typing import Optional
+from django.db.models import QuerySet
+
+
+def annotate_stock_info(queryset: QuerySet) -> QuerySet:
+    """Agrega anotaciones de stock reservado y disponible al queryset
+    
+    Args:
+        queryset: QuerySet de StoreProduct
+        
+    Returns:
+        QuerySet con anotaciones 'reserved_stock' y 'available_stock'
+    """
+    from sales.models import ProductSale
+    
+    # Subquery para stock reservado en transferencias
+    reserved_transfers = Transfer.objects.filter(
+        product=OuterRef('product'),
+        origin_store=OuterRef('store'),
+        transfer_datetime__isnull=True,
+        distribution__isnull=True
+    ).values('product', 'origin_store').annotate(
+        total=Sum('quantity')
+    ).values('total')
+    
+    # Subquery para stock reservado en ventas
+    reserved_sales = ProductSale.objects.filter(
+        product=OuterRef('product'),
+        sale__store=OuterRef('store'),
+        sale__reservation_in_progress=True
+    ).values('product', 'sale__store').annotate(
+        total=Sum('quantity')
+    ).values('total')
+    
+    return queryset.annotate(
+        reserved_stock=Coalesce(
+            Subquery(reserved_transfers, output_field=IntegerField()), 0
+        ) + Coalesce(
+            Subquery(reserved_sales, output_field=IntegerField()), 0
+        ),
+        available_stock=F('stock') - F('reserved_stock')
+    )
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductViewSet(viewsets.ModelViewSet):
@@ -77,13 +159,17 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         # --- Búsqueda directa por código ---
         if code:
-            # Combinar las dos consultas en una sola
-
             filters = {"product__code": code, "product__brand__tenant": tenant}
             if all_stores == "N":
                 filters["store"] = store
 
-            queryset = StoreProduct.objects.filter(**filters).select_related("product")
+            queryset = StoreProduct.objects.filter(**filters).select_related(
+                "product", "product__brand", "product__department", "store"
+            )
+            
+            # Agregar anotaciones de stock si es necesario
+            if self.get_serializer_class() == StoreProductSerializer:
+                queryset = annotate_stock_info(queryset)
 
             return queryset.order_by("product__brand__name", "product__name")
 
@@ -111,11 +197,15 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         if max_stock:
             storeproduct_filters &= Q(stock__lte=max_stock)
 
-        return (
-            StoreProduct.objects.filter(storeproduct_filters)
-            .prefetch_related("product")
-            .order_by("product__brand__name", "product__name")
+        queryset = StoreProduct.objects.filter(storeproduct_filters).select_related(
+            "product", "product__brand", "product__department", "store"
         )
+        
+        # Agregar anotaciones de stock si es necesario
+        if self.get_serializer_class() == StoreProductSerializer:
+            queryset = annotate_stock_info(queryset)
+        
+        return queryset.order_by("product__brand__name", "product__name")
 
     def perform_update(self, serializer):
         instance = (
@@ -132,11 +222,11 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         # Registrar un log si el stock cambia
         if original_stock != updated_stock:
             StoreProductLog.objects.create(
-                store_product=instance,
+                store_product=store_product,
                 user=self.request.user,
                 previous_stock=original_stock,
                 updated_stock=updated_stock,
-                action="A",
+                action=LogAction.AJUSTE,
             )
 
 
@@ -146,7 +236,9 @@ class TransferViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         store = self.request.store
-        queryset = Transfer.objects.all().order_by("-id")
+        queryset = Transfer.objects.select_related(
+            "origin_store", "destination_store", "product", "product__brand", "distribution"
+        ).order_by("-id")
 
         # Si NO es un GET a detalle (es decir, es listado)
         if self.action == "list":
@@ -175,12 +267,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         if department_id and department_id != "":
             filters &= Q(department__id=department_id)
 
-        queryset = Product.objects.filter(filters).select_related("brand")
+        queryset = Product.objects.filter(filters).select_related("brand", "department")
 
         if max_stock:
             queryset = queryset.annotate(
                 total_stock=Sum("product_stores__stock")
             ).filter(total_stock__lte=max_stock)
+        
+        # Optimizar campos según acción
+        if self.action == 'list':
+            # Solo campos necesarios para listado
+            queryset = queryset.only(
+                'id', 'code', 'name', 'unit_price', 'cost',
+                'brand__id', 'brand__name',
+                'department__id', 'department__name'
+            )
 
         return queryset.order_by("brand__name", "name")
 
@@ -281,7 +382,7 @@ class ConfirmProductTransfersView(APIView):
 
             try:
                 # Actualizar el stock en la tienda destino
-                destination_store_product = StoreProduct.objects.get(
+                destination_store_product = StoreProduct.objects.select_for_update().get(
                     **destination_stock_filter
                 )
                 previous_dest_stock = destination_store_product.stock
@@ -302,8 +403,19 @@ class ConfirmProductTransfersView(APIView):
                 )
 
                 # Actualizar el stock en la tienda origen
-                origin_store_product = StoreProduct.objects.get(**origin_stock_filter)
-                previous_origin_stock = origin_store_product.stock                    
+                origin_store_product = StoreProduct.objects.select_for_update().get(**origin_stock_filter)
+                previous_origin_stock = origin_store_product.stock
+                
+                # Validar stock suficiente
+                if previous_origin_stock < transfer_info["quantity"]:
+                    return Response(
+                        {
+                            "status": f"Stock insuficiente en tienda origen para {transfer.product.name}. "
+                                     f"Disponible: {previous_origin_stock}, Solicitado: {transfer_info['quantity']}"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                
                 origin_store_product.stock -= transfer_info["quantity"]
                 origin_store_product.save()
 
@@ -342,7 +454,7 @@ class ConfirmDistributionView(APIView):
         logs = []
 
         for transfer in transfers:
-            destination_store_product = StoreProduct.objects.get(
+            destination_store_product = StoreProduct.objects.select_for_update().get(
                 product=transfer.product, store=transfer.destination_store
             )
             previous_dest_stock = destination_store_product.stock
@@ -363,10 +475,12 @@ class ConfirmDistributionView(APIView):
             )
 
             # Obtener y actualizar el stock en la tienda origen
-            origin_store_product = StoreProduct.objects.get(
+            origin_store_product = StoreProduct.objects.select_for_update().get(
                 product=transfer.product, store=transfer.origin_store
             )
             previous_origin_stock = origin_store_product.stock
+            
+            # Validar y ajustar stock si es necesario
             if previous_origin_stock < transfer.quantity:
                 origin_store_product.stock = transfer.quantity
                 StoreProductLog.objects.create(
@@ -374,11 +488,11 @@ class ConfirmDistributionView(APIView):
                     user=request.user,
                     previous_stock=previous_origin_stock,
                     updated_stock=transfer.quantity,
-                    action="A",   # Salida
-                    movement="MA" # Transferencia enviada
+                    action="A",
+                    movement="MA"
                 )
                 origin_store_product.save()
-                time.sleep(2)
+                previous_origin_stock = transfer.quantity
 
             origin_store_product.stock -= transfer.quantity
             origin_store_product.save()
@@ -412,7 +526,13 @@ class BrandViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return Brand.objects.filter(tenant=tenant)
+        queryset = Brand.objects.filter(tenant=tenant)
+        
+        # Optimizar para listado
+        if self.action == 'list':
+            queryset = queryset.only('id', 'name', 'tenant_id')
+        
+        return queryset
 
     def perform_create(self, serializer):
         tenant = self.request.user.get_tenant()
@@ -425,7 +545,13 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return Department.objects.filter(tenant=tenant)
+        queryset = Department.objects.filter(tenant=tenant)
+        
+        # Optimizar para listado
+        if self.action == 'list':
+            queryset = queryset.only('id', 'name', 'tenant_id')
+        
+        return queryset
 
     def perform_create(self, serializer):
         tenant = self.request.user.get_tenant()
@@ -441,7 +567,7 @@ class AddProductsView(APIView):
         user = request.user
 
         for store_product_data in store_products_data:
-            store_product = StoreProduct.objects.get(id=store_product_data["id"])
+            store_product = StoreProduct.objects.select_for_update().get(id=store_product_data["id"])
             previous_stock = store_product.stock
             updated_stock = store_product.stock + store_product_data["quantity"]
             store_product.stock = updated_stock
@@ -475,64 +601,38 @@ class StoreInvestmentView(APIView):
 
 
 class InvestmentsView(APIView):
-    def get(self, request):
+    def get(self, request, id=None):
+        from django.shortcuts import get_object_or_404
+        
+        if not id:
+            return Response(
+                {"error": "ID is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
         user = request.user
         tenant = user.get_tenant()
-        stores = Store.objects.filter(tenant=tenant)
-
-        data = [
-            {"id": store.id, "investment": store.get_investment()} for store in stores
-        ]
-
+        store = get_object_or_404(Store, id=id, tenant=tenant)
+        
         return Response(
-            data,
+            store.get_investment(),
             status=status.HTTP_200_OK,
         )
 
 
 @method_decorator(get_store(), name="dispatch")
 class ProductImportValidationView(APIView):
-    def validate_columns(self, df, import_stock):
-        expected_columns = [
-            "Código",
-            "Marca",
-            "Departamento",
-            "Nombre",
-            "Costo",
-            "Precio unitario",
-            "Precio mayoreo",
-            "Cantidad minima mayoreo",
-            "Precio Mayoreo en descuento de clientes",
-        ]
-
-        if import_stock == "Y":
-            expected_columns += ["Cantidad"]
-
-        if not is_list_in_another(expected_columns, list(df.columns)):
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Marca": "brand",
-                "Departamento": "departament",
-                "Nombre": "name",
-                "Costo": "cost",
-                "Precio unitario": "unit_price",
-                "Precio mayoreo": "wholesale_price",
-                "Cantidad minima mayoreo": "min_wholesale_quantity",
-                "Precio Mayoreo en descuento de clientes": "wholesale_price_on_client_discount",
-                "Cantidad": "quantity",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
         if not file_obj:
             return Response(
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
+
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         create_brands = request.data.get("create_brands")
         create_departments = request.data.get("create_departments")
@@ -541,9 +641,16 @@ class ProductImportValidationView(APIView):
 
         tenant = request.user.get_tenant()
         try:
-            df = pd.read_excel(file_obj).replace({np.nan: None})
-            self.validate_columns(df, import_stock)
-            df = self.rename_columns(df)
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS).replace({np.nan: None})
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validate_excel_columns(df, import_stock)
+            df = rename_product_columns(df)
 
             if df.empty:
                 raise ValueError("El excel esta vacio")
@@ -551,10 +658,7 @@ class ProductImportValidationView(APIView):
             data, codes = [], dict()
 
             for _, data_row in enumerate(df.to_dict(orient="records")):
-                data_row = {
-                    key: value.strip() if isinstance(value, str) else value
-                    for key, value in data_row.items()
-                }
+                data_row = clean_row_data(data_row)
 
                 data_row["status"] = "Exitoso"
                 code = data_row["code"]
@@ -649,41 +753,6 @@ class ProductImportValidationView(APIView):
 
 
 class ProductImport(APIView):
-    def validate_columns(self, df, import_stock):
-        expected_columns = [
-            "Código",
-            "Marca",
-            "Departamento",
-            "Nombre",
-            "Costo",
-            "Precio unitario",
-            "Precio mayoreo",
-            "Cantidad minima mayoreo",
-            "Precio Mayoreo en descuento de clientes",
-        ]
-
-        if import_stock == "Y":
-            expected_columns += ["Cantidad"]
-
-        if not is_list_in_another(expected_columns, list(df.columns)):
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Marca": "brand",
-                "Nombre": "name",
-                "Costo": "cost",
-                "Precio unitario": "unit_price",
-                "Precio mayoreo": "wholesale_price",
-                "Cantidad minima mayoreo": "min_wholesale_quantity",
-                "Precio Mayoreo en descuento de clientes": "wholesale_price_on_client_discount",
-                "Departamento": "department",
-                "Cantidad": "quantity",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -692,13 +761,25 @@ class ProductImport(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         tenant = self.request.user.get_tenant()
         import_stock = request.data.get("import_stock")
 
         try:
-            df = pd.read_excel(file_obj).replace({np.nan: None})
-            self.validate_columns(df, import_stock)
-            df = self.rename_columns(df)
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS).replace({np.nan: None})
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validate_excel_columns(df, import_stock)
+            df = rename_product_columns(df)
 
             brand_cache = {}
             department_cache = {}
@@ -706,10 +787,7 @@ class ProductImport(APIView):
             logs = []
             for data_row in df.to_dict(orient="records"):
 
-                data_row = {
-                    key: value.strip() if isinstance(value, str) else value
-                    for key, value in data_row.items()
-                }
+                data_row = clean_row_data(data_row)
 
                 quantity = data_row.pop("quantity")
                 brand_name = data_row["brand"]
@@ -921,21 +999,6 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductImportValidationView(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -944,21 +1007,26 @@ class StoreProductImportValidationView(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         store = self.request.store
         tenant = self.request.user.get_tenant()
 
         try:
-            df = pd.read_excel(file_obj)
-            self.validate_columns(df)
-
-            df = self.rename_columns(df)
-
-            all_integers = df["quantity"].apply(lambda x: isinstance(x, int)).all()
-
-            if not all_integers:
-                raise ValueError(
-                    "No todos los datos en la columna Cantidad son números"
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS)
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
+            validate_quantities(df)
 
             data = []
 
@@ -1004,21 +1072,6 @@ class StoreProductImportValidationView(APIView):
 
 @method_decorator(get_store(), name="dispatch")
 class ImportStoreProductView(APIView):
-
-    def validate_columns(self, df):
-        expected_columns = ["Código", "Cantidad", "Descripción"]
-        if list(df.columns) != expected_columns:
-            raise ValueError("Formato de excel incorrecto")
-
-    def rename_columns(self, df):
-        return df.rename(
-            columns={
-                "Código": "code",
-                "Cantidad": "quantity",
-                "Descripción": "description",
-            }
-        )
-
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -1026,6 +1079,11 @@ class ImportStoreProductView(APIView):
             return Response(
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
+
+        try:
+            validate_excel_file(file_obj)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         tenant = self.request.user.get_tenant()
         store = self.request.store
@@ -1036,9 +1094,16 @@ class ImportStoreProductView(APIView):
             raise ValueError("ERROR EN ACTION")
 
         try:
-            df = pd.read_excel(file_obj)
-            self.validate_columns(df)
-            df = self.rename_columns(df)
+            df = pd.read_excel(file_obj, nrows=MAX_ROWS)
+            
+            if len(df) > MAX_ROWS:
+                return Response(
+                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            validate_store_product_columns(df)
+            df = rename_store_product_columns(df)
 
             logs = []  # Lista para almacenar registros de StoreProductLog
 
@@ -1048,7 +1113,7 @@ class ImportStoreProductView(APIView):
 
                 # Obtener el producto y la relación StoreProduct
                 product = Product.objects.get(code=code, brand__tenant=tenant)
-                store_product = StoreProduct.objects.get(product=product, store=store)
+                store_product = StoreProduct.objects.select_for_update().get(product=product, store=store)
 
                 previous_stock = store_product.stock
                 updated_stock = previous_stock + quantity if action == "E" else quantity
@@ -1105,7 +1170,9 @@ class StockInOtherStores(APIView):
         product = Product.objects.select_related("brand").get(
             code=code, brand__tenant=tenant
         )
-        store_product = StoreProduct.objects.get(store=store, product=product)
+        store_product = StoreProduct.objects.select_related("store").get(
+            store=store, product=product
+        )
 
         store_type_filter = (
             {} if tenant.displays_stock_in_storages else {"store__store_type": "T"}
@@ -1117,12 +1184,15 @@ class StockInOtherStores(APIView):
             .select_related("store")
             .order_by("-store__store_type", "store__name")
         )
+        
+        # Agregar anotaciones de stock
+        sps = annotate_stock_info(sps)
 
         data = [
             {
                 "store_id": sp.store.id,
                 "store_name": sp.store.get_full_name(),
-                "available_stock": sp.calculate_available_stock(),
+                "available_stock": sp.available_stock,
             }
             for sp in sps
         ]
@@ -1143,6 +1213,8 @@ class DistributionViewSet(viewsets.ModelViewSet):
 
         return Distribution.objects.filter(
             Q(origin_store=store) | Q(destination_store=store), transfer_datetime=None
+        ).select_related("origin_store", "destination_store").prefetch_related(
+            "transfers__product__brand"
         ).order_by("-id")
 
     def perform_create(self, serializer):

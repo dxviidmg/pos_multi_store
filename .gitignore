@@ -1,4 +1,4 @@
 *.pyc
 *.sqlite3
 *.env
-*.env_prod
+*.env.prod
