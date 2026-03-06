@@ -83,7 +83,8 @@ class Store(Base):
         result = self.store_products.filter(stock__gt=0).aggregate(
             total=Coalesce(
                 Sum(F('stock') * F('product__cost'), output_field=DecimalField()),
-                0
+                0,
+                output_field=DecimalField()
             )
         )
         return result['total']

@@ -601,17 +601,21 @@ class StoreInvestmentView(APIView):
 
 
 class InvestmentsView(APIView):
-    def get(self, request):
+    def get(self, request, id=None):
+        from django.shortcuts import get_object_or_404
+        
+        if not id:
+            return Response(
+                {"error": "ID is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
         user = request.user
         tenant = user.get_tenant()
-        stores = Store.objects.filter(tenant=tenant)
-
-        data = [
-            {"id": store.id, "investment": store.get_investment()} for store in stores
-        ]
-
+        store = get_object_or_404(Store, id=id, tenant=tenant)
+        
         return Response(
-            data,
+            store.get_investment(),
             status=status.HTTP_200_OK,
         )
 
