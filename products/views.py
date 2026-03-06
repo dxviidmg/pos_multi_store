@@ -601,14 +601,8 @@ class StoreInvestmentView(APIView):
 
 
 class InvestmentsView(APIView):
-    def get(self, request, id=None):
+    def get(self, request, id):
         from django.shortcuts import get_object_or_404
-        
-        if not id:
-            return Response(
-                {"error": "ID is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         
         user = request.user
         tenant = user.get_tenant()
@@ -618,6 +612,19 @@ class InvestmentsView(APIView):
             store.get_investment(),
             status=status.HTTP_200_OK,
         )
+
+
+class ResetStoreStockView(APIView):
+    def post(self, request, id):
+        from django.shortcuts import get_object_or_404
+        
+        user = request.user
+        tenant = user.get_tenant()
+        store = get_object_or_404(Store, id=id, tenant=tenant)
+        
+        store.store_products.update(stock=0)
+        
+        return Response(status=status.HTTP_200_OK)
 
 
 @method_decorator(get_store(), name="dispatch")
