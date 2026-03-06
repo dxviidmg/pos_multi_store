@@ -26,6 +26,7 @@ from .models import (
     Distribution,
 )
 from django.db.models import Q
+from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -447,6 +448,7 @@ class ConfirmProductTransfersView(APIView):
 #
 @method_decorator(get_store(), name="dispatch")
 class ConfirmDistributionView(APIView):
+    @transaction.atomic
     def post(self, request):
         id = request.data.get("id")
         distribution = Distribution.objects.get(id=id)
@@ -589,24 +591,13 @@ class AddProductsView(APIView):
 
 
 # @method_decorator(get_store(), name="dispatch")
-class StoreInvestmentView(APIView):
-    def get(self, request, pk):
-
-        store = Store.objects.get(id=pk)
-
-        return Response(
-            store.get_investment(),
-            status=status.HTTP_200_OK,
-        )
-
-
 class InvestmentsView(APIView):
-    def get(self, request, id):
+    def get(self, request, pk):
         from django.shortcuts import get_object_or_404
         
         user = request.user
         tenant = user.get_tenant()
-        store = get_object_or_404(Store, id=id, tenant=tenant)
+        store = get_object_or_404(Store, id=pk, tenant=tenant)
         
         return Response(
             store.get_investment(),
@@ -615,12 +606,12 @@ class InvestmentsView(APIView):
 
 
 class ResetStoreStockView(APIView):
-    def post(self, request, id):
+    def post(self, request, pk):
         from django.shortcuts import get_object_or_404
         
         user = request.user
         tenant = user.get_tenant()
-        store = get_object_or_404(Store, id=id, tenant=tenant)
+        store = get_object_or_404(Store, id=pk, tenant=tenant)
         
         store.store_products.update(stock=0)
         

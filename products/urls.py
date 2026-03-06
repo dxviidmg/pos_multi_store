@@ -19,11 +19,10 @@ router.register('distribution', views.DistributionViewSet, basename='distributio
 urlpatterns = router.urls
 
 urlpatterns += [
+    path('store/<int:pk>/investment/', views.InvestmentsView.as_view(), name='store-investment'),
+    path('store/<int:pk>/reset-stock/', views.ResetStoreStockView.as_view(), name='store-reset-stock'),
     path('transfers/confirm/', views.ConfirmProductTransfersView.as_view(), name='transfers-confirm'),
     path('store-product/distribution/confirm/', views.ConfirmDistributionView.as_view(), name='confirm-distribution'),
-    path('store/investment/<int:pk>/', views.StoreInvestmentView.as_view(), name='store-investment'),
-    path('store/<int:id>/investment/', views.InvestmentsView.as_view(), name='investment-detail'),
-    path('store/<int:id>/reset-stock/', views.ResetStoreStockView.as_view(), name='reset-store-stock'),
     path('products/add/', views.AddProductsView.as_view(), name='add-products'),
     path('products/import-validation/', views.ProductImportValidationView.as_view(), name='product-import-validation'),
     path('products/import/', views.ProductImport.as_view(), name='product-import'),
