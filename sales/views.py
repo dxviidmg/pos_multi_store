@@ -355,14 +355,14 @@ class SaleImportValidationView(APIView):
             df = rename_store_product_columns(df)
             validate_quantities(df)
 
-            data = []
+            validation_results = []
             product_quantities = (
                 {}
             )  # Diccionario para rastrear existencias por código de producto
 
             for _, row in df.iterrows():
-                aux = row.to_dict()
-                aux["status"] = "Exitoso"
+                row_data = row.to_dict()
+                row_data["status"] = "Exitoso"
 
                 code = row["code"]
                 quantity = row["quantity"]
@@ -370,8 +370,8 @@ class SaleImportValidationView(APIView):
 
                     product = Product.objects.get(code=code, brand__tenant=tenant)
                 except Product.DoesNotExist:
-                    aux["status"] = "Código no encontrado"
-                    data.append(aux)
+                    row_data["status"] = "Código no encontrado"
+                    validation_results.append(row_data)
                     continue
 
                 # Verificar existencias y manejar cantidades
@@ -385,16 +385,16 @@ class SaleImportValidationView(APIView):
                     product_quantities[code] = available_quantity
 
                 if available_quantity < quantity:
-                    aux["status"] = "Cantidad insuficiente"
+                    row_data["status"] = "Cantidad insuficiente"
                     product_quantities[code] = (
                         0  # Actualizar a 0 porque no hay suficiente stock
                     )
                 else:
                     product_quantities[code] -= quantity
 
-                data.append(aux)
+                validation_results.append(row_data)
 
-            return Response(data, status=status.HTTP_200_OK)
+            return Response(validation_results, status=status.HTTP_200_OK)
 
         except ValueError as e:
             print(e)

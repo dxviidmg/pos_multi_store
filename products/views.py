@@ -450,8 +450,8 @@ class TransferConfirmView(APIView):
 class ConfirmDistributionView(APIView):
     @transaction.atomic
     def post(self, request):
-        id = request.data.get("id")
-        distribution = Distribution.objects.get(id=id)
+        distribution_id = request.data.get("id")
+        distribution = Distribution.objects.get(id=distribution_id)
         transfers = distribution.transfers.all()
         logs = []
 
@@ -1026,13 +1026,13 @@ class StoreProductImportValidationView(APIView):
             df = rename_store_product_columns(df)
             validate_quantities(df)
 
-            data = []
+            validation_results = []
 
             codes = []
 
             for _, row in df.iterrows():
-                aux = row.to_dict()
-                aux["status"] = "Exitoso"
+                row_data = row.to_dict()
+                row_data["status"] = "Exitoso"
 
                 code = row["code"]
                 try:
@@ -1040,22 +1040,22 @@ class StoreProductImportValidationView(APIView):
                     product = Product.objects.get(code=code, brand__tenant=tenant)
                     StoreProduct.objects.get(product=product, store=store)
                 except Product.DoesNotExist:
-                    aux["status"] = "Código no encontrado"
-                    data.append(aux)
+                    row_data["status"] = "Código no encontrado"
+                    validation_results.append(row_data)
                     continue
                 except StoreProduct.DoesNotExist:
-                    aux["status"] = "Producto encontrado pero no existe en la tienda"
-                    data.append(aux)
+                    row_data["status"] = "Producto encontrado pero no existe en la tienda"
+                    validation_results.append(row_data)
                     continue
 
                 if code in codes:
-                    aux["status"] = "Codigo repetido en el archivo"
+                    row_data["status"] = "Codigo repetido en el archivo"
                 else:
                     codes.append(code)
 
-                data.append(aux)
+                validation_results.append(row_data)
 
-            return Response(data, status=status.HTTP_200_OK)
+            return Response(validation_results, status=status.HTTP_200_OK)
 
         except ValueError as e:
             print(e)
@@ -1186,7 +1186,7 @@ class StockInOtherStores(APIView):
         # Agregar anotaciones de stock
         sps = annotate_stock_info(sps)
 
-        data = [
+        stock_data = [
             {
                 "store_id": sp.store.id,
                 "store_name": sp.store.get_full_name(),
@@ -1195,7 +1195,7 @@ class StockInOtherStores(APIView):
             for sp in sps
         ]
 
-        return Response(data, status=status.HTTP_200_OK)
+        return Response(stock_data, status=status.HTTP_200_OK)
 
 
 def ping(request):
