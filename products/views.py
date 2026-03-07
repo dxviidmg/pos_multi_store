@@ -323,7 +323,7 @@ class StoreViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(get_store(), name="dispatch")
-class ConfirmProductTransfersView(APIView):
+class TransferConfirmView(APIView):
     @transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
     def post(self, request):
         transfer_list = request.data.get("transfers")
@@ -562,7 +562,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(get_store(), name="dispatch")
-class AddProductsView(APIView):
+class ProductAddView(APIView):
     @transaction.atomic
     def post(self, request):
         store_products_data = request.data.get("store_products", [])
@@ -591,7 +591,7 @@ class AddProductsView(APIView):
 
 
 # @method_decorator(get_store(), name="dispatch")
-class InvestmentsView(APIView):
+class StoreInvestmentView(APIView):
     def get(self, request, pk):
         from django.shortcuts import get_object_or_404
         
@@ -930,7 +930,7 @@ class CashFlowViewSet(viewsets.ModelViewSet):
         return sale_instance
 
 
-class DeleteProductsView(APIView):
+class ProductDeleteView(APIView):
     @transaction.atomic
     def post(self, request):
         ids = request.data
@@ -940,7 +940,7 @@ class DeleteProductsView(APIView):
         )
 
 
-class DeleteBrandsView(APIView):
+class BrandDeleteView(APIView):
     @transaction.atomic
     def post(self, request):
         ids = request.data
@@ -950,7 +950,7 @@ class DeleteBrandsView(APIView):
         )
 
 
-class DeleteDepartmentsView(APIView):
+class DepartmentDeleteView(APIView):
     @transaction.atomic
     def post(self, request):
         ids = request.data
@@ -1148,7 +1148,7 @@ class ImportStoreProductView(APIView):
             )
 
 
-class ImportCanIcludeQuantityView(APIView):
+class StoreProductCanIncludeQuantityView(APIView):
     def get(self, request):
         tenant = self.request.user.get_tenant()
         store_count = Store.objects.filter(tenant=tenant).count()

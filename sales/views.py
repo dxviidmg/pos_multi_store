@@ -314,7 +314,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(get_store(), name="dispatch")
-class CashSummary(APIView):
+class CashSummaryView(APIView):
     def get(self, request):
         date = request.GET.get("date")
         store = request.store
@@ -325,7 +325,7 @@ class CashSummary(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class ImportSalesValidation(APIView):
+class SaleImportValidationView(APIView):
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -408,7 +408,7 @@ class ImportSalesValidation(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class ImportSales(APIView):
+class SaleImportView(APIView):
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -513,7 +513,7 @@ class ImportSales(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class CancelSale(APIView):
+class SaleCancelView(APIView):
     def post(self, request):
         sale_id = request.data.get("id")
         products_data = request.data.get("products_sale_to_cancel")
@@ -609,7 +609,7 @@ class CancelSale(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class SalesDashboardAsyncView(APIView):
+class SaleDashboardAsyncView(APIView):
     def get(self, request):
         year = request.query_params.get('year')
         tenant = self.request.user.get_tenant()
