@@ -1,10 +1,10 @@
 from rest_framework.routers import DefaultRouter
-from . import views
 from django.urls import path
+from . import views
 
 app_name = 'products'
 
-router = DefaultRouter() 
+router = DefaultRouter()
 router.register('store', views.StoreViewSet, basename='store')
 router.register('brand', views.BrandViewSet, basename='brand')
 router.register('department', views.DepartmentViewSet, basename='department')
@@ -14,7 +14,6 @@ router.register('transfer', views.TransferViewSet, basename='transfer')
 router.register('cash-flow', views.CashFlowViewSet, basename='cash-flow')
 router.register('store-worker', views.StoreWorkerViewSet, basename='store-worker')
 router.register('distribution', views.DistributionViewSet, basename='distribution')
-
 
 urlpatterns = router.urls
 

@@ -1,12 +1,12 @@
 from rest_framework.routers import DefaultRouter
-from . import views 
 from django.urls import path
+from . import views
 
+app_name = 'sales'
 
-app_name = 'sale'
-
-router = DefaultRouter() 
+router = DefaultRouter()
 router.register('sale', views.SaleViewSet, basename='sale')
+
 urlpatterns = router.urls
 
 urlpatterns += [

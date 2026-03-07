@@ -1,10 +1,9 @@
 from rest_framework.routers import DefaultRouter
-from . import views 
-from django.urls import path
-
+from . import views
 
 app_name = 'printers'
 
-router = DefaultRouter() 
+router = DefaultRouter()
 router.register('store-printer', views.StorePrinterViewSet, basename='store-printer')
+
 urlpatterns = router.urls
