@@ -314,7 +314,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(get_store(), name="dispatch")
-class CashSummary(APIView):
+class CashSummaryView(APIView):
     def get(self, request):
         date = request.GET.get("date")
         store = request.store
@@ -325,7 +325,7 @@ class CashSummary(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class ImportSalesValidation(APIView):
+class SaleImportValidationView(APIView):
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -355,14 +355,14 @@ class ImportSalesValidation(APIView):
             df = rename_store_product_columns(df)
             validate_quantities(df)
 
-            data = []
+            validation_results = []
             product_quantities = (
                 {}
             )  # Diccionario para rastrear existencias por código de producto
 
             for _, row in df.iterrows():
-                aux = row.to_dict()
-                aux["status"] = "Exitoso"
+                row_data = row.to_dict()
+                row_data["status"] = "Exitoso"
 
                 code = row["code"]
                 quantity = row["quantity"]
@@ -370,8 +370,8 @@ class ImportSalesValidation(APIView):
 
                     product = Product.objects.get(code=code, brand__tenant=tenant)
                 except Product.DoesNotExist:
-                    aux["status"] = "Código no encontrado"
-                    data.append(aux)
+                    row_data["status"] = "Código no encontrado"
+                    validation_results.append(row_data)
                     continue
 
                 # Verificar existencias y manejar cantidades
@@ -385,16 +385,16 @@ class ImportSalesValidation(APIView):
                     product_quantities[code] = available_quantity
 
                 if available_quantity < quantity:
-                    aux["status"] = "Cantidad insuficiente"
+                    row_data["status"] = "Cantidad insuficiente"
                     product_quantities[code] = (
                         0  # Actualizar a 0 porque no hay suficiente stock
                     )
                 else:
                     product_quantities[code] -= quantity
 
-                data.append(aux)
+                validation_results.append(row_data)
 
-            return Response(data, status=status.HTTP_200_OK)
+            return Response(validation_results, status=status.HTTP_200_OK)
 
         except ValueError as e:
             print(e)
@@ -408,7 +408,7 @@ class ImportSalesValidation(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class ImportSales(APIView):
+class SaleImportView(APIView):
     def post(self, request):
         file_obj = request.FILES.get("file")
 
@@ -513,7 +513,7 @@ class ImportSales(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class CancelSale(APIView):
+class SaleCancelView(APIView):
     def post(self, request):
         sale_id = request.data.get("id")
         products_data = request.data.get("products_sale_to_cancel")
@@ -609,7 +609,7 @@ class CancelSale(APIView):
 
 
 @method_decorator(get_store(), name="dispatch")
-class SalesDashboardAsyncView(APIView):
+class SaleDashboardAsyncView(APIView):
     def get(self, request):
         year = request.query_params.get('year')
         tenant = self.request.user.get_tenant()
