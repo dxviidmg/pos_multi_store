@@ -47,9 +47,11 @@ class StoreProductLogsView(APIView):
 
 class StoreProductLogsChoicesView(APIView):
 	def get(self, request):
+		from core.constants import LogAction
+		
 		choices = [
 			{"value": key, "label": label}
-			for key, label in StoreProductLog.ACTIONS_CHOICES
+			for key, label in LogAction.choices
 		]
 		return Response(choices)
 	
