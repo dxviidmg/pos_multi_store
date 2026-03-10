@@ -47,7 +47,6 @@ class TenantInfoView(APIView):
         return Response({
             "notices": notices,
             "product_count": tenant.count_products(),
-            "supports_departments": tenant.supports_departments,
         })
     
 
