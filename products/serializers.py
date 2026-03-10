@@ -195,14 +195,10 @@ class StoreSerializer(StoreBaseSerializer):
     printer = serializers.SerializerMethodField()
     products_count = serializers.IntegerField(source='count_products', read_only=True)
     workers_count = serializers.IntegerField(source='count_workers', read_only=True)
-    accepts_exchanges = serializers.SerializerMethodField()
     pending_transfers_count = serializers.SerializerMethodField()
 
     def get_printer(self, obj):
         return obj.get_store_printer()
-    
-    def get_accepts_exchanges(self, obj):
-        return obj.tenant.accepts_exchanges
     
     def get_pending_transfers_count(self, obj):
         return obj.transfers_from.filter(transfer_datetime=None).count() + obj.transfers_to.filter(transfer_datetime=None).count()

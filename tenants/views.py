@@ -1,6 +1,6 @@
-from rest_framework import viewsets
-from .serializers import PaymentSerializer
-from .models import Payment
+from rest_framework import viewsets, mixins
+from .serializers import PaymentSerializer, TenantSerializer
+from .models import Payment, Tenant
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -14,6 +14,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
         return Payment.objects.filter(tenant=tenant).order_by("id")
+
+
+class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    serializer_class = TenantSerializer
+    
+    def get_object(self):
+        return self.request.user.get_tenant()
 
 
 class TenantInfoView(APIView):

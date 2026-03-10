@@ -6,6 +6,7 @@ app_name = 'tenants'
 
 router = DefaultRouter()
 router.register('payment', views.PaymentViewSet, basename='payment')
+router.register('tenant', views.TenantViewSet, basename='tenant')
 
 urlpatterns = router.urls
 
