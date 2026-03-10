@@ -42,7 +42,7 @@ class TenantInfoView(APIView):
                 elif days_diff == 0:
                     notices.append({"notice": "Ultimo dia de pago, favor de pagar", "variant": "warning"})
                 elif days_diff <= 5:
-                    notices.append({"notice": f"Próximo pago en {days_diff} días", "variant": "alert"})
+                    notices.append({"notice": f"Próximo pago en {days_diff} días", "variant": "warning"})
 
         return Response({
             "notices": notices,
