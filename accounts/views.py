@@ -17,15 +17,13 @@ class CustomAuthToken(ObtainAuthToken):
             'last_name': user.last_name,
             'full_name': user.get_full_name(),
             'email': user.email,
+            'tenant_id': user.get_tenant().id,
             'tenant_name': user.get_tenant().name,
             'tenant_short_name': user.get_tenant().short_name,
-            'supports_reservations': user.get_tenant().supports_reservations,
-            'sellers': user.get_tenant().sellers,
             'store_id': store.id if store else None,
             'store_name': store.name if store else None,
             'store_type': store.store_type if store else None,
             'store_type_display': store.get_store_type_display() if store else None,
             'store_printer': store.get_store_printer() if store else None,
             'role': user.get_role(),
-            'is_multi_store': user.get_tenant().stores > 1
         })

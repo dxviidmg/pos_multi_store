@@ -20,13 +20,8 @@ class Tenant(CreatedAtModel):
     name = models.CharField(max_length=100)
     short_name = models.CharField(max_length=5, unique=True)
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
-    stores = models.IntegerField()
     is_sandbox = models.BooleanField(default=False)
-    sellers = models.IntegerField(default=0)
     displays_stock_in_storages = models.BooleanField(default=False)
-    supports_departments = models.BooleanField(default=False)
-    supports_reservations = models.BooleanField(default=False)
-    accepts_exchanges = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name

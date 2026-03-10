@@ -1,6 +1,6 @@
-from rest_framework import viewsets
-from .serializers import PaymentSerializer
-from .models import Payment
+from rest_framework import viewsets, mixins
+from .serializers import PaymentSerializer, TenantSerializer
+from .models import Payment, Tenant
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -16,34 +16,39 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return Payment.objects.filter(tenant=tenant).order_by("id")
 
 
+class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    serializer_class = TenantSerializer
+    
+    def get_object(self):
+        return self.request.user.get_tenant()
+
+
 class TenantInfoView(APIView):
     def get(self, request):
         tenant = request.user.get_tenant()
-        today = date.today()
-
-        payment = Payment.objects.filter(tenant=tenant).last()
-        notices = ["Soy una cuenta de demostración"] if tenant.is_sandbox else []
-
-        if not tenant.is_sandbox:
+        
+        if tenant.is_sandbox:
+            notices = [{"notice": "Soy una cuenta de demostración", "variant": "success"}]
+        else:
+            notices = []
+            payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
+            
             if not payment:
-                notices.append("No existe ningún pago, favor de pagar")
+                notices.append({"notice": "No existe ningún pago, favor de pagar", "variant": "error"})
             else:
-                days_diff = (payment.end_of_validity - today).days
+                days_diff = (payment.end_of_validity - date.today()).days
                 if days_diff < 0:
-                    notices.append(f"Tiene un adeudo, favor de pagar")
+                    notices.append({"notice": "Tiene un adeudo, favor de pagar", "variant": "error"})
                 elif days_diff == 0:
-                    notices.append(f"Ultimo dia de pago, favor de pagar")
-                elif days_diff <= 7:
-                    notices.append(f"Próximo pago en {days_diff} días")
+                    notices.append({"notice": "Ultimo dia de pago, favor de pagar", "variant": "warning"})
+                elif days_diff <= 5:
+                    notices.append({"notice": f"Próximo pago en {days_diff} días", "variant": "alert"})
 
-        return Response(
-            {
-                "notices": notices,
-                "product_count": tenant.count_products(),
-                "supports_departments": tenant.supports_departments,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response({
+            "notices": notices,
+            "product_count": tenant.count_products(),
+            "supports_departments": tenant.supports_departments,
+        })
     
 
 
