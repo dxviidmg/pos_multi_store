@@ -69,7 +69,7 @@ def get_sales_for_dashboard(self, store_ids, year, month):
 
         # Traer stores primero (más rápido)
         stores_qs = Store.objects.filter(id__in=store_ids).only("id", "name")
-        stores = {s.id: s.get_full_name() for s in stores_qs}
+        stores = {s.id: s.name for s in stores_qs}
 
         self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100})
 
