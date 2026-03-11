@@ -57,7 +57,7 @@ def get_sales_duplicates_task(self, store_ids, start_date, end_date):
 
 
 @shared_task(bind=True)
-def get_sales_for_dashboard(self, store_ids, year):
+def get_sales_for_dashboard(self, store_ids, year, month):
     try:
         self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100})
         if isinstance(store_ids, QuerySet):
@@ -74,11 +74,16 @@ def get_sales_for_dashboard(self, store_ids, year):
         self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100})
 
         # Usar values() en lugar de only() para evitar instancias de modelo
-        sales = Sale.objects.filter(
-            store_id__in=store_ids,
-            created_at__year=year,
-            is_canceled=False
-        ).values("store_id", "created_at", "total")
+        sales_filter = {
+            "store_id__in": store_ids,
+            "created_at__year": year,
+            "is_canceled": False
+        }
+
+        if month != '0':
+            sales_filter["created_at__month"] = month
+
+        sales = Sale.objects.filter(**sales_filter).values("store_id", "created_at", "total")
 
         self.update_state(state='PROGRESS', meta={'current': 70, 'total': 100})
 

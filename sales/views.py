@@ -612,10 +612,11 @@ class SaleCancelView(APIView):
 class SaleDashboardAsyncView(APIView):
     def get(self, request):
         year = request.query_params.get('year')
+        month = request.query_params.get('month')
         tenant = self.request.user.get_tenant()
         stores = Store.objects.filter(tenant=tenant, store_type="T")
         store_ids = list(stores.values_list("id", flat=True))
         
-        task = get_sales_for_dashboard.delay(store_ids, year)
+        task = get_sales_for_dashboard.delay(store_ids, year, month)
         
         return Response({"task": task.id})
