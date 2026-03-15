@@ -259,6 +259,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         brand_id = self.request.GET.get("brand_id")
         department_id = self.request.GET.get("department_id")
         max_stock = self.request.GET.get("max_stock")
+        code = self.request.GET.get("code")
 
         filters = Q(brand__tenant=tenant)
 
@@ -267,6 +268,9 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         if department_id and department_id != "":
             filters &= Q(department__id=department_id)
+
+        if code:
+            filters &= Q(code__icontains=code)
 
         queryset = Product.objects.filter(filters).select_related("brand", "department")
 
