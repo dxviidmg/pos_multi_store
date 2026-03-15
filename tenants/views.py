@@ -34,15 +34,15 @@ class TenantInfoView(APIView):
             payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
             
             if not payment:
-                notices.append({"notice": "No existe ningún pago, favor de pagar", "variant": "error"})
+                notices.append({"notice": "No se encontró un pago activo. Regularice su cuenta para continuar.", "variant": "error"})
             else:
                 days_diff = (payment.end_of_validity - date.today()).days
                 if days_diff < 0:
-                    notices.append({"notice": "Tiene un adeudo, favor de pagar", "variant": "error"})
+                    notices.append({"notice": "Su periodo de servicio ha vencido. Renueve para mantener el acceso.", "variant": "error"})
                 elif days_diff == 0:
-                    notices.append({"notice": "Ultimo dia de pago, favor de pagar", "variant": "warning"})
+                    notices.append({"notice": "Su periodo de servicio vence hoy. Renueve para evitar interrupciones.", "variant": "warning"})
                 elif days_diff <= 5:
-                    notices.append({"notice": f"Próximo pago en {days_diff} días", "variant": "warning"})
+                    notices.append({"notice": f"Su periodo de servicio vence en {days_diff} días.", "variant": "warning"})
 
         return Response({
             "notices": notices,
