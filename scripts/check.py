@@ -1,3 +1,7 @@
+"""
+Consulta ventas de una fecha y hora específica (usado para verificaciones puntuales).
+Uso: python manage.py runscript check
+"""
 from sales.models import Sale
 
 def run():

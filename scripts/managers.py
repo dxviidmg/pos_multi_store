@@ -1,3 +1,8 @@
+"""
+Clases utilitarias para gestionar tenants, tiendas, productos y clientes.
+Incluye importación desde archivos Excel (Eleventa/SmartVenta) y creación de datos demo.
+Uso: importar las clases desde otros scripts.
+"""
 from products.models import Store, Product, Brand, StoreProduct
 import xlrd
 from decimal import Decimal

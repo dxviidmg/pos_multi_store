@@ -1,3 +1,7 @@
+"""
+Resetea contraseñas de usuarios de un tenant y elimina sus tokens de autenticación.
+Uso: python manage.py runscript reset_passwords
+"""
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 
