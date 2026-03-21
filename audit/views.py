@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from django.http import JsonResponse
 from celery.result import AsyncResult
 from rest_framework.views import APIView
@@ -7,7 +6,94 @@ from django.utils.decorators import method_decorator
 from sales.tasks import get_sales_duplicates_task
 from rest_framework.response import Response
 from logs.tasks import get_logs_duplicates_or_inconsistens_task, get_store_products_inconsistens_task
-from products.models import Store
+from products.models import Store, Product, StoreProduct
+from django.db.models import Count, Q, F
+from .tasks import get_unused_products_task
+
+
+class ProductAuditView(APIView):
+    def get(self, request):
+        tenant = request.user.get_tenant()
+        products = Product.objects.filter(brand__tenant=tenant)
+
+        # 1 — Códigos repetidos
+        duplicate_codes = (
+            products.exclude(Q(code="") | Q(code__isnull=True))
+            .values("code")
+            .annotate(count=Count("id"))
+            .filter(count__gt=1)
+        )
+        duplicates = []
+        for entry in duplicate_codes:
+            names = list(products.filter(code=entry["code"]).values_list("name", flat=True))
+            duplicates.append({"code": entry["code"], "count": entry["count"], "products": names})
+
+        # 2 — Costo en cero
+        zero_cost = list(
+            products.filter(Q(cost=0) | Q(cost__isnull=True))
+            .values("id", "name", "code")
+        )
+
+        # 3 — Precio mayoreo inconsistente
+        wholesale_issues = []
+        qs = products.filter(
+            Q(wholesale_price__gte=F("unit_price")) |
+            Q(wholesale_price__gt=0, min_wholesale_quantity__isnull=True) |
+            Q(wholesale_price__gt=0, min_wholesale_quantity=0) |
+            Q(min_wholesale_quantity__gt=0, wholesale_price__isnull=True) |
+            Q(min_wholesale_quantity__gt=0, wholesale_price=0)
+        ).distinct()
+        for p in qs:
+            reasons = []
+            if p.wholesale_price and p.wholesale_price >= p.unit_price:
+                reasons.append("mayoreo >= menudeo")
+            if p.wholesale_price and p.wholesale_price > 0 and (not p.min_wholesale_quantity):
+                reasons.append("tiene precio mayoreo sin cantidad mínima")
+            if p.min_wholesale_quantity and p.min_wholesale_quantity > 0 and (not p.wholesale_price):
+                reasons.append("tiene cantidad mínima sin precio mayoreo")
+            wholesale_issues.append({"id": p.id, "name": p.name, "code": p.code, "reasons": reasons})
+
+        # 4 — Faltantes en tiendas
+        stores = Store.objects.filter(tenant=tenant)
+        total_stores = stores.count()
+        missing = []
+        if total_stores > 0:
+            product_store_counts = (
+                StoreProduct.objects.filter(store__tenant=tenant)
+                .values("product_id")
+                .annotate(store_count=Count("store_id"))
+                .filter(store_count__lt=total_stores)
+            )
+            store_ids_set = set(stores.values_list("id", flat=True))
+            for entry in product_store_counts:
+                p = products.only("id", "name", "code").get(id=entry["product_id"])
+                present_ids = set(
+                    StoreProduct.objects.filter(product_id=p.id, store__tenant=tenant)
+                    .values_list("store_id", flat=True)
+                )
+                missing_stores = list(
+                    stores.filter(id__in=store_ids_set - present_ids).values_list("name", flat=True)
+                )
+                missing.append({
+                    "id": p.id, "name": p.name, "code": p.code,
+                    "in_stores": entry["store_count"], "total_stores": total_stores,
+                    "missing_in": missing_stores,
+                })
+
+        return Response({
+            "duplicate_codes": duplicates,
+            "zero_cost": zero_cost,
+            "wholesale_issues": wholesale_issues,
+            "missing_in_stores": missing,
+        })
+
+
+class ProductAuditActivityView(APIView):
+    def get(self, request):
+        tenant = request.user.get_tenant()
+        task = get_unused_products_task.delay(tenant.id)
+        return Response({"task": task.id})
+
 
 @method_decorator(get_store(), name="dispatch")
 class Audit1AsyncView(APIView):
