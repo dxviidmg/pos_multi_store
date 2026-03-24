@@ -7,7 +7,9 @@ def get_full_name(self):
     return f"{self.first_name} {self.last_name}"
 
 def get_store(self):
-    return getattr(StoreWorker.objects.filter(worker=self).first(), "store", None) or Store.objects.filter(manager=self).first()
+    if not hasattr(self, '_cached_store'):
+        self._cached_store = getattr(StoreWorker.objects.filter(worker=self).first(), "store", None) or Store.objects.filter(manager=self).first()
+    return self._cached_store
     
 
 def get_role(self):
@@ -20,8 +22,9 @@ def get_role(self):
     return 'Sin definir'
 
 def get_tenant(self):
-    # Usar `or` para evitar realizar múltiples consultas
-    return Tenant.objects.filter(owner=self).first() or self.get_store().tenant
+    if not hasattr(self, '_cached_tenant'):
+        self._cached_tenant = Tenant.objects.filter(owner=self).first() or self.get_store().tenant
+    return self._cached_tenant
 
 # Asignar métodos a la clase `User`
 User.add_to_class("__str__", get_full_name)
