@@ -1,8 +1,10 @@
 from rest_framework import viewsets
 from .serializers import SaleSerializer, SaleCreateSerializer
 from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product, CashFlow, Store
+from products.models import StoreProduct, Product, CashFlow, Store, Distribution, Transfer
 from django.db import transaction
+from django.db.models import Sum, Count, Q, F, DecimalField
+from collections import defaultdict
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -620,3 +622,232 @@ class SaleDashboardAsyncView(APIView):
         task = get_sales_for_dashboard.delay(store_ids, year, month)
         
         return Response({"task": task.id})
+
+
+class StoresCashSummaryView(APIView):
+    """
+    GET /api/stores-cash-summary/?start_date=...&end_date=...&store_type=T&department_id=...
+    Corte de caja bulk: todas las tiendas en ~5 queries.
+    Si se envía department_id, filtra por departamento (~2 queries).
+    """
+    def get(self, request):
+        tenant = request.user.get_tenant()
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
+        store_type = request.GET.get("store_type")
+        department_id = request.GET.get("department_id")
+
+        if not start_date or not end_date:
+            return Response({"error": "start_date y end_date son requeridos"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if department_id == "0":
+            department_id = None
+
+        date_range = [start_date, end_date]
+        stores = Store.objects.filter(tenant=tenant).select_related("tenant", "manager")
+        if store_type:
+            stores = stores.filter(store_type=store_type)
+        store_ids = list(stores.values_list("id", flat=True))
+        store_ids_set = set(store_ids)
+
+        if department_id:
+            return self._by_department(stores, store_ids, date_range, department_id)
+        return self._general(stores, store_ids, store_ids_set, date_range)
+
+    def _by_department(self, stores, store_ids, date_range, department_id):
+        # ProductSale filtrado por departamento
+        ps_filter = Q(
+            sale__store_id__in=store_ids,
+            sale__is_canceled=False,
+            sale__reservation_in_progress=False,
+            sale__created_at__date__range=date_range,
+            product__department_id=department_id,
+        )
+
+        # 1 — Totales por tienda
+        ps_totals = (
+            ProductSale.objects.filter(ps_filter)
+            .values("sale__store_id")
+            .annotate(
+                total_received=Sum(F("price") * F("quantity"), output_field=DecimalField()),
+                profit=Sum((F("price") - F("product__cost")) * F("quantity"), output_field=DecimalField()),
+                sale_count=Count("sale_id", distinct=True),
+            )
+        )
+        ps_map = {r["sale__store_id"]: r for r in ps_totals}
+
+        # 2 — Canceladas por tienda
+        canceled = (
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                reservation_in_progress=False,
+                is_canceled=True,
+                created_at__date__range=date_range,
+            )
+            .values("store_id")
+            .annotate(count=Count("id"))
+        )
+        canceled_map = {r["store_id"]: r["count"] for r in canceled}
+
+        totals = {"total_payment": 0, "total_sales": 0, "canceled_sales": 0, "profit": 0}
+        stores_data = []
+
+        for store in stores:
+            sid = store.id
+            ps = ps_map.get(sid, {"total_received": 0, "profit": 0, "sale_count": 0})
+            total_received = ps["total_received"] or 0
+            profit = ps["profit"] or 0
+            sale_count = ps["sale_count"] or 0
+            canceled_count = canceled_map.get(sid, 0)
+
+            stores_data.append({
+                "id": sid,
+                "name": store.name,
+                "store_type": store.store_type,
+                "cash_summary": {
+                    "total_payment": total_received,
+                    "profit": profit,
+                    "total_sales": sale_count,
+                    "canceled_sales": canceled_count,
+                },
+            })
+
+            totals["total_payment"] += total_received
+            totals["profit"] += profit
+            totals["total_sales"] += sale_count
+            totals["canceled_sales"] += canceled_count
+
+        return Response({"stores": stores_data, "totals": totals})
+
+    def _general(self, stores, store_ids, store_ids_set, date_range):
+
+        # 1 — Pagos agrupados por tienda y método
+        payments = (
+            Payment.objects.filter(
+                sale__store_id__in=store_ids,
+                sale__is_canceled=False,
+                sale__reservation_in_progress=False,
+                sale__created_at__date__range=date_range,
+            )
+            .values("sale__store_id", "payment_method")
+            .annotate(total=Sum("amount"))
+        )
+        payments_map = defaultdict(lambda: {"EF": 0, "TA": 0, "TR": 0})
+        for p in payments:
+            payments_map[p["sale__store_id"]][p["payment_method"]] = p["total"] or 0
+
+        # 2 — Ganancia por tienda (aggregate en ProductSale)
+        profits = (
+            ProductSale.objects.filter(
+                sale__store_id__in=store_ids,
+                sale__is_canceled=False,
+                sale__reservation_in_progress=False,
+                sale__created_at__date__range=date_range,
+            )
+            .values("sale__store_id")
+            .annotate(
+                profit=Sum(
+                    (F("price") - F("product__cost")) * F("quantity"),
+                    output_field=DecimalField(),
+                )
+            )
+        )
+        profit_map = {r["sale__store_id"]: r["profit"] or 0 for r in profits}
+
+        # 3 — Conteo de ventas y canceladas por tienda
+        sales_counts = (
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                reservation_in_progress=False,
+                created_at__date__range=date_range,
+            )
+            .values("store_id")
+            .annotate(
+                total_sales=Count("id", filter=Q(is_canceled=False)),
+                canceled_sales=Count("id", filter=Q(is_canceled=True)),
+            )
+        )
+        sales_map = {r["store_id"]: r for r in sales_counts}
+
+        # 4 — CashFlow por tienda
+        cashflows = (
+            CashFlow.objects.filter(
+                store_id__in=store_ids,
+                created_at__date__range=date_range,
+            )
+            .values("store_id", "transaction_type")
+            .annotate(total=Sum("amount"))
+        )
+        cashflow_map = defaultdict(lambda: {"E": 0, "S": 0})
+        for cf in cashflows:
+            cashflow_map[cf["store_id"]][cf["transaction_type"]] = cf["total"] or 0
+
+        # 5 — Pendientes por tienda
+        pending_dists = Distribution.objects.filter(
+            Q(origin_store_id__in=store_ids) | Q(destination_store_id__in=store_ids),
+            transfer_datetime__isnull=True,
+        )
+        pending_dist = defaultdict(int)
+        for d in pending_dists.values_list("origin_store_id", "destination_store_id"):
+            for sid in d:
+                if sid in store_ids_set:
+                    pending_dist[sid] += 1
+
+        pending_transfers = Transfer.objects.filter(
+            Q(origin_store_id__in=store_ids) | Q(destination_store_id__in=store_ids),
+            transfer_datetime__isnull=True,
+            distribution__isnull=True,
+        )
+        pending_trans = defaultdict(int)
+        for t in pending_transfers.values_list("origin_store_id", "destination_store_id"):
+            for sid in t:
+                if sid in store_ids_set:
+                    pending_trans[sid] += 1
+
+        # --- Construir response ---
+        totals = {"EF": 0, "TA": 0, "TR": 0, "total_payment": 0, "total_sales": 0, "canceled_sales": 0, "profit": 0, "cash": 0}
+        stores_data = []
+
+        for store in stores:
+            sid = store.id
+            pay = payments_map[sid]
+            ef, ta, tr = pay["EF"], pay["TA"], pay["TR"]
+            total_payment = ef + ta + tr
+            sc = sales_map.get(sid, {"total_sales": 0, "canceled_sales": 0})
+            cf = cashflow_map[sid]
+            income, expenses = cf["E"], cf["S"]
+            net_cashflow = income - expenses
+            profit = profit_map.get(sid, 0)
+            cash = ef + net_cashflow
+
+            stores_data.append({
+                "id": sid,
+                "name": store.name,
+                "store_type": store.store_type,
+                "cash_summary": {
+                    "EF": ef,
+                    "TA": ta,
+                    "TR": tr,
+                    "total_payment": total_payment,
+                    "income": income,
+                    "expenses": expenses,
+                    "net_cashflow": net_cashflow,
+                    "cash": cash,
+                    "profit": profit,
+                    "total_sales": sc["total_sales"],
+                    "canceled_sales": sc["canceled_sales"],
+                    "pending_distributions": pending_dist.get(sid, 0),
+                    "pending_transfers": pending_trans.get(sid, 0),
+                },
+            })
+
+            totals["EF"] += ef
+            totals["TA"] += ta
+            totals["TR"] += tr
+            totals["total_payment"] += total_payment
+            totals["total_sales"] += sc["total_sales"]
+            totals["canceled_sales"] += sc["canceled_sales"]
+            totals["profit"] += profit
+            totals["cash"] += cash
+
+        return Response({"stores": stores_data, "totals": totals})

@@ -106,7 +106,7 @@ class StoreBaseSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     store_type_display = serializers.SerializerMethodField()
     manager_username = serializers.SerializerMethodField()
-    workers_count = serializers.IntegerField(source='count_workers', read_only=True)
+    workers_count = serializers.IntegerField(read_only=True)
 
     
     def get_tenant_name(self, obj):
@@ -131,6 +131,12 @@ class StoreProductBaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreProduct
         fields = "__all__"
+
+
+class StoreProductCodeSerializer(StoreProductBaseSerializer):
+    available_stock = serializers.IntegerField(read_only=True)
+    reserved_stock = serializers.IntegerField(read_only=True)
+    store_name = serializers.CharField(source='store.name', read_only=True)
 
 
 class StoreProductSerializer(StoreProductBaseSerializer):
@@ -194,7 +200,7 @@ class TransferSerializer(serializers.ModelSerializer):
 class StoreSerializer(StoreBaseSerializer):
     printer = serializers.SerializerMethodField()
     products_count = serializers.IntegerField(source='count_products', read_only=True)
-    workers_count = serializers.IntegerField(source='count_workers', read_only=True)
+    workers_count = serializers.IntegerField(read_only=True)
     pending_transfers_count = serializers.SerializerMethodField()
 
     def get_printer(self, obj):

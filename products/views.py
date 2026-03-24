@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from .serializers import (
     StoreProductSerializer,
+    StoreProductCodeSerializer,
     TransferSerializer,
     ProductSerializer,
     BrandSerializer,
@@ -37,7 +38,7 @@ from django.utils.decorators import method_decorator
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from django.db.models import Sum, OuterRef, Subquery, IntegerField, F
+from django.db.models import Sum, OuterRef, Subquery, IntegerField, F, Count
 from django.db.models.functions import Coalesce
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -140,7 +141,9 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         if only_stock:
             return StoreProductForStockSerializer
-        if not q and not code:
+        if code:
+            return StoreProductCodeSerializer
+        if not q:
             return StoreProductBaseSerializer
         return StoreProductSerializer
 
@@ -169,44 +172,39 @@ class StoreProductViewSet(viewsets.ModelViewSet):
             )
             
             # Agregar anotaciones de stock si es necesario
-            if self.get_serializer_class() == StoreProductSerializer:
+            if self.get_serializer_class() in (StoreProductSerializer, StoreProductCodeSerializer):
                 queryset = annotate_stock_info(queryset)
 
             return queryset.order_by("product__brand__name", "product__name")
 
         # --- Búsqueda general ---
-        product_filters = Q(brand__tenant=tenant)
+        storeproduct_filters = Q(product__brand__tenant=tenant)
 
         if q:
-            product_filters &= Q(name__icontains=q) | Q(brand__name__icontains=q)
+            storeproduct_filters &= (
+                Q(product__name__icontains=q) | Q(product__brand__name__icontains=q)
+            )
         if brand_id:
-            product_filters &= Q(brand_id=brand_id)
+            storeproduct_filters &= Q(product__brand_id=brand_id)
         if department_id:
-            product_filters &= Q(department_id=department_id)
-
-        product_queryset = Product.objects.filter(product_filters).select_related(
-            "brand"
-        )
-
-        if q:
-            product_queryset = product_queryset[:200]
-
-        # --- Filtro StoreProduct ---
-        storeproduct_filters = Q(product__in=product_queryset)
+            storeproduct_filters &= Q(product__department_id=department_id)
         if all_stores != "Y":
             storeproduct_filters &= Q(store=store)
         if max_stock:
             storeproduct_filters &= Q(stock__lte=max_stock)
 
         queryset = StoreProduct.objects.filter(storeproduct_filters).select_related(
-            "product", "product__brand", "product__department", "store"
-        )
+            "product", "product__brand", "product__department", "store", "store__tenant", "store__manager"
+        ).order_by("product__brand__name", "product__name")
+
+        if q:
+            queryset = queryset[:200]
         
         # Agregar anotaciones de stock si es necesario
-        if self.get_serializer_class() == StoreProductSerializer:
+        if self.get_serializer_class() in (StoreProductSerializer, StoreProductCodeSerializer):
             queryset = annotate_stock_info(queryset)
         
-        return queryset.order_by("product__brand__name", "product__name")
+        return queryset
 
     def perform_update(self, serializer):
         instance = (
@@ -315,7 +313,9 @@ class StoreViewSet(viewsets.ModelViewSet):
         tenant = self.request.user.get_tenant()
         store = self.request.store
         store_type = self.request.GET.get("store_type", None)
-        queryset = Store.objects.filter(tenant=tenant)
+        queryset = Store.objects.filter(tenant=tenant).select_related("tenant", "manager").annotate(
+            workers_count=Count("workers")
+        )
 
         if store_type:
             queryset = queryset.filter(store_type=store_type)

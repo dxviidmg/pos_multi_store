@@ -15,4 +15,5 @@ urlpatterns += [
     path('sales/import/', views.SaleImportView.as_view(), name='sale-import'),
     path('sales/import-validation/', views.SaleImportValidationView.as_view(), name='sale-import-validation'),
     path('sales-dashboard/', views.SaleDashboardAsyncView.as_view(), name='sales-dashboard'),
+    path('stores-cash-summary/', views.StoresCashSummaryView.as_view(), name='stores-cash-summary'),
 ]
