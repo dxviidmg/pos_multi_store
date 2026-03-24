@@ -1,5 +1,7 @@
 from products.decorators import get_store
 from django.utils.decorators import method_decorator
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -21,8 +23,10 @@ class StoreProductLogsView(APIView):
 		store_related = request.GET.get("store_related")
 
 		if store_product_id:
+			one_month_ago = timezone.now() - timedelta(days=30)
 			store_product_logs = StoreProductLog.objects.filter(
-				store_product__id=store_product_id
+				store_product__id=store_product_id,
+				created_at__gte=one_month_ago,
 			).order_by("-id")
 			serializer_class = StoreProductLogSerializer
 		else:
