@@ -175,24 +175,16 @@ class StoreProductViewSet(viewsets.ModelViewSet):
             return queryset.order_by("product__brand__name", "product__name")
 
         # --- Búsqueda general ---
-        product_filters = Q(brand__tenant=tenant)
+        storeproduct_filters = Q(product__brand__tenant=tenant)
 
         if q:
-            product_filters &= Q(name__icontains=q) | Q(brand__name__icontains=q)
+            storeproduct_filters &= (
+                Q(product__name__icontains=q) | Q(product__brand__name__icontains=q)
+            )
         if brand_id:
-            product_filters &= Q(brand_id=brand_id)
+            storeproduct_filters &= Q(product__brand_id=brand_id)
         if department_id:
-            product_filters &= Q(department_id=department_id)
-
-        product_queryset = Product.objects.filter(product_filters).select_related(
-            "brand"
-        )
-
-        if q:
-            product_queryset = product_queryset[:200]
-
-        # --- Filtro StoreProduct ---
-        storeproduct_filters = Q(product__in=product_queryset)
+            storeproduct_filters &= Q(product__department_id=department_id)
         if all_stores != "Y":
             storeproduct_filters &= Q(store=store)
         if max_stock:
@@ -200,13 +192,16 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         queryset = StoreProduct.objects.filter(storeproduct_filters).select_related(
             "product", "product__brand", "product__department", "store"
-        )
+        ).order_by("product__brand__name", "product__name")
+
+        if q:
+            queryset = queryset[:200]
         
         # Agregar anotaciones de stock si es necesario
         if self.get_serializer_class() == StoreProductSerializer:
             queryset = annotate_stock_info(queryset)
         
-        return queryset.order_by("product__brand__name", "product__name")
+        return queryset
 
     def perform_update(self, serializer):
         instance = (
