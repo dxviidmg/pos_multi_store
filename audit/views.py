@@ -24,14 +24,19 @@ class ProductAuditView(APIView):
             .filter(count__gt=1)
         )
         duplicates = []
-        for entry in duplicate_codes:
-            names = list(products.filter(code=entry["code"]).values_list("name", flat=True))
-            duplicates.append({"code": entry["code"], "count": entry["count"], "products": names})
+        duplicate_code_list = [entry["code"] for entry in duplicate_codes]
+        for p in products.filter(code__in=duplicate_code_list).select_related("brand", "department").order_by("code"):
+            duplicates.append({
+                "code": p.code,
+                "brand": p.brand.name,
+                "department": p.department.name if p.department else None,
+                "name": p.name,
+            })
 
         # 2 — Costo en cero
         zero_cost = list(
             products.filter(Q(cost=0) | Q(cost__isnull=True))
-            .values("id", "name", "code")
+            .values("code", "name")
         )
 
         # 3 — Precio mayoreo inconsistente
@@ -51,7 +56,14 @@ class ProductAuditView(APIView):
                 reasons.append("tiene precio mayoreo sin cantidad mínima")
             if p.min_wholesale_quantity and p.min_wholesale_quantity > 0 and (not p.wholesale_price):
                 reasons.append("tiene cantidad mínima sin precio mayoreo")
-            wholesale_issues.append({"id": p.id, "name": p.name, "code": p.code, "reasons": reasons})
+            wholesale_issues.append({
+                "code": p.code,
+                "name": p.name,
+                "unit_price": p.unit_price,
+                "wholesale_price": p.wholesale_price,
+                "min_wholesale_quantity": p.min_wholesale_quantity,
+                "reasons": " | ".join(reasons),
+            })
 
         # 4 — Faltantes en tiendas
         stores = Store.objects.filter(tenant=tenant)
@@ -75,9 +87,8 @@ class ProductAuditView(APIView):
                     stores.filter(id__in=store_ids_set - present_ids).values_list("name", flat=True)
                 )
                 missing.append({
-                    "id": p.id, "name": p.name, "code": p.code,
-                    "in_stores": entry["store_count"], "total_stores": total_stores,
-                    "missing_in": missing_stores,
+                    "code": p.code, "name": p.name,
+                    "missing_in": ", ".join(missing_stores),
                 })
 
         return Response({
