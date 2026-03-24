@@ -6,8 +6,10 @@ from django.utils.decorators import method_decorator
 from sales.tasks import get_sales_duplicates_task
 from rest_framework.response import Response
 from logs.tasks import get_logs_duplicates_or_inconsistens_task, get_store_products_inconsistens_task
-from products.models import Store, Product, StoreProduct
+from products.models import Store, Product, StoreProduct, Distribution, Transfer
 from django.db.models import Count, Q, F
+from django.utils import timezone
+from sales.models import Sale
 from .tasks import get_unused_products_task
 
 
@@ -140,6 +142,58 @@ class StockAuditView(APIView):
         task3 = get_store_products_inconsistens_task.delay(store_ids)
         return Response({"task3": task3.id})
     
+@method_decorator(get_store(), name="dispatch")
+class OwnerNotificationsView(APIView):
+    def get(self, request):
+        tenant = request.user.get_tenant()
+        today = timezone.localdate()
+
+        if request.store:
+            stores = Store.objects.filter(tenant=tenant, id=request.store.id)
+        else:
+            stores = Store.objects.filter(tenant=tenant)
+
+        notifications = []
+
+        for store in stores:
+            store_data = {"store": store.name}
+
+            pending_transfers = Transfer.objects.filter(
+                Q(origin_store=store) | Q(destination_store=store),
+                transfer_datetime__isnull=True, distribution__isnull=True
+            ).count()
+            if pending_transfers:
+                store_data["pending_transfers"] = pending_transfers
+
+            pending_distributions = Distribution.objects.filter(
+                Q(origin_store=store) | Q(destination_store=store),
+                transfer_datetime__isnull=True
+            ).count()
+            if pending_distributions:
+                store_data["pending_distributions"] = pending_distributions
+
+            canceled_ids = list(Sale.objects.filter(
+                store=store, is_canceled=True, created_at__date=today
+            ).values_list("id", flat=True))
+            if canceled_ids:
+                store_data["canceled_sales"] = canceled_ids
+
+            duplicate_ids = [
+                sale.id for sale in Sale.objects.filter(
+                    store=store, is_canceled=False, created_at__date=today
+                ).order_by("pk")
+                if sale.is_repeated()
+            ]
+            if duplicate_ids:
+                store_data["duplicate_sales"] = duplicate_ids
+
+            # Solo incluir si tiene algo además del nombre
+            if len(store_data) > 1:
+                notifications.append(store_data)
+
+        return Response(notifications)
+
+
 # Create your views here.
 class TaskResultView(APIView):
     def get(self, request, task_id):
