@@ -1,7 +1,8 @@
 from django.shortcuts import render
+from rest_framework import viewsets
+
 from .models import StorePrinter
 from .serializers import StorePrinterSerializer
-from rest_framework import viewsets
 
 # Create your views here.
 class StorePrinterViewSet(viewsets.ModelViewSet):

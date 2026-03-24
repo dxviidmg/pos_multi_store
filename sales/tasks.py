@@ -1,17 +1,13 @@
-from celery import shared_task
 from datetime import datetime, timedelta
-from django.utils.timezone import now
-from django.db.models import Count
-from django.db.models.functions import TruncMonth, ExtractHour, ExtractWeekDay
 
+from celery import shared_task
+from django.db.models import Count, QuerySet
+from django.db.models.functions import ExtractHour, ExtractWeekDay, TruncMonth
+from django.utils.timezone import now
+
+from products.models import Store
 from .models import Sale, Payment
 from .serializers import SaleAuditSerializer
-from products.models import Store
-
-from celery import shared_task
-from django.utils.timezone import now
-from django.db.models import QuerySet
-import json
 
 # ============================================================
 #   1) DUPLICADOS DE VENTAS

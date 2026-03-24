@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import StorePrinter, Printer
+
 from products.serializers import StoreSerializer
+from .models import Printer, StorePrinter
 
 class PrinterSerializer(serializers.ModelSerializer):
     class Meta:

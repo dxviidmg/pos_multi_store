@@ -1,7 +1,8 @@
-from django.db import models
-from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import User
+from django.db import models
 from django.utils import timezone
+
 from dateutil.relativedelta import relativedelta
 
 MONTHY_PRICE_BY_STORE = 500
@@ -44,7 +45,8 @@ class Tenant(CreatedAtModel):
         super().save(*args, **kwargs)
 
     def count_products(self):
-        return sum([brand.count_products() for brand in self.brand_set.all()])
+        from products.models import Product
+        return Product.objects.filter(brand__tenant=self).count()
     
 
 class Payment(CreatedAtModel):

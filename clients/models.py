@@ -1,11 +1,12 @@
-from django.db import models
 from django.core.validators import (
-    MinValueValidator,
     MaxValueValidator,
     MinLengthValidator,
+    MinValueValidator,
 )
-from tenants.models import Tenant
+from django.db import models
 from django.db.models import Sum
+
+from tenants.models import Tenant
 
 
 class Discount(models.Model):

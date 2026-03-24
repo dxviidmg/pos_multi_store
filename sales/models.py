@@ -1,9 +1,10 @@
+from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import DecimalField, F, Sum
+
 from clients.models import Client
 from products.models import Product, Store, StoreProduct
-from django.contrib.auth.models import User
 from tenants.models import CreatedAtModel
-from django.db.models import Sum
 
 
 class Sale(CreatedAtModel):
@@ -31,11 +32,13 @@ class Sale(CreatedAtModel):
         return payments.count() == 1 and payments.filter(payment_method="EF").exists()
 
     def get_refunded(self):
-        refunded = 0
-        for product_sale in self.products_sale.exclude(returned_quantity=0):
-            refunded = refunded + product_sale.get_refunded()
-
-        return refunded
+        result = self.products_sale.exclude(returned_quantity=0).aggregate(
+            total=Sum(
+                F('returned_quantity') * F('price'),
+                output_field=DecimalField()
+            )
+        )
+        return result['total'] or 0
         
     def is_cancelable(self):
         return (
@@ -51,11 +54,13 @@ class Sale(CreatedAtModel):
         return next((payment.reference for payment in self.payments.all() if payment.reference), None)
 
     def get_profit(self):
-        profit = 0
-        for product_sale in self.products_sale.all():
-            profit = profit + product_sale.get_profit()
-
-        return profit
+        result = self.products_sale.aggregate(
+            total=Sum(
+                (F('price') - F('product__cost')) * F('quantity'),
+                output_field=DecimalField()
+            )
+        )
+        return result['total'] or 0
     
     def get_paid(self):
         return self.payments.all().aggregate(total_amount=Sum('amount'))['total_amount'] or 0

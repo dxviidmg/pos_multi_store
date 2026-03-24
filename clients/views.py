@@ -1,8 +1,9 @@
-from rest_framework import viewsets
-from .serializers import ClientSerializer, DiscountSerializer
-from .models import Client, Discount
 from django.db.models import Q, Value
 from django.db.models.functions import Concat
+from rest_framework import viewsets
+
+from .models import Client, Discount
+from .serializers import ClientSerializer, DiscountSerializer
 
 
 class DiscountViewSet(viewsets.ModelViewSet):
