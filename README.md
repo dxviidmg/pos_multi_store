@@ -36,7 +36,7 @@ SmartVenta es un POS diseñado para negocios minoristas con múltiples sucursale
 | **Roles y permisos** | Tres niveles: Propietario, Administrador de tienda y Vendedor |
 | **Importación masiva** | Carga de productos e inventario desde Excel con plantillas y validación automática |
 | **Impresión de tickets** | Configuración de impresoras térmicas por sucursal |
-| **Auditoría** | Detección automática de ventas duplicadas, logs inconsistentes y discrepancias de stock (async) |
+| **Auditoría** | Detección automática de ventas duplicadas, logs inconsistentes, discrepancias de stock, códigos de barras repetidos, costos en cero, precios de mayoreo inconsistentes, productos faltantes en tiendas y productos sin actividad |
 | **Bitácora** | Registro de cada movimiento de inventario: usuario, fecha, tipo, stock anterior/posterior |
 | **Catálogo con imágenes** | Fotos de productos en AWS S3, organizados por marca y departamento |
 | **Devoluciones** | Devoluciones parciales y cancelación de ventas con reversión automática de stock |
@@ -215,6 +215,18 @@ El archivo `render.yaml` contiene la configuración completa de infraestructura 
 ## 💰 Modelo de Negocio
 
 Suscripción mensual por sucursal: **$500 MXN/mes por tienda**, con facturación y control de vigencia integrados en el sistema.
+
+---
+
+## 📝 Changelog
+
+### 2026-03-21
+- `refactor(audit)`: Renombrar audit1/audit2 a sales-logs-audit/stock-audit
+
+### 2026-03-20
+- `feat(audit)`: Nuevos endpoints de auditoría de productos
+  - `GET /api/product-audit/` (síncrono) — códigos repetidos, costo en cero, mayoreo inconsistente, faltantes en tiendas
+  - `GET /api/product-audit-activity/` (asíncrono) — productos sin actividad vía Celery
 
 ---
 
