@@ -722,6 +722,18 @@ class StoresCashSummaryView(APIView):
 
     def _general(self, stores, store_ids, store_ids_set, date_range):
 
+        # Total de productos del tenant
+        tenant = stores.first().tenant if stores.exists() else None
+        total_products = Product.objects.filter(brand__tenant=tenant).count() if tenant else 0
+
+        # StoreProducts por tienda
+        sp_counts = (
+            StoreProduct.objects.filter(store_id__in=store_ids)
+            .values("store_id")
+            .annotate(count=Count("id"))
+        )
+        sp_count_map = {r["store_id"]: r["count"] for r in sp_counts}
+
         # 1 — Pagos agrupados por tienda y método
         payments = (
             Payment.objects.filter(
@@ -827,6 +839,7 @@ class StoresCashSummaryView(APIView):
                 "full_name": store.get_full_name(),
                 "store_type": store.store_type,
                 "manager": {"id": store.manager.id, "username": store.manager.username, "full_name": store.manager.get_full_name()} if store.manager else None,
+                "has_all_products": sp_count_map.get(sid, 0) >= total_products,
                 "cash_summary": {
                     "EF": ef,
                     "TA": ta,
