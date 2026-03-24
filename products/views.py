@@ -515,7 +515,7 @@ class BrandViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        queryset = Brand.objects.filter(tenant=tenant)
+        queryset = Brand.objects.filter(tenant=tenant).order_by('name')
         
         # Optimizar para listado
         if self.action == 'list':
@@ -534,7 +534,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        queryset = Department.objects.filter(tenant=tenant)
+        queryset = Department.objects.filter(tenant=tenant).order_by('name')
         
         # Optimizar para listado
         if self.action == 'list':
