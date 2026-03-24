@@ -5,6 +5,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from django.contrib.auth.models import User
 from .serializers import UserSerializer
+from products.models import Store
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -63,21 +64,41 @@ class CustomAuthToken(ObtainAuthToken):
         user = serializer.validated_data['user']
         token, _ = Token.objects.get_or_create(user=user)
 
-        store = user.get_store()
-        return Response({
+        from tenants.models import Tenant
+        from products.models import Store, StoreWorker
+
+        tenant = Tenant.objects.filter(owner=user).first()
+        if tenant:
+            role = 'owner'
+            store = None
+        else:
+            store = Store.objects.filter(manager=user).select_related('tenant').first()
+            if store:
+                role = 'manager'
+                tenant = store.tenant
+            else:
+                sw = StoreWorker.objects.filter(worker=user).select_related('store__tenant').first()
+                role = 'seller' if sw else 'Sin definir'
+                store = sw.store if sw else None
+                tenant = store.tenant if store else None
+
+        data = {
             'user_id': user.pk,
             'token': token.key,
             'first_name': user.first_name,
             'last_name': user.last_name,
             'full_name': user.get_full_name(),
             'email': user.email,
-            'tenant_id': user.get_tenant().id,
-            'tenant_name': user.get_tenant().name,
-            'tenant_short_name': user.get_tenant().short_name,
+            'tenant_id': tenant.id if tenant else None,
+            'tenant_name': tenant.name if tenant else None,
+            'tenant_short_name': tenant.short_name if tenant else None,
             'store_id': store.id if store else None,
             'store_name': store.name if store else None,
             'store_type': store.store_type if store else None,
             'store_type_display': store.get_store_type_display() if store else None,
             'store_printer': store.get_store_printer() if store else None,
-            'role': user.get_role(),
-        })
+            'role': role,
+        }
+        if role == 'owner':
+            data['store_count'] = Store.objects.filter(tenant=tenant).count()
+        return Response(data)
