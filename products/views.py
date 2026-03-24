@@ -293,20 +293,9 @@ class ProductViewSet(viewsets.ModelViewSet):
 class StoreViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
-        if self.request.GET.get("start_date"):
-            return StoreCashSummarySerializer
         return StoreBaseSerializer
 
     def get_serializer(self, *args, **kwargs):
-        kwargs.setdefault("context", {}).update(
-            {"start_date": self.request.GET.get("start_date", None)}
-        )
-        kwargs.setdefault("context", {}).update(
-            {"end_date": self.request.GET.get("end_date", None)}
-        )
-        kwargs.setdefault("context", {}).update(
-            {"department_id": self.request.GET.get("department_id", None)}
-        )
         return super().get_serializer(*args, **kwargs)
 
     def get_queryset(self):

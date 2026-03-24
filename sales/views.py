@@ -823,6 +823,7 @@ class StoresCashSummaryView(APIView):
             stores_data.append({
                 "id": sid,
                 "name": store.name,
+                "full_name": store.get_full_name(),
                 "store_type": store.store_type,
                 "cash_summary": {
                     "EF": ef,
