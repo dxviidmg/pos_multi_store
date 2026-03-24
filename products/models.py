@@ -1,10 +1,10 @@
-from django.db import models
-from django.contrib.auth.models import User
-from tenants.models import Tenant, CreatedAtModel
 from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db.models import Sum
-from django.db.models import Q
+from django.db import models
+from django.db.models import Q, Sum
+
+from tenants.models import CreatedAtModel, Tenant
 
 class Base(models.Model):
     name = models.CharField(max_length=30)

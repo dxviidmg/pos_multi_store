@@ -1,10 +1,12 @@
+import time
+
+from celery import shared_task
+from django.db.models import OuterRef, Subquery
+
 from products.models import StoreProduct
+from products.serializers import StoreProductAuditSerializer
 from .models import StoreProductLog
 from .serializers import StoreProductLogAuditSerializer
-from celery import shared_task
-from products.serializers import StoreProductAuditSerializer
-from django.db.models import OuterRef, Subquery
-import time
 
 
 @shared_task(bind=True)

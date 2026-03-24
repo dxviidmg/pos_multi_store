@@ -1,7 +1,9 @@
-from rest_framework import serializers
-from .models import Discount, Client
+from datetime import date, datetime
+
 from django.core.exceptions import ValidationError
-from datetime import datetime, date
+from rest_framework import serializers
+
+from .models import Client, Discount
 
 
 class DiscountSerializer(serializers.ModelSerializer):

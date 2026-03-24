@@ -1,7 +1,9 @@
-from django.db.models import Sum, Q
 from collections import defaultdict
-from .models import Sale, Payment, ProductSale
+
+from django.db.models import Q, Sum
+
 from products.models import CashFlow
+from .models import Sale, Payment, ProductSale
 
 
 def calculate_cash_summary(store, date=None, start_date=None, end_date=None):

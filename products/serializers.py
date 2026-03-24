@@ -1,20 +1,27 @@
+from datetime import date, datetime
+
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db.models import IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
 from rest_framework import serializers
+
+from sales.cash_summary_utils import (
+    calculate_cash_summary,
+    calculate_cash_summary_by_department,
+    calculate_total_sales_by_seller,
+)
 from .models import (
-    Product,
-    StoreProduct,
-    Transfer,
-    Store,
     Brand,
     CashFlow,
+    Department,
+    Distribution,
+    Product,
+    Store,
+    StoreProduct,
     StoreWorker,
-    Department, Distribution
+    Transfer,
 )
-from django.core.exceptions import ValidationError
-from sales.cash_summary_utils import calculate_cash_summary, calculate_cash_summary_by_department, calculate_total_sales_by_seller
-from datetime import datetime, date
-from django.contrib.auth.models import User
-from django.db.models import Sum, Q, OuterRef, Subquery, IntegerField
-from django.db.models.functions import Coalesce
 
 
 

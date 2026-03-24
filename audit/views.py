@@ -1,15 +1,16 @@
-from django.http import JsonResponse
 from celery.result import AsyncResult
-from rest_framework.views import APIView
-from products.decorators import get_store
-from django.utils.decorators import method_decorator
-from sales.tasks import get_sales_duplicates_task
-from rest_framework.response import Response
-from logs.tasks import get_logs_duplicates_or_inconsistens_task, get_store_products_inconsistens_task
-from products.models import Store, Product, StoreProduct, Distribution, Transfer
-from django.db.models import Count, Q, F
+from django.db.models import Count, F, Q
+from django.http import JsonResponse
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from logs.tasks import get_logs_duplicates_or_inconsistens_task, get_store_products_inconsistens_task
+from products.decorators import get_store
+from products.models import Distribution, Product, Store, StoreProduct, Transfer
 from sales.models import Sale
+from sales.tasks import get_sales_duplicates_task
 from .tasks import get_unused_products_task
 
 

@@ -1,8 +1,9 @@
-from django.db import models
 from django.contrib.auth.models import User
-from tenants.models import CreatedAtModel
-from products.models import StoreProduct, Store
+from django.db import models
+
 from core.constants import LogAction, LogMovement
+from products.models import Store, StoreProduct
+from tenants.models import CreatedAtModel
 
 
 class StoreProductLog(CreatedAtModel):

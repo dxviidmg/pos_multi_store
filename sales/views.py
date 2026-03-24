@@ -1,27 +1,28 @@
-from rest_framework import viewsets
-from .serializers import SaleSerializer, SaleCreateSerializer
-from .models import Sale, ProductSale, Payment
-from products.models import StoreProduct, Product, CashFlow, Store, Distribution, Transfer
-from django.db import transaction
-from django.db.models import Sum, Count, Q, F, DecimalField
 from collections import defaultdict
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-import pandas as pd
-from products.decorators import get_store
-from django.utils.decorators import method_decorator
-from .cash_summary_utils import calculate_cash_summary
-from django.shortcuts import get_object_or_404
-from logs.models import StoreProductLog
-from rest_framework.exceptions import NotFound
 from datetime import datetime
-from .tasks import get_sales_for_dashboard
+
+import pandas as pd
+from django.db import transaction
+from django.db.models import Count, DecimalField, F, Q, Sum
+from django.shortcuts import get_object_or_404
+from django.utils.decorators import method_decorator
+from rest_framework import status, viewsets
+from rest_framework.exceptions import NotFound
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from logs.models import StoreProductLog
+from products.decorators import get_store
 from products.import_utils import (
     validate_store_product_columns,
     rename_store_product_columns,
     validate_quantities,
 )
+from products.models import CashFlow, Distribution, Product, Store, StoreProduct, Transfer
+from .cash_summary_utils import calculate_cash_summary
+from .models import Sale, ProductSale, Payment
+from .serializers import SaleSerializer, SaleCreateSerializer
+from .tasks import get_sales_for_dashboard
 
 # Límites para archivos Excel
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -704,8 +705,8 @@ class StoresCashSummaryView(APIView):
                 "id": sid,
                 "name": store.name,
                 "store_type": store.store_type,
+                "manager": {"id": store.manager.id, "username": store.manager.username, "full_name": store.manager.get_full_name()} if store.manager else None,
                 "cash_summary": {
-                    "total_payment": total_received,
                     "profit": profit,
                     "total_sales": sale_count,
                     "canceled_sales": canceled_count,
@@ -720,6 +721,18 @@ class StoresCashSummaryView(APIView):
         return Response({"stores": stores_data, "totals": totals})
 
     def _general(self, stores, store_ids, store_ids_set, date_range):
+
+        # Total de productos del tenant
+        tenant = stores.first().tenant if stores.exists() else None
+        total_products = Product.objects.filter(brand__tenant=tenant).count() if tenant else 0
+
+        # StoreProducts por tienda
+        sp_counts = (
+            StoreProduct.objects.filter(store_id__in=store_ids)
+            .values("store_id")
+            .annotate(count=Count("id"))
+        )
+        sp_count_map = {r["store_id"]: r["count"] for r in sp_counts}
 
         # 1 — Pagos agrupados por tienda y método
         payments = (
@@ -825,6 +838,8 @@ class StoresCashSummaryView(APIView):
                 "name": store.name,
                 "full_name": store.get_full_name(),
                 "store_type": store.store_type,
+                "manager": {"id": store.manager.id, "username": store.manager.username, "full_name": store.manager.get_full_name()} if store.manager else None,
+                "has_all_products": sp_count_map.get(sid, 0) >= total_products,
                 "cash_summary": {
                     "EF": ef,
                     "TA": ta,

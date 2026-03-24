@@ -1,7 +1,8 @@
 from celery import shared_task
+
+from logs.models import StoreProductLog
 from products.models import Product, Transfer
 from sales.models import ProductSale
-from logs.models import StoreProductLog
 
 
 @shared_task(bind=True)
