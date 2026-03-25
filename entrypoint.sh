@@ -9,5 +9,5 @@ echo "=== Iniciando Celery Worker ==="
 celery -A pos_multi_store worker -l info &
 
 
-echo "=== Iniciando Gunicorn ==="
-exec gunicorn pos_multi_store.wsgi:application --timeout 120 --workers 4 --threads 2
+echo "=== Iniciando Daphne ==="
+exec daphne -b 0.0.0.0 -p ${PORT:-8000} pos_multi_store.asgi:application

@@ -1,17 +1,12 @@
 from rest_framework import serializers
-from .models import Sale, ProductSale
+
 from clients.serializers import ClientSerializer
+from .models import ProductSale, Sale
 
 
 class ProductSaleSerializer(serializers.ModelSerializer):
-    code = serializers.SerializerMethodField()
-    name = serializers.SerializerMethodField()
-
-    def get_code(self, obj):
-        return obj.product.code
-    
-    def get_name(self, obj):
-        return obj.product.name
+    code = serializers.CharField(source='product.code', read_only=True)
+    name = serializers.CharField(source='product.name', read_only=True)
 
     class Meta:
         model = ProductSale
@@ -19,21 +14,15 @@ class ProductSaleSerializer(serializers.ModelSerializer):
 
 
 class SaleSerializer(serializers.ModelSerializer):
-    seller_username = serializers.SerializerMethodField()
+    seller_username = serializers.CharField(source='seller.username', read_only=True)
     is_cancelable = serializers.SerializerMethodField()
     payments_methods = serializers.SerializerMethodField()
     client = ClientSerializer()
     products_sale = ProductSaleSerializer(many=True)
     is_repeated = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
-    refunded = serializers.SerializerMethodField()
-    paid = serializers.SerializerMethodField()
-
-    def get_refunded(self, obj):
-        return obj.get_refunded()
-
-    def get_seller_username(self, obj):
-        return obj.seller.username
+    refunded = serializers.DecimalField(source='get_refunded', max_digits=10, decimal_places=2, read_only=True)
+    paid = serializers.DecimalField(source='get_paid', max_digits=10, decimal_places=2, read_only=True)
 
     def get_is_cancelable(self, obj):
         return obj.is_cancelable()
@@ -42,13 +31,10 @@ class SaleSerializer(serializers.ModelSerializer):
         return obj.get_payments_methods_display()
 
     def get_is_repeated(self, obj):
-            return obj.is_repeated()
+        return obj.is_repeated()
 
     def get_reference(self, obj):
         return obj.get_reference()
-
-    def get_paid(self, obj):
-        return obj.get_paid()
 
     class Meta:
         model = Sale
@@ -62,12 +48,8 @@ class SaleCreateSerializer(serializers.ModelSerializer):
 
 
 class SaleSerializer2(serializers.ModelSerializer):
-
     products_sale = ProductSaleSerializer(many=True)
-    refunded = serializers.SerializerMethodField()
-
-    def get_refunded(self, obj):
-        return obj.get_refunded()
+    refunded = serializers.DecimalField(source='get_refunded', max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Sale
@@ -75,12 +57,8 @@ class SaleSerializer2(serializers.ModelSerializer):
 
 
 class SaleAuditSerializer(serializers.ModelSerializer):
-    store_name = serializers.SerializerMethodField()
-    
+    store_name = serializers.CharField(source='store.get_full_name', read_only=True)
+
     class Meta:
         model = Sale
         fields = ["id", "created_at", "store_name"]
-
-    def get_store_name(self, obj):
-        # Puedes llamar al método o añadir más lógica
-        return obj.store.get_full_name()  # ejemplo: en mayúsculas
