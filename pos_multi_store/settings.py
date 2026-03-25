@@ -147,6 +147,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+CSRF_TRUSTED_ORIGINS = ['https://pos-multi-store.onrender.com']
+
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
 REST_FRAMEWORK = {
