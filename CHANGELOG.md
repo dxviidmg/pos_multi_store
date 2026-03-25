@@ -5,6 +5,7 @@ Todos los cambios relevantes del proyecto están documentados aquí.
 ---
 
 ## 2026-03-25
+- `fix`: Agregar `CSRF_TRUSTED_ORIGINS` para dominio de Render (requerido por ASGI/Daphne)
 - `feat(notifications)`: Notificaciones en tiempo real vía WebSocket con Django Channels
 - `refactor(serializers)`: Optimizar serializers reemplazando `SerializerMethodField` por `source=`
 - `fix(decorators)`: Proteger `get_store` contra header `store-id` no numérico
