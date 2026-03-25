@@ -4,7 +4,7 @@ def get_store():
     def decorator(view_func):
         def wrapper(request, *args, **kwargs):
             store_id = request.headers.get("store-id")
-            if store_id:
+            if store_id and store_id.isdigit():
                 store = Store.objects.get(id=store_id)
             else:
                 store = None

@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from logs.models import StoreProductLog
+from notifications.utils import notify_store
 from products.decorators import get_store
 from products.import_utils import (
     validate_store_product_columns,
@@ -245,6 +246,12 @@ class SaleViewSet(viewsets.ModelViewSet):
                         "store": store,
                     }
                     CashFlow.objects.create(**cash_flow_data)
+
+        if reservation_in_progress:
+            notify_store(store, store.tenant_id, {
+                'event': 'reservation_created',
+                'message': f'Nuevo apartado #{sale_instance.pk} en {store.name}',
+            })
 
         return sale_instance
 

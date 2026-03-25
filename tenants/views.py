@@ -14,7 +14,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return Payment.objects.filter(tenant=tenant).order_by("id")
+        return Payment.objects.filter(tenant=tenant).order_by("-id")
 
 
 class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
