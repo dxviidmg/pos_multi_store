@@ -59,11 +59,7 @@ class Payment(CreatedAtModel):
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos
             tenant = self.tenant
-            self.total = tenant.stores * self.months * MONTHY_PRICE_BY_STORE
-
-            # Analizar la promocion de vendedores
-            #            if self.tenant.has_sellers:
-            #                self.total += self.months * MONTHY_PRICE_BY_STORE
+            self.total = tenant.store_set.count() * self.months * MONTHY_PRICE_BY_STORE
 
             last_payment = Payment.objects.filter(
                 tenant=tenant
@@ -75,7 +71,7 @@ class Payment(CreatedAtModel):
                 start_of_validity = tenant.created_at
 
             end_of_validity = (
-                start_of_validity + relativedelta(months=1) - relativedelta(days=1)
+                start_of_validity + relativedelta(months=self.months) - relativedelta(days=1)
             )
             self.start_of_validity = start_of_validity
             self.end_of_validity = end_of_validity
