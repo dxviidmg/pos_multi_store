@@ -15,6 +15,8 @@ class Sale(CreatedAtModel):
     reservation_in_progress = models.BooleanField(default=False)
     is_canceled = models.BooleanField(default=False)
     reason_cancel = models.CharField(max_length=50, null=True, blank=True)
+    has_return = models.BooleanField(default=False)
+    reason_return = models.CharField(max_length=50, null=True, blank=True)
     
     class Meta:
         indexes = [
@@ -30,21 +32,12 @@ class Sale(CreatedAtModel):
     def has_only_cash_payment(self):
         payments = self.payments.all()
         return payments.count() == 1 and payments.filter(payment_method="EF").exists()
-
-    def get_refunded(self):
-        result = self.products_sale.exclude(returned_quantity=0).aggregate(
-            total=Sum(
-                F('returned_quantity') * F('price'),
-                output_field=DecimalField()
-            )
-        )
-        return result['total'] or 0
         
     def is_cancelable(self):
         return (
             not self.reservation_in_progress and
             self.has_only_cash_payment() and
-            self.get_refunded() == 0
+            self.is_canceled == False and self.has_return == False
         )
 
     def get_payments_methods_display(self):
@@ -102,16 +95,12 @@ class ProductSale(models.Model):
     )
     quantity = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    returned_quantity = models.IntegerField(default=0)
 
     def get_total(self):
         return self.quantity * self.price
 
     def get_profit(self):
         return (self.price - self.product.cost) * self.quantity
-
-    def get_refunded(self):
-        return self.returned_quantity * self.price
     
 class Payment(CreatedAtModel):
     PAYMENT_METHOD_CHOICES = (

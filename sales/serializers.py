@@ -21,7 +21,6 @@ class SaleSerializer(serializers.ModelSerializer):
     products_sale = ProductSaleSerializer(many=True)
     is_repeated = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
-    refunded = serializers.DecimalField(source='get_refunded', max_digits=10, decimal_places=2, read_only=True)
     paid = serializers.DecimalField(source='get_paid', max_digits=10, decimal_places=2, read_only=True)
 
     def get_is_cancelable(self, obj):
@@ -49,7 +48,6 @@ class SaleCreateSerializer(serializers.ModelSerializer):
 
 class SaleSerializer2(serializers.ModelSerializer):
     products_sale = ProductSaleSerializer(many=True)
-    refunded = serializers.DecimalField(source='get_refunded', max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Sale

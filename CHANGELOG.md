@@ -5,6 +5,8 @@ Todos los cambios relevantes del proyecto están documentados aquí.
 ---
 
 ## 2026-03-25
+- `refactor(sales)`: Separar `SaleCancelView` en cancelación total (`is_canceled`) y devolución parcial (`products_to_return`)
+- `feat(sales)`: Agregar `has_return` y `reason_return` a nivel Sale, eliminar `returned_quantity` de ProductSale
 - `fix`: Agregar `CSRF_TRUSTED_ORIGINS` para dominio de Render (requerido por ASGI/Daphne)
 - `feat(notifications)`: Notificaciones en tiempo real vía WebSocket con Django Channels
 - `refactor(serializers)`: Optimizar serializers reemplazando `SerializerMethodField` por `source=`

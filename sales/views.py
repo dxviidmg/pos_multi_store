@@ -526,94 +526,85 @@ class SaleImportView(APIView):
 class SaleCancelView(APIView):
     def post(self, request):
         sale_id = request.data.get("id")
-        products_data = request.data.get("products_sale_to_cancel")
-        reason_cancel = request.data.get("reason_cancel")
+        sale = get_object_or_404(Sale, id=sale_id)
 
-        if not sale_id or not products_data:
+        if request.data.get("is_canceled"):
+            return self._cancel_full(request, sale)
+        elif request.data.get("products_to_return"):
+            return self._return_partial(request, sale)
+        else:
             return Response(
-                {"detail": "Sale ID and products to cancel are required."},
+                {"detail": "Se requiere is_canceled o products_to_return."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        sale = get_object_or_404(Sale, id=sale_id)
-        if reason_cancel != "":
-            sale.reason_cancel = reason_cancel
-            sale.save()
+    def _cancel_full(self, request, sale):
+        logs = []
+        with transaction.atomic():
+            for ps in sale.products_sale.all():
+                sp = StoreProduct.objects.select_for_update().get(
+                    store=sale.store, product=ps.product
+                )
+                previous_stock = sp.stock
+                sp.stock += ps.quantity
+                sp.save()
+                logs.append(StoreProductLog(
+                    store_product=sp, user=request.user,
+                    previous_stock=previous_stock, updated_stock=sp.stock,
+                    action="E", movement="DE",
+                ))
 
-        product_ids = products_data.keys()
+            sale.is_canceled = True
+            sale.reason_cancel = request.data.get("reason_cancel", "")
+            sale.save(update_fields=["is_canceled", "reason_cancel"])
+            StoreProductLog.objects.bulk_create(logs)
 
-        products_to_cancel = ProductSale.objects.filter(id__in=product_ids)
-        if not products_to_cancel.exists():
+        return Response(
+            {"sale": SaleSerializer(sale).data, "cash_back": sale.total},
+            status=status.HTTP_200_OK,
+        )
+
+    def _return_partial(self, request, sale):
+        products_data = request.data["products_to_return"]
+        products_to_return = ProductSale.objects.filter(id__in=products_data.keys())
+        if not products_to_return.exists():
             return Response(
-                {"detail": "No products found to cancel."},
-                status=status.HTTP_404_NOT_FOUND,
+                {"detail": "No se encontraron productos."}, status=status.HTTP_404_NOT_FOUND,
             )
 
         logs = []
-        total_refund = 0
-
         with transaction.atomic():
-            for product_sale in products_to_cancel:
+            for ps in products_to_return:
+                qty = products_data.get(str(ps.pk), 0)
+                ps.quantity -= qty
+                ps.save()
 
-                quantity_to_cancel = products_data.get(str(product_sale.pk), 0)
-                product_sale.returned_quantity += quantity_to_cancel
-                product_sale.quantity -= quantity_to_cancel
-                product_sale.save()
-
-                store_product = StoreProduct.objects.select_for_update().get(
-                    store=sale.store, product=product_sale.product
+                sp = StoreProduct.objects.select_for_update().get(
+                    store=sale.store, product=ps.product
                 )
+                previous_stock = sp.stock
+                sp.stock += qty
+                sp.save()
+                logs.append(StoreProductLog(
+                    store_product=sp, user=request.user,
+                    previous_stock=previous_stock, updated_stock=sp.stock,
+                    action="E", movement="DE",
+                ))
 
-                previous_stock = store_product.stock
-                store_product.stock += quantity_to_cancel
-                store_product.save()
+            new_total = sum(p.get_total() for p in sale.products_sale.all())
+            cash_back = sale.total - new_total
 
-                logs.append(
-                    StoreProductLog(
-                        store_product=store_product,
-                        user=request.user,
-                        previous_stock=previous_stock,
-                        updated_stock=store_product.stock,
-                        action="E",
-                        movement="DE",
-                    )
-                )
-
-                # Calcular y aplicar reembolso
-                if product_sale.quantity == quantity_to_cancel:
-                    total_refund += product_sale.get_total()
-                else:
-                    refund = product_sale.price * quantity_to_cancel
-                    total_refund += refund
-
-            # Actualizar o eliminar la venta
-            remaining_products = sale.products_sale.all()
-
-            # calcular cash_back de inicio
-            cash_back = 0
-
-            if sale.total != sale.get_refunded():
-                old_total = sale.total
-                new_total = sum(p.get_total() for p in remaining_products)
-
-                sale.total = new_total
-                sale.save(update_fields=["total"])
-
-                Payment.objects.filter(sale=sale).update(amount=new_total)
-
-                cash_back = old_total - new_total
-            else:
-                sale.is_canceled = True
-                sale.save(update_fields=["is_canceled"])
-
-                cash_back = sale.total
-
+            sale.total = new_total
+            sale.has_return = True
+            sale.reason_return = request.data.get("reason_return", "")
+            sale.save(update_fields=["total", "has_return", "reason_return"])
+            Payment.objects.filter(sale=sale).update(amount=new_total)
             StoreProductLog.objects.bulk_create(logs)
 
-            return Response(
-                {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
-                status=status.HTTP_200_OK,
-            )
+        return Response(
+            {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
+            status=status.HTTP_200_OK,
+        )
         
 
 
