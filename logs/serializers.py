@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import StoreProductLog
+
+from .models import ProductPriceLog, StoreProductLog
 from products.serializers import ProductSerializer
 
 
@@ -56,3 +57,23 @@ class StoreProductLogAuditSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreProductLog
         fields = ["id", "created_at", "product_code", "product_name", "store_name"]
+
+
+class ProductPriceLogSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    product_name = serializers.CharField(source='product.get_description', read_only=True)
+    field_display = serializers.SerializerMethodField()
+
+    FIELD_LABELS = {
+        'cost': 'Costo',
+        'unit_price': 'Precio menudeo',
+        'wholesale_price': 'Precio mayoreo',
+        'min_wholesale_quantity': 'Cantidad mínima mayoreo',
+    }
+
+    def get_field_display(self, obj):
+        return self.FIELD_LABELS.get(obj.field, obj.field)
+
+    class Meta:
+        model = ProductPriceLog
+        fields = ['id', 'product', 'product_name', 'user_username', 'field', 'field_display', 'previous_value', 'new_value', 'created_at']

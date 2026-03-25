@@ -265,3 +265,18 @@ class StoreWorker(models.Model):
 
     def role_display(self):
         return self.get_role_display()
+
+
+class StockUpdateRequest(CreatedAtModel):
+    store_product = models.ForeignKey(StoreProduct, on_delete=models.CASCADE, related_name='update_requests')
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stock_requests')
+    requested_stock = models.IntegerField()
+    applied = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['applied', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.store_product} -> {self.requested_stock} ({'Aplicada' if self.applied else 'Pendiente'})"
