@@ -218,23 +218,6 @@ Suscripción mensual por sucursal: **$500 MXN/mes por tienda**, con facturación
 
 ---
 
-## 📝 Changelog
-
-### 2026-03-24
-- `feat(stores-cash-summary)`: Agregar dict de `manager` (id, username, full_name) y flag `has_all_products` en respuesta
-- `feat(products)`: Ordenar brands y departments alfabéticamente
-- `refactor`: Reordenar imports (PEP 8) y optimizar métodos `Tenant.count_products`, `Sale.get_profit`, `Sale.get_refunded` con aggregates
-
-### 2026-03-21
-- `refactor(audit)`: Renombrar audit1/audit2 a sales-logs-audit/stock-audit
-
-### 2026-03-20
-- `feat(audit)`: Nuevos endpoints de auditoría de productos
-  - `GET /api/product-audit/` (síncrono) — códigos repetidos, costo en cero, mayoreo inconsistente, faltantes en tiendas
-  - `GET /api/product-audit-activity/` (asíncrono) — productos sin actividad vía Celery
-
----
-
 ## 📄 Licencia
 
 Proyecto privado. Todos los derechos reservados.

@@ -2,8 +2,6 @@ from datetime import date, datetime
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db.models import IntegerField, OuterRef, Q, Subquery, Sum
-from django.db.models.functions import Coalesce
 from rest_framework import serializers
 
 from sales.cash_summary_utils import (
@@ -25,37 +23,26 @@ from .models import (
 )
 
 
-
 class BrandSerializer(serializers.ModelSerializer):
-    product_count = serializers.SerializerMethodField()
-
-    def get_product_count(self, obj):
-        return obj.count_products()
+    product_count = serializers.IntegerField(source='count_products', read_only=True)
 
     class Meta:
         model = Brand
         exclude = ["tenant"]
 
-class DepartmentSerializer(serializers.ModelSerializer):
-    product_count = serializers.SerializerMethodField()
 
-    def get_product_count(self, obj):
-        return obj.count_products()
+class DepartmentSerializer(serializers.ModelSerializer):
+    product_count = serializers.IntegerField(source='count_products', read_only=True)
 
     class Meta:
         model = Department
         exclude = ["tenant"]
 
 
-
 class ProductSearchSerializer(serializers.ModelSerializer):
-    brand_name = serializers.SerializerMethodField()
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
     prices = serializers.SerializerMethodField()
 
-    def get_brand_name(self, obj):
-        return obj.brand.name
-
-    
     def get_prices(self, obj):
         return {
             "unit_price": obj.unit_price,
@@ -64,31 +51,23 @@ class ProductSearchSerializer(serializers.ModelSerializer):
             "apply_wholesale": obj.apply_wholesale(),
             "wholesale_price_on_client_discount": obj.wholesale_price_on_client_discount,
         }
-    
+
     class Meta:
         model = Product
         fields = ["id", "code", "brand_name", "name", "prices", "image"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    brand_name = serializers.SerializerMethodField()
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
     department_name = serializers.SerializerMethodField()
     apply_wholesale = serializers.SerializerMethodField()
-    stock = serializers.SerializerMethodField()
-
-    def get_brand_name(self, obj):
-        return obj.brand.name
+    stock = serializers.IntegerField(source='get_stock', read_only=True)
 
     def get_department_name(self, obj):
         return obj.department.name if obj.department else ''
-    
+
     def get_apply_wholesale(self, obj):
         return obj.apply_wholesale()
-    
-    def get_stock(self, obj):
-        return obj.get_stock()
-    
-
 
     class Meta:
         model = Product
@@ -96,42 +75,27 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         request = self.context.get("request")
-        method = request.method if request else None
-
-        if method == "POST":
+        if request and request.method == "POST":
             if Product.objects.filter(
                 code=data["code"], brand__tenant=data["brand"].tenant
             ).exists():
                 raise ValidationError(
                     {"code": "product with this code already exists."}
                 )
-
         return data
-    
+
 
 class StoreBaseSerializer(serializers.ModelSerializer):
-    tenant_name = serializers.SerializerMethodField()
-    full_name = serializers.SerializerMethodField()
-    store_type_display = serializers.SerializerMethodField()
-    manager_username = serializers.SerializerMethodField()
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
+    store_type_display = serializers.CharField(source='get_store_type_display', read_only=True)
+    manager_username = serializers.CharField(source='manager.username', read_only=True)
     workers_count = serializers.IntegerField(read_only=True)
 
-    
-    def get_tenant_name(self, obj):
-        return obj.tenant.name
-    
-    def get_full_name(self, obj):
-        return obj.get_full_name()
-
-    def get_store_type_display(self, obj):
-        return obj.get_store_type_display()
-    
-    def get_manager_username(self, obj):
-        return obj.manager.username
-    
     class Meta:
         model = Store
         fields = "__all__"
+
 
 class StoreProductBaseSerializer(serializers.ModelSerializer):
     product = ProductSearchSerializer(read_only=True)
@@ -152,20 +116,14 @@ class StoreProductSerializer(StoreProductBaseSerializer):
     reserved_stock = serializers.IntegerField(read_only=True)
     store = StoreBaseSerializer(read_only=True)
 
-    def get_product_description(self, obj):
-        return obj.product.get_description()
-
-
 
 class ProductForStockSerializer(serializers.ModelSerializer):
-    brand_name = serializers.SerializerMethodField()
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
 
-    def get_brand_name(self, obj):
-        return obj.brand.name
-    
     class Meta:
         model = Product
         fields = ["id", "code", "brand_name", "name", "image"]
+
 
 class StoreProductForStockSerializer(serializers.ModelSerializer):
     product = ProductForStockSerializer(read_only=True)
@@ -174,30 +132,23 @@ class StoreProductForStockSerializer(serializers.ModelSerializer):
         model = StoreProduct
         fields = "__all__"
 
+
 class TransferSerializer(serializers.ModelSerializer):
-    product_code = serializers.SerializerMethodField()
-    product_description = serializers.SerializerMethodField()
+    product_code = serializers.CharField(source='product.code', read_only=True)
+    product_description = serializers.CharField(source='product.get_description', read_only=True)
     editable_product_max_stock = serializers.SerializerMethodField()
     description = serializers.SerializerMethodField()
 
-    def get_product_code(self, obj):
-        return obj.product.code
-
-    def get_product_description(self, obj):
-        return obj.product.get_description()
-
     def get_description(self, obj):
         store = self.context["request"].store
-
         if store == obj.destination_store:
-            return "Le solicite este producto a " + obj.origin_store.__str__()
+            return "Le solicite este producto a " + str(obj.origin_store)
         elif store == obj.origin_store:
-            return "Le proveere este producto a " + obj.destination_store.__str__()
+            return "Le proveere este producto a " + str(obj.destination_store)
         return "No tengo gerencia entre traspaso"
 
     def get_editable_product_max_stock(self, obj):
         store_product = StoreProduct.objects.get(product=obj.product, store=obj.origin_store)
-        
         return obj.quantity + store_product.calculate_available_stock()
 
     class Meta:
@@ -213,10 +164,9 @@ class StoreSerializer(StoreBaseSerializer):
 
     def get_printer(self, obj):
         return obj.get_store_printer()
-    
+
     def get_pending_transfers_count(self, obj):
         return obj.transfers_from.filter(transfer_datetime=None).count() + obj.transfers_to.filter(transfer_datetime=None).count()
-    
 
     class Meta:
         model = Store
@@ -224,7 +174,7 @@ class StoreSerializer(StoreBaseSerializer):
 
 
 class StoreCashSummarySerializer(StoreSerializer):
-    cash_summary = serializers.SerializerMethodField()    
+    cash_summary = serializers.SerializerMethodField()
 
     def get_cash_summary(self, obj):
         start_date_str = self.context.get("start_date")
@@ -238,14 +188,8 @@ class StoreCashSummarySerializer(StoreSerializer):
 
 
 class CashFlowSerializer(serializers.ModelSerializer):
-    transaction_type_display = serializers.SerializerMethodField()
-    user_username = serializers.SerializerMethodField()
-
-    def get_transaction_type_display(self, obj):
-        return obj.get_transaction_type_display()
-
-    def get_user_username(self, obj):
-        return obj.user.username
+    transaction_type_display = serializers.CharField(source='get_transaction_type_display', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
         model = CashFlow
@@ -258,21 +202,17 @@ class CashFlowCreateSerializer(serializers.ModelSerializer):
         fields = ["concept", "amount", "transaction_type"]
 
 
-class UserSerializer(serializers.ModelSerializer):    
+class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-#        fields = "__all__"
         exclude = ['password']
+
 
 class StoreWorkerSerializer(serializers.ModelSerializer):
     store = serializers.PrimaryKeyRelatedField(queryset=Store.objects.all(), write_only=True, required=False)
     store_detail = StoreSerializer(source='store', read_only=True)
-
     worker = UserSerializer()
     total_sales = serializers.SerializerMethodField(read_only=True)
-    
-#    def get_user_username(self, obj):
-#        return obj.worker.username
 
     def get_total_sales(self, obj):
         start_date_str = self.context.get("start_date")
@@ -281,7 +221,6 @@ class StoreWorkerSerializer(serializers.ModelSerializer):
         end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date.today()
 
         if isinstance(obj, dict):
-        
             user = User.objects.get(username=obj['worker']['username'])
             return calculate_total_sales_by_seller(user, start_date, end_date)
         return calculate_total_sales_by_seller(obj.worker, start_date, end_date)
@@ -292,33 +231,20 @@ class StoreWorkerSerializer(serializers.ModelSerializer):
 
 
 class StoreProductAuditSerializer(serializers.ModelSerializer):
-    product_code = serializers.SerializerMethodField()
-    product_name = serializers.SerializerMethodField()
-    store_name = serializers.SerializerMethodField()
+    product_code = serializers.CharField(source='product.code', read_only=True)
+    product_name = serializers.CharField(source='product.get_description', read_only=True)
+    store_name = serializers.CharField(source='store.get_full_name', read_only=True)
 
-    def get_product_code(self, obj):
-        return obj.product.code
-
-    def get_product_name(self, obj):
-        return obj.product.get_description()
-    
-    def get_store_name(self, obj):
-        return obj.store.get_full_name()
-    
     class Meta:
         model = StoreProduct
         fields = ["id", "product_code", "product_name", "store_name", "stock"]
 
 
-
 class DistributionSerializer(serializers.ModelSerializer):
     origin_store = serializers.PrimaryKeyRelatedField(read_only=True)
     transfers = TransferSerializer(read_only=True, many=True)
-    description = serializers.SerializerMethodField()
+    description = serializers.CharField(source='__str__', read_only=True)
 
-    def get_description(self, obj):
-        return obj.__str__()
-    
     class Meta:
         model = Distribution
         fields = "__all__"
