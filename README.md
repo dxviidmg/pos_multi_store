@@ -32,7 +32,7 @@ SmartVenta es un POS diseñado para negocios minoristas con múltiples sucursale
 | **Transferencias** | Movimiento de mercancía entre sucursales/almacenes con seguimiento de estado |
 | **Apartados** | Reservación de productos para clientes con bloqueo automático de stock |
 | **Clientes y descuentos** | Registro de clientes con descuentos por porcentaje y precios de mayoreo por producto |
-| **Corte de caja** | Resumen diario o por rango: ventas por método de pago, utilidad, flujo de caja y cancelaciones |
+| **Corte de caja** | Resumen diario o por rango: ventas por método de pago, utilidad, flujo de caja, cancelaciones. Vista bulk multi-sucursal con datos del administrador y validación de catálogo completo |
 | **Roles y permisos** | Tres niveles: Propietario, Administrador de tienda y Vendedor |
 | **Importación masiva** | Carga de productos e inventario desde Excel con plantillas y validación automática |
 | **Impresión de tickets** | Configuración de impresoras térmicas por sucursal |
@@ -219,6 +219,11 @@ Suscripción mensual por sucursal: **$500 MXN/mes por tienda**, con facturación
 ---
 
 ## 📝 Changelog
+
+### 2026-03-24
+- `feat(stores-cash-summary)`: Agregar dict de `manager` (id, username, full_name) y flag `has_all_products` en respuesta
+- `feat(products)`: Ordenar brands y departments alfabéticamente
+- `refactor`: Reordenar imports (PEP 8) y optimizar métodos `Tenant.count_products`, `Sale.get_profit`, `Sale.get_refunded` con aggregates
 
 ### 2026-03-21
 - `refactor(audit)`: Renombrar audit1/audit2 a sales-logs-audit/stock-audit

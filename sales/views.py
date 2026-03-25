@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from logs.models import StoreProductLog
+from notifications.utils import notify_store
 from products.decorators import get_store
 from products.import_utils import (
     validate_store_product_columns,
@@ -245,6 +246,12 @@ class SaleViewSet(viewsets.ModelViewSet):
                         "store": store,
                     }
                     CashFlow.objects.create(**cash_flow_data)
+
+        if reservation_in_progress:
+            notify_store(store, store.tenant_id, {
+                'event': 'reservation_created',
+                'message': f'Nuevo apartado #{sale_instance.pk} en {store.name}',
+            })
 
         return sale_instance
 
@@ -645,7 +652,7 @@ class StoresCashSummaryView(APIView):
             department_id = None
 
         date_range = [start_date, end_date]
-        stores = Store.objects.filter(tenant=tenant).select_related("tenant", "manager")
+        stores = Store.objects.filter(tenant=tenant).select_related("tenant", "manager").prefetch_related("printer__printer__brand")
         if store_type:
             stores = stores.filter(store_type=store_type)
         store_ids = list(stores.values_list("id", flat=True))
@@ -833,6 +840,7 @@ class StoresCashSummaryView(APIView):
             profit = profit_map.get(sid, 0)
             cash = ef + net_cashflow
 
+            store_printer = store.printer.first()
             stores_data.append({
                 "id": sid,
                 "name": store.name,
@@ -840,6 +848,7 @@ class StoresCashSummaryView(APIView):
                 "store_type": store.store_type,
                 "manager": {"id": store.manager.id, "username": store.manager.username, "full_name": store.manager.get_full_name()} if store.manager else None,
                 "has_all_products": sp_count_map.get(sid, 0) >= total_products,
+                "printer": {"brand": store_printer.printer.brand.name, "model": store_printer.printer.model} if store_printer else None,
                 "cash_summary": {
                     "EF": ef,
                     "TA": ta,

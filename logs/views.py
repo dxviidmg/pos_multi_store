@@ -8,8 +8,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from products.decorators import get_store
-from .models import StoreProductLog
-from .serializers import StoreProductLogSerializer, StoreProductLogSerializer2
+from .models import ProductPriceLog, StoreProductLog
+from .serializers import (
+    ProductPriceLogSerializer,
+    StoreProductLogSerializer,
+    StoreProductLogSerializer2,
+)
 
 # Create your views here.
 @method_decorator(get_store(), name="dispatch")
@@ -66,3 +70,15 @@ class StoreProductLogViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return StoreProductLog.objects.all()
+
+
+class ProductPriceLogView(APIView):
+    def get(self, request):
+        product_id = request.GET.get('product_id')
+        if not product_id:
+            return Response({"error": "product_id es requerido"}, status=status.HTTP_400_BAD_REQUEST)
+        logs = ProductPriceLog.objects.filter(
+            product_id=product_id
+        ).select_related('user', 'product__brand').order_by('-created_at')
+        serializer = ProductPriceLogSerializer(logs, many=True)
+        return Response(serializer.data)

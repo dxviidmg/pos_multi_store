@@ -11,11 +11,13 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.constants import LogAction, LogMovement
-from logs.models import StoreProductLog
+from logs.models import ProductPriceLog, StoreProductLog
+from notifications.utils import notify_store
 from .decorators import get_store
 from .import_utils import (
     validate_excel_columns,
@@ -32,6 +34,7 @@ from .models import (
     Distribution,
     Product,
     Store,
+    StockUpdateRequest,
     StoreProduct,
     StoreWorker,
     Transfer,
@@ -43,6 +46,7 @@ from .serializers import (
     DepartmentSerializer,
     DistributionSerializer,
     ProductSerializer,
+    StockUpdateRequestSerializer,
     StoreBaseSerializer,
     StoreCashSummarySerializer,
     StoreProductBaseSerializer,
@@ -243,6 +247,14 @@ class TransferViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def perform_create(self, serializer):
+        transfer = serializer.save()
+        dest = transfer.destination_store
+        notify_store(dest, dest.tenant_id, {
+            'event': 'transfer_created',
+            'message': f'Nuevo traspaso de {transfer.quantity}x {transfer.product.name} desde {transfer.origin_store.name}',
+        })
+
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
 
@@ -281,6 +293,22 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
 
         return queryset.order_by("brand__name", "name")
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        tracked_fields = ['cost', 'unit_price', 'wholesale_price', 'min_wholesale_quantity']
+        old_values = {f: str(getattr(instance, f)) if getattr(instance, f) is not None else None for f in tracked_fields}
+        product = serializer.save()
+        logs = []
+        for f in tracked_fields:
+            new_val = str(getattr(product, f)) if getattr(product, f) is not None else None
+            if new_val != old_values[f]:
+                logs.append(ProductPriceLog(
+                    product=product, user=self.request.user,
+                    field=f, previous_value=old_values[f], new_value=new_val,
+                ))
+        if logs:
+            ProductPriceLog.objects.bulk_create(logs)
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -429,6 +457,11 @@ class TransferConfirmView(APIView):
         # Guardar todos los logs en una sola operación
         StoreProductLog.objects.bulk_create(logs)
 
+        notify_store(origin_store, origin_store.tenant_id, {
+            'event': 'transfer_confirmed',
+            'message': f'Traspaso confirmado hacia tienda destino',
+        })
+
         return Response({"status": "Transfer confirmed"}, status=status.HTTP_200_OK)
 
 
@@ -506,6 +539,11 @@ class ConfirmDistributionView(APIView):
 
         # Guardar todos los logs en una sola operación
         StoreProductLog.objects.bulk_create(logs)
+
+        notify_store(distribution.destination_store, distribution.origin_store.tenant_id, {
+            'event': 'distribution_confirmed',
+            'message': f'Distribución desde {distribution.origin_store.name} confirmada',
+        })
 
         return Response({"status": "Distribution confirmed"}, status=status.HTTP_200_OK)
 
@@ -1240,4 +1278,60 @@ class DistributionViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
+        dest = distribution_instance.destination_store
+        notify_store(dest, dest.tenant_id, {
+            'event': 'distribution_created',
+            'message': f'Nueva distribución desde {origin_store.name}',
+        })
+
         return distribution_instance
+
+
+class StockUpdateRequestViewSet(viewsets.ModelViewSet):
+    serializer_class = StockUpdateRequestSerializer
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        tenant = self.request.user.get_tenant()
+        return (
+            StockUpdateRequest.objects
+            .filter(store_product__store__tenant=tenant, applied=False)
+            .select_related('requested_by', 'store_product__product__brand', 'store_product__store')
+            .order_by('-created_at')
+        )
+
+    def perform_create(self, serializer):
+        sp = serializer.validated_data['store_product']
+        if StockUpdateRequest.objects.filter(store_product=sp, applied=False).exists():
+            raise ValidationError({"error": "Ya hay una solicitud en proceso para este producto-tienda"})
+        instance = serializer.save(requested_by=self.request.user)
+        store = sp.store
+        notify_store(store, store.tenant_id, {
+            'event': 'stock_request_created',
+            'message': f'Solicitud de ajuste de stock para {sp.product.name} en {store.name}',
+        })
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        adj = self.get_object()
+        if adj.applied:
+            return Response({"error": "Ya fue aplicada"}, status=status.HTTP_400_BAD_REQUEST)
+
+        sp = adj.store_product
+        previous_stock = sp.stock
+        sp.stock = adj.requested_stock
+        sp.save()
+        adj.applied = True
+        adj.save()
+
+        StoreProductLog.objects.create(
+            store_product=sp, user=request.user,
+            previous_stock=previous_stock, updated_stock=adj.requested_stock,
+            action=LogAction.AJUSTE, movement=LogMovement.MANUAL,
+        )
+        store = sp.store
+        notify_store(store, store.tenant_id, {
+            'event': 'stock_request_approved',
+            'message': f'Ajuste de stock aprobado para {sp.product.name} en {store.name}',
+        })
+        return Response(StockUpdateRequestSerializer(adj).data)

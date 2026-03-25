@@ -12,4 +12,5 @@ urlpatterns = router.urls
 urlpatterns += [
     path('store-product-logs/', views.StoreProductLogsView.as_view(), name='store-product-logs'),
     path('store-product-logs/choices/', views.StoreProductLogsChoicesView.as_view(), name='store-product-logs-choices'),
+    path('product-price-logs/', views.ProductPriceLogView.as_view(), name='product-price-logs'),
 ]

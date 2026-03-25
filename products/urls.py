@@ -13,6 +13,7 @@ router.register('store-product', views.StoreProductViewSet, basename='store-prod
 router.register('transfer', views.TransferViewSet, basename='transfer')
 router.register('cash-flow', views.CashFlowViewSet, basename='cash-flow')
 router.register('store-worker', views.StoreWorkerViewSet, basename='store-worker')
+router.register('stock-update-request', views.StockUpdateRequestViewSet, basename='stock-update-request')
 router.register('distribution', views.DistributionViewSet, basename='distribution')
 
 urlpatterns = router.urls

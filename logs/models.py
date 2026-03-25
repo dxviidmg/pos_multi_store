@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.db import models
 
 from core.constants import LogAction, LogMovement
-from products.models import Store, StoreProduct
+from products.models import Store, StoreProduct, Product
 from tenants.models import CreatedAtModel
 
 
@@ -77,3 +77,21 @@ class StoreProductLog(CreatedAtModel):
     
     def has_negatives(self):
         return self.previous_stock < 0 or self.updated_stock < 0
+
+
+class ProductPriceLog(CreatedAtModel):
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="price_logs"
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    field = models.CharField(max_length=20)  # cost, unit_price, wholesale_price
+    previous_value = models.CharField(max_length=20, null=True)
+    new_value = models.CharField(max_length=20, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['product', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.product} {self.field}: {self.previous_value} -> {self.new_value}"
