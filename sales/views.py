@@ -5,6 +5,7 @@ import pandas as pd
 from django.db import transaction
 from django.db.models import Count, DecimalField, F, Q, Sum
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from rest_framework import status, viewsets
 from rest_framework.exceptions import NotFound
@@ -22,7 +23,7 @@ from products.import_utils import (
 from products.models import CashFlow, Product, Store, StoreProduct
 from .cash_summary_utils import calculate_cash_summary
 from .models import Sale, ProductSale, Payment
-from .serializers import SaleSerializer, SaleCreateSerializer
+from .serializers import SaleSerializer, SaleCreateSerializer, SaleAuditSerializer
 from .tasks import get_sales_for_dashboard, get_cancellations_dashboard, get_products_dashboard
 
 # Límites para archivos Excel
@@ -251,6 +252,12 @@ class SaleViewSet(viewsets.ModelViewSet):
             notify_store(store, store.tenant_id, {
                 'event': 'reservation_created',
                 'message': f'Nuevo apartado #{sale_instance.pk} en {store.name}',
+            })
+
+        if not reservation_in_progress and sale_instance.is_repeated():
+            notify_store(store, store.tenant_id, {
+                'event': 'duplicate_sale',
+                'message': f'Posible venta duplicada #{sale_instance.pk}',
             })
 
         return sale_instance
@@ -867,3 +874,35 @@ class StoresCashSummaryView(APIView):
             totals["cash"] += cash
 
         return Response({"stores": stores_data, "totals": totals})
+
+
+@method_decorator(get_store(), name="dispatch")
+class DuplicateSalesView(APIView):
+    def get(self, request):
+        tenant = request.user.get_tenant()
+
+        if request.store:
+            stores = Store.objects.filter(tenant=tenant, id=request.store.id)
+        else:
+            stores = Store.objects.filter(tenant=tenant)
+
+        today = timezone.localdate()
+
+        sales = Sale.objects.filter(
+            store__in=stores, is_canceled=False, created_at__date=today
+        ).select_related("store").order_by("store", "pk")
+
+        duplicates = [s for s in sales.iterator(chunk_size=500) if s.is_repeated()]
+
+        grouped = {}
+        for sale in duplicates:
+            store_name = sale.store.get_full_name()
+            grouped.setdefault(store_name, 0)
+            grouped[store_name] += 1
+
+        notifications = [
+            {"title": store_name, "messages": [f"{count} venta(s) duplicada(s)"]}
+            for store_name, count in grouped.items()
+        ]
+
+        return Response(notifications)
