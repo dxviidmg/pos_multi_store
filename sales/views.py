@@ -19,7 +19,7 @@ from products.import_utils import (
     rename_store_product_columns,
     validate_quantities,
 )
-from products.models import CashFlow, Distribution, Product, Store, StoreProduct, Transfer
+from products.models import CashFlow, Product, Store, StoreProduct
 from .cash_summary_utils import calculate_cash_summary
 from .models import Sale, ProductSale, Payment
 from .serializers import SaleSerializer, SaleCreateSerializer
@@ -793,28 +793,6 @@ class StoresCashSummaryView(APIView):
         for cf in cashflows:
             cashflow_map[cf["store_id"]][cf["transaction_type"]] = cf["total"] or 0
 
-        # 5 — Pendientes por tienda
-        pending_dists = Distribution.objects.filter(
-            Q(origin_store_id__in=store_ids) | Q(destination_store_id__in=store_ids),
-            transfer_datetime__isnull=True,
-        )
-        pending_dist = defaultdict(int)
-        for d in pending_dists.values_list("origin_store_id", "destination_store_id"):
-            for sid in d:
-                if sid in store_ids_set:
-                    pending_dist[sid] += 1
-
-        pending_transfers = Transfer.objects.filter(
-            Q(origin_store_id__in=store_ids) | Q(destination_store_id__in=store_ids),
-            transfer_datetime__isnull=True,
-            distribution__isnull=True,
-        )
-        pending_trans = defaultdict(int)
-        for t in pending_transfers.values_list("origin_store_id", "destination_store_id"):
-            for sid in t:
-                if sid in store_ids_set:
-                    pending_trans[sid] += 1
-
         # --- Construir response ---
         totals = {"EF": 0, "TA": 0, "TR": 0, "total_payment": 0, "total_sales": 0, "canceled_sales": 0, "profit": 0, "cash": 0}
         stores_data = []
@@ -852,8 +830,6 @@ class StoresCashSummaryView(APIView):
                     "profit": profit,
                     "total_sales": sc["total_sales"],
                     "canceled_sales": sc["canceled_sales"],
-                    "pending_distributions": pending_dist.get(sid, 0),
-                    "pending_transfers": pending_trans.get(sid, 0),
                 },
             })
 

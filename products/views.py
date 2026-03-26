@@ -1228,6 +1228,50 @@ def ping(request):
 
 
 @method_decorator(get_store(), name="dispatch")
+class PendingMovementsView(APIView):
+    def get(self, request):
+        tenant = request.user.get_tenant()
+
+        if request.store:
+            stores = Store.objects.filter(tenant=tenant, id=request.store.id)
+        else:
+            stores = Store.objects.filter(tenant=tenant)
+
+        pending_transfers = Transfer.objects.filter(
+            Q(origin_store__in=stores) | Q(destination_store__in=stores),
+            transfer_datetime__isnull=True, distribution__isnull=True
+        ).select_related('origin_store', 'destination_store')
+
+        pending_distributions = Distribution.objects.filter(
+            Q(origin_store__in=stores) | Q(destination_store__in=stores),
+            transfer_datetime__isnull=True
+        ).select_related('origin_store', 'destination_store')
+
+        grouped = {}
+
+        for t in pending_transfers:
+            key = (t.origin_store.name, t.destination_store.name)
+            grouped.setdefault(key, {"transfers": 0, "distributions": 0})
+            grouped[key]["transfers"] += 1
+
+        for d in pending_distributions:
+            key = (d.origin_store.name, d.destination_store.name)
+            grouped.setdefault(key, {"transfers": 0, "distributions": 0})
+            grouped[key]["distributions"] += 1
+
+        notifications = []
+        for (origin, dest), counts in grouped.items():
+            messages = []
+            if counts["distributions"]:
+                messages.append(f"{counts['distributions']} distribución(es)")
+            if counts["transfers"]:
+                messages.append(f"{counts['transfers']} traspaso(s)")
+            notifications.append({"title": f"{origin} → {dest}", "messages": messages})
+
+        return Response(notifications)
+
+
+@method_decorator(get_store(), name="dispatch")
 class DistributionViewSet(viewsets.ModelViewSet):
     serializer_class = DistributionSerializer
 
