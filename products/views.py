@@ -1187,15 +1187,12 @@ class StockInOtherStores(APIView):
     def get(self, request):
         user = request.user
         tenant = user.get_tenant()
-        store = request.store
-        code = request.GET.get("code", "")
+        store_product_id = request.GET.get("store-product", "")
 
-        product = Product.objects.select_related("brand").get(
-            code=code, brand__tenant=tenant
+        store_product = StoreProduct.objects.select_related("store", "product").get(
+            id=store_product_id, store__tenant=tenant
         )
-        store_product = StoreProduct.objects.select_related("store").get(
-            store=store, product=product
-        )
+        product = store_product.product
 
         store_type_filter = (
             {} if tenant.displays_stock_in_storages else {"store__store_type": "T"}
