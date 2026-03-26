@@ -23,7 +23,7 @@ from products.models import CashFlow, Product, Store, StoreProduct
 from .cash_summary_utils import calculate_cash_summary
 from .models import Sale, ProductSale, Payment
 from .serializers import SaleSerializer, SaleCreateSerializer
-from .tasks import get_sales_for_dashboard
+from .tasks import get_sales_for_dashboard, get_cancellations_dashboard, get_products_dashboard
 
 # Límites para archivos Excel
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -554,6 +554,7 @@ class SaleCancelView(APIView):
                     action="E", movement="DE",
                 ))
 
+            sale.products_sale.all().delete()
             sale.is_canceled = True
             sale.reason_cancel = request.data.get("reason_cancel", "")
             sale.save(update_fields=["is_canceled", "reason_cancel"])
@@ -577,7 +578,10 @@ class SaleCancelView(APIView):
             for ps in products_to_return:
                 qty = products_data.get(str(ps.pk), 0)
                 ps.quantity -= qty
-                ps.save()
+                if ps.quantity <= 0:
+                    ps.delete()
+                else:
+                    ps.save()
 
                 sp = StoreProduct.objects.select_for_update().get(
                     store=sale.store, product=ps.product
@@ -620,6 +624,26 @@ class SaleDashboardAsyncView(APIView):
         
         task = get_sales_for_dashboard.delay(store_ids, year, month)
         
+        return Response({"task": task.id})
+
+
+class CancellationsDashboardView(APIView):
+    def get(self, request):
+        year = request.query_params.get('year')
+        month = request.query_params.get('month', '0')
+        tenant = request.user.get_tenant()
+        store_ids = list(Store.objects.filter(tenant=tenant, store_type="T").values_list("id", flat=True))
+        task = get_cancellations_dashboard.delay(store_ids, year, month)
+        return Response({"task": task.id})
+
+
+class ProductsDashboardView(APIView):
+    def get(self, request):
+        year = request.query_params.get('year')
+        month = request.query_params.get('month', '0')
+        tenant = request.user.get_tenant()
+        store_ids = list(Store.objects.filter(tenant=tenant, store_type="T").values_list("id", flat=True))
+        task = get_products_dashboard.delay(tenant.id, store_ids, year, month)
         return Response({"task": task.id})
 
 
