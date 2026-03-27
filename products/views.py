@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -1264,6 +1265,19 @@ class PendingMovementsView(APIView):
             if counts["transfers"]:
                 messages.append(f"{counts['transfers']} traspaso(s)")
             notifications.append({"title": f"{origin} → {dest}", "messages": messages})
+
+        # Solicitudes de ajuste de stock en el último minuto
+        one_minute_ago = timezone.now() - timedelta(minutes=1)
+        recent_requests = StockUpdateRequest.objects.filter(
+            store_product__store__in=stores, applied=False,
+            created_at__gte=one_minute_ago,
+        ).select_related('store_product__store', 'store_product__product', 'requested_by')
+
+        for req in recent_requests:
+            notifications.append({
+                "title": req.store_product.store.name,
+                "messages": [f"Solicitud de ajuste: {req.store_product.product.name} ({req.requested_by.first_name})"],
+            })
 
         return Response(notifications)
 
