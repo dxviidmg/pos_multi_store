@@ -648,8 +648,14 @@ class ProductsDashboardView(APIView):
     def get(self, request):
         year = request.query_params.get('year')
         month = request.query_params.get('month', '0')
+        store_id = request.query_params.get('store_id')
         tenant = request.user.get_tenant()
-        store_ids = list(Store.objects.filter(tenant=tenant, store_type="T").values_list("id", flat=True))
+        
+        if store_id:
+            store_ids = [store_id]
+        else:
+            store_ids = list(Store.objects.filter(tenant=tenant, store_type="T").values_list("id", flat=True))
+
         task = get_products_dashboard.delay(tenant.id, store_ids, year, month)
         return Response({"task": task.id})
 
