@@ -5,6 +5,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from tenants.models import Tenant
 from products.models import Store
 from .serializers import UserSerializer
 
@@ -25,13 +26,11 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if new_password != confirm_password:
             return Response({'error': 'Las contraseñas no coinciden'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         if user_id:
             user_id = int(user_id)
             if request.user.id != user_id:
                 # Validar si el request.user es owner
-                from tenants.models import Tenant
-                from products.models import Store
                 tenant = Tenant.objects.filter(owner=request.user).first()
                 if tenant:
                     # Validar que user_id sea manager de una tienda del owner
@@ -55,6 +54,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
         user.set_password(new_password)
         user.save()
+        # Borrar token si el usuario es diferente al request.user
+        if user != request.user:
+            Token.objects.filter(user=user).delete()
         return Response({'message': 'Contraseña actualizada exitosamente'})
 
 
