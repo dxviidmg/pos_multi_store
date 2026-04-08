@@ -206,7 +206,12 @@ ASGI_APPLICATION = 'pos_multi_store.asgi.application'
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {'hosts': [config('REDIS_URL')]},
+        'CONFIG': {
+            'hosts': [config('REDIS_URL')],
+            'capacity': 1000,
+            'expiry': 60,
+            'prefix': 'ws_',
+        },
     },
 }
 
@@ -215,6 +220,13 @@ CELERY_RESULT_BACKEND = config('REDIS_URL')
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
+
+# Optimizaciones para tier gratuito de Redis
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_DISABLE_RATE_LIMITS = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 min max por tarea
+CELERY_WORKER_TASK_SOFT_TIME_LIMIT = 25 * 60  # Soft limit 25 min
 
 
 RENDER_API_KEY = config('RENDER_API_KEY')
