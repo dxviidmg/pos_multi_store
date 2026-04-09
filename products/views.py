@@ -1,4 +1,3 @@
-import time
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -7,7 +6,6 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from rest_framework import status, viewsets
@@ -49,7 +47,6 @@ from .serializers import (
     ProductSerializer,
     StockUpdateRequestSerializer,
     StoreBaseSerializer,
-    StoreCashSummarySerializer,
     StoreProductBaseSerializer,
     StoreProductCodeSerializer,
     StoreProductForStockSerializer,
@@ -57,7 +54,8 @@ from .serializers import (
     StoreWorkerSerializer,
     TransferSerializer,
 )
-from .utils import is_list_in_another, is_positive_number
+from .utils import is_positive_number
+
 
 # Configuración de límites para archivos Excel
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -87,12 +85,7 @@ def validate_excel_file(file_obj):
     
     return True
 
-
-from typing import Optional
-from django.db.models import QuerySet
-
-
-def annotate_stock_info(queryset: QuerySet) -> QuerySet:
+def annotate_stock_info(queryset):
     """Agrega anotaciones de stock reservado y disponible al queryset
     
     Args:
@@ -1219,10 +1212,6 @@ class StockInOtherStores(APIView):
         ]
 
         return Response(stock_data, status=status.HTTP_200_OK)
-
-
-def ping(request):
-    return JsonResponse({"status": "alive"})
 
 
 @method_decorator(get_store(), name="dispatch")
