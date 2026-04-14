@@ -7,7 +7,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pos_multi_store.settings")
 app = Celery("pos_multi_store")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 
-redis_url = os.environ.get("REDIS_URL")
+redis_url = os.environ.get("REDIS_CELERY_URL")
 
 if redis_url and redis_url.startswith("rediss://"):
     app.conf.broker_use_ssl = {
