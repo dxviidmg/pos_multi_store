@@ -207,30 +207,27 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [config('REDIS_WS_URL')],
-            'capacity': 200,
-            'expiry': 30,
+            'hosts': [config('REDIS_WS_URL', default=config('REDIS_CHANNELS_URL', default=config('REDIS_URL')))],
+            'capacity': 1000,
+            'expiry': 60,
             'prefix': 'ws_',
         },
     },
 }
 
-CELERY_BROKER_URL = config('REDIS_CELERY_URL')
-CELERY_RESULT_BACKEND = config('REDIS_CELERY_URL')
+CELERY_BROKER_URL = config('REDIS_CELERY_URL', default=config('REDIS_URL'))
+CELERY_RESULT_BACKEND = config('REDIS_CELERY_URL', default=config('REDIS_URL'))
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 
-RENDER_API_KEY = config('RENDER_API_KEY')
-RENDER_SERVICE_ID = config('RENDER_SERVICE_ID')
-
+# Optimizaciones para tier gratuito de Redis
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_DISABLE_RATE_LIMITS = True
-CELERY_TASK_TIME_LIMIT = 20 * 60        # 20 min hard
-CELERY_WORKER_TASK_SOFT_TIME_LIMIT = 18 * 60  # 18 min soft
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 300
-CELERY_BROKER_POOL_LIMIT = 3
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_BROKER_CONNECTION_RETRY = True
-CELERY_BROKER_CONNECTION_MAX_RETRIES = None  # infinito
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 min max por tarea
+CELERY_WORKER_TASK_SOFT_TIME_LIMIT = 25 * 60  # Soft limit 25 min
+
+
+RENDER_API_KEY = config('RENDER_API_KEY')
+RENDER_SERVICE_ID = config('RENDER_SERVICE_ID')
