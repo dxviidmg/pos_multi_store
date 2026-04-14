@@ -1,10 +1,11 @@
 import os
 import ssl
-import warnings
+import logging
 from celery import Celery
 from urllib.parse import urlparse
 
-warnings.filterwarnings('ignore', message='.*ssl_cert_reqs=CERT_NONE.*')
+# Suppress SSL warning from redis-py
+logging.getLogger('redis').setLevel(logging.ERROR)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pos_multi_store.settings")
 
