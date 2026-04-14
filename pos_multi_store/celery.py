@@ -1,8 +1,11 @@
 import os
 import ssl
+import django
 from celery import Celery
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pos_multi_store.settings")
+
+django.setup()
 
 app = Celery("pos_multi_store")
 app.config_from_object("django.conf:settings", namespace="CELERY")
@@ -14,11 +17,12 @@ if redis_url:
     app.conf.result_backend = redis_url
 
     if redis_url.startswith("rediss://"):
-        app.conf.broker_use_ssl = {
-            "ssl_cert_reqs": ssl.CERT_NONE
+        ssl_config = {
+            "ssl_cert_reqs": ssl.CERT_NONE,
+            "ssl_check_hostname": False,
         }
-        app.conf.redis_backend_use_ssl = {
-            "ssl_cert_reqs": ssl.CERT_NONE
-        }
+
+        app.conf.broker_use_ssl = ssl_config
+        app.conf.redis_backend_use_ssl = ssl_config
 
 app.autodiscover_tasks()
