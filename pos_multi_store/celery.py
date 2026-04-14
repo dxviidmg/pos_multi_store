@@ -16,10 +16,10 @@ if redis_url:
 
     if redis_url.startswith("rediss://"):
         app.conf.broker_use_ssl = {
-            "ssl_cert_reqs": ssl.CERT_REQUIRED
+            "ssl_cert_reqs": ssl.CERT_NONE
         }
         app.conf.redis_backend_use_ssl = {
-            "ssl_cert_reqs": ssl.CERT_REQUIRED
+            "ssl_cert_reqs": ssl.CERT_NONE
         }
 
 app.autodiscover_tasks()
