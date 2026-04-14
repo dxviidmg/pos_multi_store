@@ -1,7 +1,10 @@
 import os
 import ssl
+import warnings
 from celery import Celery
 from urllib.parse import urlparse
+
+warnings.filterwarnings('ignore', message='.*ssl_cert_reqs=CERT_NONE.*')
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pos_multi_store.settings")
 
