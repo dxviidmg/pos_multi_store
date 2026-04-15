@@ -207,7 +207,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [config('REDIS_WS_URL', default=config('REDIS_CHANNELS_URL', default=config('REDIS_URL')))],
+            'hosts': [config('REDIS_URL')],
             'capacity': 1000,
             'expiry': 60,
             'prefix': 'ws_',
@@ -215,8 +215,8 @@ CHANNEL_LAYERS = {
     },
 }
 
-CELERY_BROKER_URL = config('REDIS_CELERY_URL', default=config('REDIS_URL'))
-CELERY_RESULT_BACKEND = config('REDIS_CELERY_URL', default=config('REDIS_URL'))
+CELERY_BROKER_URL = config('REDIS_URL')
+CELERY_RESULT_BACKEND = config('REDIS_URL')
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
