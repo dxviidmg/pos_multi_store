@@ -28,7 +28,7 @@ class StoreProductLogsView(APIView):
 		store_related = request.GET.get("store_related")
 
 		if store_product_id:
-			one_month_ago = timezone.now() - timedelta(days=30)
+			one_month_ago = timezone.now() - timedelta(days=150)
 			store_product_logs = StoreProductLog.objects.filter(
 				store_product__id=store_product_id,
 				created_at__gte=one_month_ago,
