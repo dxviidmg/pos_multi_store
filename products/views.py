@@ -217,15 +217,17 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         updated_stock = instance.stock  # Obtener el stock actualizado
 
-        # Registrar un log si el stock cambia
+        # Registrar un log si el stock cambia y no es igual al último registro
         if original_stock != updated_stock:
-            StoreProductLog.objects.create(
-                store_product=instance,
-                user=self.request.user,
-                previous_stock=original_stock,
-                updated_stock=updated_stock,
-                action=LogAction.AJUSTE,
-            )
+            last_log = StoreProductLog.objects.filter(store_product=instance).order_by("-created_at").first()
+            if last_log is None or last_log.updated_stock != updated_stock:
+                StoreProductLog.objects.create(
+                    store_product=instance,
+                    user=self.request.user,
+                    previous_stock=original_stock,
+                    updated_stock=updated_stock,
+                    action=LogAction.AJUSTE,
+                )
 
 
 @method_decorator(get_store(), name="dispatch")
