@@ -21,6 +21,7 @@ class StoreProductLogsView(APIView):
 	@transaction.atomic  # Decorador para asegurar la atomicidad de todo el método
 	def get(self, request):
 		store_product_id = request.GET.get("store-product-id")
+		months = request.GET.get("months", 1)
 		date = request.GET.get("date")
 		brand_id = request.GET.get("brand_id")
 		action = request.GET.get("action")
@@ -28,10 +29,10 @@ class StoreProductLogsView(APIView):
 		store_related = request.GET.get("store_related")
 
 		if store_product_id:
-			one_month_ago = timezone.now() - timedelta(days=150)
+			months_ago = timezone.now() - timedelta(days=(30*int(months)))
 			store_product_logs = StoreProductLog.objects.filter(
 				store_product__id=store_product_id,
-				created_at__gte=one_month_ago,
+				created_at__gte=months_ago,
 			).order_by("-id")
 			serializer_class = StoreProductLogSerializer
 		else:
