@@ -220,7 +220,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         # Registrar un log si el stock cambia
         if original_stock != updated_stock:
             StoreProductLog.objects.create(
-                store_product=store_product,
+                store_product=instance,
                 user=self.request.user,
                 previous_stock=original_stock,
                 updated_stock=updated_stock,
