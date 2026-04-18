@@ -23,6 +23,7 @@ class Tenant(CreatedAtModel):
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
     is_sandbox = models.BooleanField(default=False)
     displays_stock_in_storages = models.BooleanField(default=False)
+    create_products_on_sale = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name

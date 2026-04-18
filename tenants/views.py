@@ -52,6 +52,12 @@ class TenantInfoView(APIView):
     
 
 
+class CreateProductsOnSaleView(APIView):
+    def get(self, request):
+        tenant = request.user.get_tenant()
+        return Response({"create_products_on_sale": tenant.create_products_on_sale})
+
+
 class RenderRedeployView(APIView):
     def get(self, request):
         result = render_redeploy()
