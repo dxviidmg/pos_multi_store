@@ -35,6 +35,13 @@ def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_da
             # Si estos métodos hacen queries, puede optimizarse más (ver nota abajo)
             if log.is_repeated() or not log.is_consistent() or log.has_negatives():
                 ids.append(log.id)
+                # Print si es entrada manual con stock igual al previo
+                if not log.is_consistent() and log.movement == "MA":
+                    previous_obj = StoreProductLog.objects.filter(
+                        store_product=log.store_product, pk__lt=log.pk
+                    ).order_by("-pk").first()
+                    if previous_obj and log.updated_stock == previous_obj.updated_stock:
+                        print(f"⚠️ Log duplicado detectado - Producto: {log.store_product.product.name}, Tienda: {log.store_product.store.get_full_name()}")
 
             if i % update_every == 0 or i == total:
                 percent = max(int((i / total) * 99), 1)
