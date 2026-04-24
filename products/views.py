@@ -159,6 +159,7 @@ class StoreProductViewSet(viewsets.ModelViewSet):
 
         store = request.store
         tenant = request.user.get_tenant()
+        requires_stock_verification = query_params.get("requires_stock_verification") == "true"
 
         # --- Búsqueda directa por código ---
         if code:
@@ -191,6 +192,8 @@ class StoreProductViewSet(viewsets.ModelViewSet):
             storeproduct_filters &= Q(store=store)
         if max_stock:
             storeproduct_filters &= Q(stock__lte=max_stock)
+        if requires_stock_verification:
+            storeproduct_filters &= Q(requires_stock_verification=True)
 
         queryset = StoreProduct.objects.filter(storeproduct_filters).select_related(
             "product", "product__brand", "product__department", "store", "store__tenant", "store__manager"
