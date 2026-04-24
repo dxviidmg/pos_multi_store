@@ -554,14 +554,26 @@ class ConfirmDistributionView(APIView):
         return Response({"status": "Distribution confirmed"}, status=status.HTTP_200_OK)
 
 
+@method_decorator(get_store(), name="dispatch")
 class BrandViewSet(viewsets.ModelViewSet):
     serializer_class = BrandSerializer
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        queryset = Brand.objects.filter(tenant=tenant).order_by('name')
+        store = self.request.store
+        audit = self.request.query_params.get("audit") == "true"
         
-        # Optimizar para listado
+        if audit:
+            filters = {
+                "tenant": tenant,
+                "products__product_stores__requires_stock_verification": True
+            }
+            if store:
+                filters["products__product_stores__store"] = store
+            queryset = Brand.objects.filter(**filters).distinct().order_by('name')
+        else:
+            queryset = Brand.objects.filter(tenant=tenant).order_by('name')
+        
         if self.action == 'list':
             queryset = queryset.only('id', 'name', 'tenant_id')
         
@@ -573,14 +585,26 @@ class BrandViewSet(viewsets.ModelViewSet):
         return sale_instance
 
 
+@method_decorator(get_store(), name="dispatch")
 class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        queryset = Department.objects.filter(tenant=tenant).order_by('name')
+        store = self.request.store
+        audit = self.request.query_params.get("audit", "") == "true"
         
-        # Optimizar para listado
+        if audit:
+            filters = {
+                "tenant": tenant,
+                "products__product_stores__requires_stock_verification": True
+            }
+            if store:
+                filters["products__product_stores__store"] = store
+            queryset = Department.objects.filter(**filters).distinct().order_by('name')
+        else:
+            queryset = Department.objects.filter(tenant=tenant).order_by('name')
+        
         if self.action == 'list':
             queryset = queryset.only('id', 'name', 'tenant_id')
         
