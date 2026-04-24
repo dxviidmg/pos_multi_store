@@ -24,19 +24,37 @@ from .models import (
 
 
 class BrandSerializer(serializers.ModelSerializer):
-    product_count = serializers.IntegerField(source='count_products', read_only=True)
+    product_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Brand
         exclude = ["tenant"]
+    
+    def get_product_count(self, obj):
+        store = self.context.get('store')
+        if store:
+            return obj.products.filter(
+                product_stores__store=store,
+                product_stores__requires_stock_verification=True
+            ).distinct().count()
+        return obj.count_products()
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    product_count = serializers.IntegerField(source='count_products', read_only=True)
+    product_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Department
         exclude = ["tenant"]
+    
+    def get_product_count(self, obj):
+        store = self.context.get('store')
+        if store:
+            return obj.products.filter(
+                product_stores__store=store,
+                product_stores__requires_stock_verification=True
+            ).distinct().count()
+        return obj.count_products()
 
 
 class ProductSearchSerializer(serializers.ModelSerializer):

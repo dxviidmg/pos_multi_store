@@ -558,6 +558,11 @@ class ConfirmDistributionView(APIView):
 class BrandViewSet(viewsets.ModelViewSet):
     serializer_class = BrandSerializer
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['store'] = self.request.store
+        return context
+
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
         store = self.request.store
@@ -588,6 +593,11 @@ class BrandViewSet(viewsets.ModelViewSet):
 @method_decorator(get_store(), name="dispatch")
 class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['store'] = self.request.store
+        return context
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
