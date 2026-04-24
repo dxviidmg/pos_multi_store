@@ -32,23 +32,23 @@ def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_da
 
         # 🚀 Usar iterator() evita cargar todo en memoria
         for i, log in enumerate(logs_qs.iterator(), start=1):
-#            # Detectar entrada manual inconsistente
-#            if not log.is_consistent() and log.movement == "MA":
-#                previous_obj = StoreProductLog.objects.filter(
-#                    store_product=log.store_product, pk__lt=log.pk
-#                ).order_by("-pk").first()
-#                if previous_obj:
-#                    # Si stock actualizado es igual al anterior, es duplicado - eliminar
-#                    if log.updated_stock == previous_obj.updated_stock:
-#                        log.delete()
-#                        continue
-#                    # Si no, ajustar previous_stock al updated_stock del log anterior
-#                    log.previous_stock = previous_obj.updated_stock
-#                    # Si entrada manual pero stock disminuye, cambiar a ajuste
-#                    if log.previous_stock > log.updated_stock:
-#                        log.action = "A"  # Ajuste
-#                    log.save(update_fields=['previous_stock', 'action'])
-#                    continue
+            # Detectar entrada manual inconsistente
+            if not log.is_consistent() and log.movement == "MA":
+                previous_obj = StoreProductLog.objects.filter(
+                    store_product=log.store_product, pk__lt=log.pk
+                ).order_by("-pk").first()
+                if previous_obj:
+                    # Si stock actualizado es igual al anterior, es duplicado - eliminar
+                    if log.updated_stock == previous_obj.updated_stock:
+                        log.delete()
+                        continue
+                    # Si no, ajustar previous_stock al updated_stock del log anterior
+                    log.previous_stock = previous_obj.updated_stock
+                    # Si entrada manual pero stock disminuye, cambiar a ajuste
+                    if log.previous_stock > log.updated_stock:
+                        log.action = "A"  # Ajuste
+                    log.save(update_fields=['previous_stock', 'action'])
+                    continue
             
             # Si estos métodos hacen queries, puede optimizarse más (ver nota abajo)
             if log.is_repeated() or not log.is_consistent() or log.has_negatives():
