@@ -161,6 +161,7 @@ class StoreProduct(models.Model):
         Product, on_delete=models.CASCADE, related_name="product_stores"
     )
     stock = models.IntegerField(default=0)
+    requires_stock_verification = models.BooleanField(default=False)
 
     class Meta:
         indexes = [
