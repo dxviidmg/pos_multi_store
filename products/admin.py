@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Store, Product, StoreProduct, Brand, Transfer, CashFlow, StoreWorker, Department, Distribution
+from .models import Store, Product, StoreProduct, Brand, Transfer, CashFlow, StoreWorker, Department, Distribution, StockUpdateRequest
 
 
 @admin.register(Product)
@@ -50,3 +50,5 @@ admin.site.register(StoreWorker)
 admin.site.register(Department)
 
 admin.site.register(Distribution)
+
+admin.site.register(StockUpdateRequest)

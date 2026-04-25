@@ -166,6 +166,8 @@ class StoreProductViewSet(viewsets.ModelViewSet):
             filters = {"product__code": code, "product__brand__tenant": tenant}
             if all_stores == "N":
                 filters["store"] = store
+            if requires_stock_verification:
+                filters["requires_stock_verification"] = True
 
             queryset = StoreProduct.objects.filter(**filters).select_related(
                 "product", "product__brand", "product__department", "store"
@@ -219,6 +221,10 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         serializer.save()  # Guardar los cambios en el objeto
 
         updated_stock = instance.stock  # Obtener el stock actualizado
+
+        if instance.requires_stock_verification:
+            instance.requires_stock_verification = False
+            instance.save(update_fields=['requires_stock_verification'])
 
         # Registrar un log si el stock cambia y no es igual al último registro
         if original_stock != updated_stock:
@@ -1414,6 +1420,7 @@ class StockUpdateRequestViewSet(viewsets.ModelViewSet):
         sp = adj.store_product
         previous_stock = sp.stock
         sp.stock = adj.requested_stock
+        sp.requires_stock_verification = False
         sp.save()
         adj.applied = True
         adj.save()

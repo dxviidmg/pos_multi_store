@@ -114,7 +114,7 @@ class Product(Base):
 
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="products", db_index=True)
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="products", null=True, blank=True, db_index=True)
-    code = models.CharField(max_length=20, db_index=True)
+    code = models.CharField(max_length=50, db_index=True)
     name = models.CharField(max_length=100, db_index=True)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
