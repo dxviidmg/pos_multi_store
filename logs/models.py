@@ -84,9 +84,9 @@ class ProductPriceLog(CreatedAtModel):
         Product, on_delete=models.CASCADE, related_name="price_logs"
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    field = models.CharField(max_length=20)  # cost, unit_price, wholesale_price
-    previous_value = models.CharField(max_length=20, null=True)
-    new_value = models.CharField(max_length=20, null=True)
+    field = models.CharField(max_length=50)  # cost, unit_price, wholesale_price
+    previous_value = models.CharField(max_length=50, null=True)
+    new_value = models.CharField(max_length=50, null=True)
 
     class Meta:
         indexes = [
