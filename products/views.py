@@ -567,6 +567,7 @@ class BrandViewSet(viewsets.ModelViewSet):
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['store'] = self.request.store
+        context['audit'] = self.request.query_params.get("audit") == "true"
         return context
 
     def get_queryset(self):
