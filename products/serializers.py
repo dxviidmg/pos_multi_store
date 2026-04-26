@@ -32,13 +32,14 @@ class BrandSerializer(serializers.ModelSerializer):
     
     def get_product_count(self, obj):
         store = self.context.get('store')
-        if store:
+        audit = self.context.get('audit', False)
+        
+        if audit and store:
             return obj.products.filter(
                 product_stores__store=store,
                 product_stores__requires_stock_verification=True
             ).distinct().count()
         return obj.count_products()
-
 
 class DepartmentSerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()
@@ -49,7 +50,9 @@ class DepartmentSerializer(serializers.ModelSerializer):
     
     def get_product_count(self, obj):
         store = self.context.get('store')
-        if store:
+        audit = self.context.get('audit', False)
+        
+        if audit and store:
             return obj.products.filter(
                 product_stores__store=store,
                 product_stores__requires_stock_verification=True
