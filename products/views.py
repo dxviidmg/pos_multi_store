@@ -1443,6 +1443,6 @@ class StockVerificationDashboardView(APIView):
     def get(self, request):
         from .tasks import get_stock_verification_dashboard
         tenant = request.user.get_tenant()
-        store_ids = list(Store.objects.filter(tenant=tenant, store_type="T").values_list("id", flat=True))
+        store_ids = list(Store.objects.filter(tenant=tenant).values_list("id", flat=True))
         task = get_stock_verification_dashboard.delay(store_ids)
         return Response({"task": task.id})
