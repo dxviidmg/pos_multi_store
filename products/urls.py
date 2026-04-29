@@ -36,5 +36,6 @@ urlpatterns += [
     path('store-products/import/can-include-quantity/', views.StoreProductCanIncludeQuantityView.as_view(), name='store-product-can-include-quantity'),
     path('transfers/confirm/', views.TransferConfirmView.as_view(), name='transfers-confirm'),
     path('pending-movements/', views.PendingMovementsView.as_view(), name='pending-movements'),
+    path('stock-verification-dashboard/', views.StockVerificationDashboardView.as_view(), name='stock-verification-dashboard'),
     path('ping/', views.ping, name='ping'),
 ]
