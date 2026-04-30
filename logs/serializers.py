@@ -29,10 +29,11 @@ class StoreProductLogAuditSerializer(serializers.ModelSerializer):
     product_code = serializers.CharField(source='store_product.product.code', read_only=True)
     product_name = serializers.CharField(source='store_product.product.get_description', read_only=True)
     store_name = serializers.CharField(source='store_product.store.get_full_name', read_only=True)
+    current_stock = serializers.IntegerField(source='store_product.stock', read_only=True)
 
     class Meta:
         model = StoreProductLog
-        fields = ["id", "created_at", "product_code", "product_name", "store_name"]
+        fields = ["id", "created_at", "product_code", "product_name", "store_name", "current_stock"]
 
 
 class ProductPriceLogSerializer(serializers.ModelSerializer):
