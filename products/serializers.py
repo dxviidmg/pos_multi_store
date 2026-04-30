@@ -255,10 +255,16 @@ class StoreProductAuditSerializer(serializers.ModelSerializer):
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_name = serializers.CharField(source='product.get_description', read_only=True)
     store_name = serializers.CharField(source='store.get_full_name', read_only=True)
+    current_stock = serializers.IntegerField(source='stock', read_only=True)
+    last_log_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = StoreProduct
-        fields = ["id", "product_code", "product_name", "store_name", "stock"]
+        fields = ["id", "product_code", "product_name", "store_name", "current_stock", "last_log_stock"]
+
+    def get_last_log_stock(self, obj):
+        last_log = obj.store_product_logs.order_by('-id').values('updated_stock').first()
+        return last_log['updated_stock'] if last_log else None
 
 
 class DistributionSerializer(serializers.ModelSerializer):
