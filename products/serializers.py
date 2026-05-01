@@ -279,13 +279,14 @@ class DistributionSerializer(serializers.ModelSerializer):
 
 class StockUpdateRequestSerializer(serializers.ModelSerializer):
     requested_by_username = serializers.CharField(source='requested_by.username', read_only=True)
+    product_code = serializers.CharField(source='store_product.product.code', read_only=True)
     product_name = serializers.CharField(source='store_product.product.get_description', read_only=True)
     store_name = serializers.CharField(source='store_product.store.get_full_name', read_only=True)
 
     class Meta:
         model = StockUpdateRequest
         fields = [
-            'id', 'store_product', 'product_name', 'store_name',
+            'id', 'store_product', 'product_code', 'product_name', 'store_name',
             'requested_by', 'requested_by_username',
             'requested_stock', 'applied', 'created_at',
         ]

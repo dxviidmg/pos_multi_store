@@ -1420,17 +1420,19 @@ class StockUpdateRequestViewSet(viewsets.ModelViewSet):
 
         sp = adj.store_product
         previous_stock = sp.stock
-        sp.stock = adj.requested_stock
         sp.requires_stock_verification = False
-        sp.save()
+        if previous_stock != adj.requested_stock:
+            sp.stock = adj.requested_stock
+            sp.save()
+            StoreProductLog.objects.create(
+                store_product=sp, user=request.user,
+                previous_stock=previous_stock, updated_stock=adj.requested_stock,
+                action=LogAction.AJUSTE, movement=LogMovement.MANUAL,
+            )
+        else:
+            sp.save()
         adj.applied = True
         adj.save()
-
-        StoreProductLog.objects.create(
-            store_product=sp, user=request.user,
-            previous_stock=previous_stock, updated_stock=adj.requested_stock,
-            action=LogAction.AJUSTE, movement=LogMovement.MANUAL,
-        )
         store = sp.store
         notify_store(store, store.tenant_id, {
             'event': 'stock_request_approved',
