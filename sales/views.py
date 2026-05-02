@@ -854,7 +854,7 @@ class StoresCashSummaryView(APIView):
                 "store_type": store.store_type,
                 "manager": {"id": store.manager.id, "username": store.manager.username, "full_name": store.manager.get_full_name()} if store.manager else None,
                 "has_all_products": sp_count_map.get(sid, 0) >= total_products,
-                "printer": {"brand": store_printer.printer.brand.name, "model": store_printer.printer.model} if store_printer else None,
+                "printer": {"brand": store_printer.printer.brand.name, "model": store_printer.printer.model, 'id': store_printer.id } if store_printer else None,
                 "cash_summary": {
                     "EF": ef,
                     "TA": ta,
