@@ -1457,3 +1457,12 @@ class StockVerificationDashboardView(APIView):
         store_ids = list(Store.objects.filter(tenant=tenant).values_list("id", flat=True))
         task = get_stock_verification_dashboard.delay(store_ids)
         return Response({"task": task.id})
+
+
+class PendingTransfersDashboardView(APIView):
+    def get(self, request):
+        from .tasks import get_pending_transfers_dashboard
+        tenant = request.user.get_tenant()
+        store_ids = list(Store.objects.filter(tenant=tenant, store_type='T').values_list("id", flat=True))
+        task = get_pending_transfers_dashboard.delay(store_ids)
+        return Response({"task": task.id})

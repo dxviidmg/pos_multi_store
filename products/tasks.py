@@ -1,5 +1,5 @@
 from celery import shared_task
-from .models import StoreProduct, Store
+from .models import StoreProduct, Store, Transfer
 from .serializers import StoreProductForStockSerializer, TransferSerializer
 
 @shared_task
@@ -43,4 +43,35 @@ def get_stock_verification_dashboard(store_ids):
         "stores": [{"name": name} for name in stores.values()],
         "total": len(store_products),
         "total_store_products": total_store_products,
+    }
+
+@shared_task
+def get_pending_transfers_dashboard(store_ids):
+    stores_qs = Store.objects.filter(id__in=store_ids).only("id", "name")
+    stores = {s.id: s.name for s in stores_qs}
+
+    tranfers = (
+        Transfer.objects
+        .filter(destination_store__in=store_ids, transfer_datetime=None, distribution=None)
+        .select_related("destination_store")
+        .values(
+            "id", "quantity", "destination_store_id", "created_at",
+            "product__name", "product__brand__name"
+        )
+        .order_by("destination_store", "created_at")
+    )
+
+    return {
+        "transfers": [
+            {
+                "quantity": t["quantity"],
+                "destination_store": stores.get(t["destination_store_id"], ""),
+                "created_at": t["created_at"],
+                "product": t["product__name"],
+                "brand": t["product__brand__name"],
+            }
+            for t in tranfers
+        ],
+        "stores": [{"name": name} for name in stores.values()],
+        "total": len(tranfers),
     }
