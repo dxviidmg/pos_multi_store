@@ -892,10 +892,10 @@ class DuplicateSalesView(APIView):
         else:
             stores = Store.objects.filter(tenant=tenant)
 
-        today = timezone.localdate()
+        today = datetime.today()
 
         sales = Sale.objects.filter(
-            store__in=stores, is_canceled=False, created_at__date=today
+            store__in=stores, is_canceled=False, created_at__date=today.date()
         ).select_related("store").order_by("store", "pk")
 
         duplicates = [s for s in sales.iterator(chunk_size=500) if s.is_repeated()]

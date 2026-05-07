@@ -253,9 +253,18 @@ class TransferViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             queryset = queryset.filter(
                 Q(origin_store=store) | Q(destination_store=store),
-                transfer_datetime=None,
                 distribution=None,
             )
+            
+            status = self.request.query_params.get('status')
+            if status == 'pending':
+                queryset = queryset.filter(transfer_datetime__isnull=True)
+            elif status == 'applied':
+                today = datetime.now().date()
+                queryset = queryset.filter(
+                    transfer_datetime__date=today,
+                    transfer_datetime__isnull=False
+                )
 
         return queryset
 
