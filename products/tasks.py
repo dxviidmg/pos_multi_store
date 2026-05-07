@@ -41,7 +41,6 @@ def get_stock_verification_dashboard(store_ids):
             for sp in store_products
         ],
         "stores": [{"name": name} for name in stores.values()],
-        "total": len(store_products),
         "total_store_products": total_store_products,
     }
 
@@ -72,6 +71,5 @@ def get_pending_transfers_dashboard(store_ids):
             }
             for t in tranfers
         ],
-        "stores": [{"name": name} for name in stores.values()],
-        "total": len(tranfers),
+        "stores": [{"name": name} for name in stores.values()]
     }
