@@ -165,14 +165,14 @@ class TransferSerializer(serializers.ModelSerializer):
         
         if obj.transfer_datetime is None:  # Pendiente
             if store == obj.destination_store:
-                return "Me solicité a " + str(obj.origin_store)
+                return "Pendiente de recibir de " + str(obj.origin_store)
             elif store == obj.origin_store:
-                return "Le proveeré a " + str(obj.destination_store)
+                return "Pendiente de enviar a " + str(obj.destination_store)
         else:  # Aplicado
             if store == obj.destination_store:
-                return "Recibí de " + str(obj.origin_store)
+                return "Recibido de " + str(obj.origin_store)
             elif store == obj.origin_store:
-                return "Le proveí a " + str(obj.destination_store)
+                return "Enviado a " + str(obj.destination_store)
         
         return "No tengo gerencia en este traspaso"
 
