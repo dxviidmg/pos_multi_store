@@ -742,6 +742,7 @@ class StoresCashSummaryView(APIView):
                 "store_type": store.store_type,
                 "manager": {"id": store.manager.id, "username": store.manager.username, "full_name": store.manager.get_full_name()} if store.manager else None,
                 "cash_summary": {
+                    "total_payment": total_received,
                     "profit": profit,
                     "total_sales": sale_count,
                     "canceled_sales": canceled_count,
