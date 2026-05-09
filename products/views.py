@@ -288,30 +288,24 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         filters = Q(brand__tenant=tenant)
 
-        if brand_id and brand_id != "":
+        if brand_id:
             filters &= Q(brand__id=brand_id)
 
-        if department_id and department_id != "":
+        if department_id:
             filters &= Q(department__id=department_id)
 
         if code:
             filters &= Q(code__icontains=code)
 
-        queryset = Product.objects.filter(filters).select_related("brand", "department")
+        queryset = (
+            Product.objects
+            .filter(filters)
+            .select_related("brand", "department")
+            .annotate(total_stock=Coalesce(Sum("product_stores__stock"), 0))
+        )
 
         if max_stock:
-            queryset = queryset.annotate(
-                total_stock=Sum("product_stores__stock")
-            ).filter(total_stock__lte=max_stock)
-        
-        # Optimizar campos según acción
-        if self.action == 'list':
-            # Solo campos necesarios para listado
-            queryset = queryset.only(
-                'id', 'code', 'name', 'unit_price', 'cost',
-                'brand__id', 'brand__name',
-                'department__id', 'department__name'
-            )
+            queryset = queryset.filter(total_stock__lte=max_stock)
 
         return queryset.order_by("brand__name", "name")
 
