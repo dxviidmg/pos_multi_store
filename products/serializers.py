@@ -82,17 +82,27 @@ class ProductSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source='brand.name', read_only=True)
     department_name = serializers.SerializerMethodField()
     apply_wholesale = serializers.SerializerMethodField()
-    stock = serializers.IntegerField(source='get_stock', read_only=True)
+    stock = serializers.SerializerMethodField()
 
     def get_department_name(self, obj):
         return obj.department.name if obj.department else ''
 
     def get_apply_wholesale(self, obj):
-        return obj.apply_wholesale()
+        return obj.wholesale_price is not None and obj.min_wholesale_quantity is not None
+
+    def get_stock(self, obj):
+        if hasattr(obj, 'total_stock'):
+            return obj.total_stock
+        return obj.get_stock()
 
     class Meta:
         model = Product
-        fields = "__all__"
+        fields = [
+            'id', 'code', 'name', 'cost', 'unit_price', 'wholesale_price',
+            'min_wholesale_quantity', 'wholesale_price_on_client_discount',
+            'image', 'brand', 'department', 'brand_name', 'department_name',
+            'apply_wholesale', 'stock',
+        ]
 
     def validate(self, data):
         request = self.context.get("request")
