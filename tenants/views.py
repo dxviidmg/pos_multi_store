@@ -78,3 +78,36 @@ class RenderRedeployView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+
+class CurrentPlanView(APIView):
+    def get(self, request):
+        # Verificar que el usuario es owner
+        if request.user.get_role() != 'owner':
+            return Response(
+                {"error": "Solo los propietarios pueden ver la información del plan"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        tenant = request.user.get_tenant()
+        plan = tenant.plan
+        
+        if not plan:
+            return Response({
+                "has_plan": False,
+                "message": "No hay un plan asignado"
+            })
+        
+        return Response({
+            "has_plan": True,
+            "plan": {
+                "id": plan.id,
+                "name": plan.name,
+                "price": str(plan.price),
+                "stores": plan.stores,
+                "storages": plan.storages,
+                "billing_type": plan.billing_type,
+                "billing_type_display": plan.get_billing_type_display()
+            }
+        })

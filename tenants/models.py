@@ -17,6 +17,21 @@ class CreatedAtModel(models.Model):
         abstract = True
 
 
+class Plan(models.Model):
+    BILLING_TYPE_CHOICES = [
+        ("S", "Suscripción"),
+        ("M", "Manual"),
+    ]
+    name = models.CharField(max_length=30)
+    price = models.DecimalField(max_digits=6, decimal_places=2)
+    stores = models.IntegerField()
+    storages = models.IntegerField()
+    billing_type = models.CharField(max_length=1, choices=BILLING_TYPE_CHOICES)
+
+    def __str__(self):
+        return self.name
+    
+
 class Tenant(CreatedAtModel):
     name = models.CharField(max_length=100)
     short_name = models.CharField(max_length=5, unique=True)
@@ -24,6 +39,7 @@ class Tenant(CreatedAtModel):
     is_sandbox = models.BooleanField(default=False)
     displays_stock_in_storages = models.BooleanField(default=False)
     create_products_on_sale = models.BooleanField(default=True)
+    plan = models.ForeignKey(Plan, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return self.name
