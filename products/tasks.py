@@ -52,10 +52,10 @@ def get_pending_transfers_dashboard(store_ids):
     tranfers = (
         Transfer.objects
         .filter(destination_store__in=store_ids, transfer_datetime=None, distribution=None)
-        .select_related("destination_store")
+        .select_related("destination_store", "origin_store")
         .values(
             "id", "quantity", "destination_store_id", "created_at",
-            "product__name", "product__brand__name"
+            "product__name", "product__brand__name", "origin_store_id"
         )
         .order_by("destination_store", "created_at")
     )
@@ -65,6 +65,7 @@ def get_pending_transfers_dashboard(store_ids):
             {
                 "quantity": t["quantity"],
                 "destination_store": stores.get(t["destination_store_id"], ""),
+                "origin_store": stores.get(t.get("origin_store_id"), ""),
                 "created_at": t["created_at"],
                 "product": t["product__name"],
                 "brand": t["product__brand__name"],
