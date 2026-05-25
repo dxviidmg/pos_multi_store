@@ -13,3 +13,4 @@ class StoreProductLogAdmin(admin.ModelAdmin):
 class ProductPriceLogAdmin(admin.ModelAdmin):
     search_fields = ['id', 'product__code']
     list_display = ['id', 'created_at', 'product__code']
+    list_filter = ['product__brand__tenant']
