@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import StoreProductLog
+from .models import StoreProductLog, ProductPriceLog
 
 # Register your models here.
 
@@ -7,3 +7,9 @@ from .models import StoreProductLog
 class StoreProductLogAdmin(admin.ModelAdmin):
     search_fields = ['id', 'store_product__product__code']
     list_display = ['id', 'created_at', 'store_product__product__code']
+
+
+@admin.register(ProductPriceLog)
+class ProductPriceLogAdmin(admin.ModelAdmin):
+    search_fields = ['id', 'product__code']
+    list_display = ['id', 'created_at', 'product__code']
