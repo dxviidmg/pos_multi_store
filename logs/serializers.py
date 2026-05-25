@@ -40,6 +40,7 @@ class ProductPriceLogSerializer(serializers.ModelSerializer):
     user_username = serializers.CharField(source='user.username', read_only=True)
     product_name = serializers.CharField(source='product.get_description', read_only=True)
     product_code = serializers.CharField(source='product.code', read_only=True)
+    brand_name = serializers.CharField(source='product.brand.name', read_only=True)
     field_display = serializers.SerializerMethodField()
 
     FIELD_LABELS = {
@@ -54,4 +55,4 @@ class ProductPriceLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductPriceLog
-        fields = ['id', 'product', 'product_code', 'product_name', 'user_username', 'field', 'field_display', 'previous_value', 'new_value', 'created_at']
+        fields = ['id', 'product', 'product_code', 'product_name', 'brand_name', 'user_username', 'field', 'field_display', 'previous_value', 'new_value', 'created_at']
