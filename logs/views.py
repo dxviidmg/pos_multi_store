@@ -75,11 +75,26 @@ class StoreProductLogViewSet(viewsets.ModelViewSet):
 
 class ProductPriceLogView(APIView):
     def get(self, request):
-        product_id = request.GET.get('product_id')
-        if not product_id:
-            return Response({"error": "product_id es requerido"}, status=status.HTTP_400_BAD_REQUEST)
         logs = ProductPriceLog.objects.filter(
-            product_id=product_id
+            product__brand__tenant=request.user.tenant
         ).select_related('user', 'product__brand').order_by('-created_at')
+
+        product_id = request.GET.get('product_id')
+        if product_id:
+            logs = logs.filter(product_id=product_id)
+        else:
+            months = int(request.GET.get('months', 1))
+            date_from = timezone.now() - timedelta(days=30 * months)
+            logs = logs.filter(created_at__gte=date_from)
+
+        serializer = ProductPriceLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+
+class ProductPriceLogListView(APIView):
+    def get(self, request):
+        logs = ProductPriceLog.objects.filter(
+            product__brand__tenant=request.user.tenant
+        ).select_related('user', 'product__brand').order_by('-created_at')[:200]
         serializer = ProductPriceLogSerializer(logs, many=True)
         return Response(serializer.data)
