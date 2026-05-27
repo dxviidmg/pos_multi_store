@@ -29,6 +29,7 @@ urlpatterns += [
     path('products/import-validation/', views.ProductImportValidationView.as_view(), name='product-import-validation'),
     path('products/reassign/', views.ProductReassignView.as_view(), name='product-reassign'),
     path('products/stock-other-stores/', views.StockInOtherStores.as_view(), name='product-stock-other-stores'),
+    path('products/update-prices/', views.UpdatePricesView.as_view(), name='product-update-prices'),
     path('products/upper-code/', views.ProductUpperCodeView.as_view(), name='product-upper-code'),
     path('store-product/distribution/confirm/', views.ConfirmDistributionView.as_view(), name='store-product-distribution-confirm'),
     path('store-products/import/', views.ImportStoreProductView.as_view(), name='store-product-import'),
