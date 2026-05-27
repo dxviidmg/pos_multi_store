@@ -326,6 +326,50 @@ class ProductViewSet(viewsets.ModelViewSet):
             ProductPriceLog.objects.bulk_create(logs)
 
 
+class UpdatePricesView(APIView):
+    def post(self, request):
+        tenant = request.user.get_tenant()
+        product_ids = request.data.get("product_ids", [])
+        if not product_ids:
+            return Response({"error": "product_ids is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        products = Product.objects.filter(id__in=product_ids, brand__tenant=tenant)
+        if not products.exists():
+            return Response({"error": "No products found"}, status=status.HTTP_404_NOT_FOUND)
+
+        tracked_fields = ['cost', 'unit_price', 'wholesale_price', 'min_wholesale_quantity']
+        update_data = {f: request.data.get(f) for f in tracked_fields if request.data.get(f) is not None}
+
+        if not update_data:
+            return Response({"error": "No fields to update"}, status=status.HTTP_400_BAD_REQUEST)
+
+        def format_log_value(field, value):
+            if value is None:
+                return None
+            if field == 'min_wholesale_quantity':
+                return str(int(value))
+            return f"{float(value):.2f}"
+
+        logs = []
+        with transaction.atomic():
+            for product in products:
+                for field, new_value in update_data.items():
+                    old_value = getattr(product, field)
+                    old_log = format_log_value(field, old_value)
+                    new_log = format_log_value(field, new_value)
+                    if old_log != new_log:
+                        logs.append(ProductPriceLog(
+                            product=product, user=request.user,
+                            field=field, previous_value=old_log, new_value=new_log,
+                        ))
+                    setattr(product, field, new_value)
+                product.save()
+            if logs:
+                ProductPriceLog.objects.bulk_create(logs)
+
+        return Response({"updated": products.count()}, status=status.HTTP_200_OK)
+
+
 @method_decorator(get_store(), name="dispatch")
 class StoreViewSet(viewsets.ModelViewSet):
 
