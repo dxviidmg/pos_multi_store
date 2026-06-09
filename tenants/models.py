@@ -25,8 +25,9 @@ class Plan(models.Model):
     name = models.CharField(max_length=30)
     price = models.DecimalField(max_digits=6, decimal_places=2)
     stores = models.IntegerField()
-    storages = models.IntegerField()
     billing_type = models.CharField(max_length=1, choices=BILLING_TYPE_CHOICES)
+    # Mercado Pago (vacío si el plan no está en MP)
+    mp_plan_id = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -61,6 +62,12 @@ class Tenant(CreatedAtModel):
 
         super().save(*args, **kwargs)
 
+    def get_plan(self):
+        sub = self.subscription_set.filter(status="authorized").first()
+        if sub and sub.plan:
+            return sub.plan
+        return self.plan
+
     def count_products(self):
         from products.models import Product
         return Product.objects.filter(brand__tenant=self).count()
@@ -94,3 +101,35 @@ class Payment(CreatedAtModel):
             self.end_of_validity = end_of_validity
 
         super().save(*args, **kwargs)
+
+
+class Subscription(CreatedAtModel):
+    """Suscripción activa de un tenant en Mercado Pago."""
+    STATUS_CHOICES = [
+        ("pending", "Pendiente"),
+        ("authorized", "Autorizada"),
+        ("paused", "Pausada"),
+        ("cancelled", "Cancelada"),
+    ]
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True)
+    mp_subscription_id = models.CharField(max_length=100, unique=True)
+    payer_email = models.EmailField()
+    external_reference = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    next_payment_date = models.DateField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.tenant} - {self.status}"
+
+
+class SubscriptionPayment(CreatedAtModel):
+    """Pago recurrente procesado por MP."""
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE)
+    mp_payment_id = models.CharField(max_length=100, unique=True)
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    status = models.CharField(max_length=20)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.subscription.tenant} - ${self.amount} - {self.status}"

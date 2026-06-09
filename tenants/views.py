@@ -1,10 +1,16 @@
+import hmac
+import hashlib
+import requests
 from datetime import date
 
+import mercadopago
+from django.conf import settings
 from rest_framework import mixins, status, viewsets
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Payment, Tenant
+from .models import Payment, Plan, Subscription, SubscriptionPayment, Tenant
 from .serializers import PaymentSerializer, TenantSerializer
 from .utils import render_redeploy
 
@@ -91,7 +97,7 @@ class CurrentPlanView(APIView):
             )
         
         tenant = request.user.get_tenant()
-        plan = tenant.plan
+        plan = tenant.get_plan()
         
         if not plan:
             return Response({
@@ -106,8 +112,21 @@ class CurrentPlanView(APIView):
                 "name": plan.name,
                 "price": str(plan.price),
                 "stores": plan.stores,
-                "storages": plan.storages,
                 "billing_type": plan.billing_type,
                 "billing_type_display": plan.get_billing_type_display()
             }
+        })
+
+
+class PlanEquivalentView(APIView):
+    def get(self, request, stores):
+        try:
+            plan = Plan.objects.get(stores=stores, billing_type="S")
+        except Plan.DoesNotExist:
+            return Response({"error": "No hay plan de suscripción para esta cantidad de tiendas"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            "id": plan.id,
+            "name": plan.name,
+            "price": str(plan.price),
+            "stores": plan.stores,
         })
