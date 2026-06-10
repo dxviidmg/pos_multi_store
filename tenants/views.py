@@ -282,12 +282,16 @@ class MPWebhookView(APIView):
         if mp_payment.get("status") != "approved":
             return Response(status=status.HTTP_200_OK)
 
-        # Buscar suscripción por external_reference
+        # Buscar suscripción por external_reference o preapproval_id
         external_reference = mp_payment.get("external_reference", "")
-        try:
-            subscription = Subscription.objects.get(external_reference=external_reference, status="authorized")
-        except Subscription.DoesNotExist:
-            logger.warning(f"[MPWebhook] subscription not found for ref={external_reference}")
+        preapproval_id = mp_payment.get("metadata", {}).get("preapproval_id", "")
+        subscription = None
+        if external_reference and external_reference != "Recurring payment validation":
+            subscription = Subscription.objects.filter(external_reference=external_reference, status="authorized").first()
+        if not subscription and preapproval_id:
+            subscription = Subscription.objects.filter(mp_subscription_id=preapproval_id, status="authorized").first()
+        if not subscription:
+            logger.warning(f"[MPWebhook] subscription not found for ref={external_reference} preapproval={preapproval_id}")
             return Response(status=status.HTTP_200_OK)
 
         # Evitar duplicados
