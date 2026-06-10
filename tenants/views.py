@@ -236,7 +236,7 @@ class CreateSubscriptionView(APIView):
             payer_email=payer_email,
             external_reference=external_reference,
             status=mp_data.get("status", "authorized"),
-            next_payment_date=mp_data.get("next_payment_date"),
+            next_payment_date=mp_data.get("next_payment_date", "")[:10] or None,
         )
 
         # Mover el plan del tenant a la suscripción
