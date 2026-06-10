@@ -4,7 +4,7 @@ import requests
 from datetime import date, datetime, timedelta
 
 import mercadopago
-from decouple import config
+
 from django.conf import settings
 from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import AllowAny
@@ -163,7 +163,7 @@ class CreateSubscriptionView(APIView):
 
         if not plan.mp_plan_id:
             # Crear el plan en Mercado Pago automáticamente
-            mp_access_token = config("MERCADO_PAGO_ACCESS_TOKEN")
+            mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
             create_plan_payload = {
                 "reason": plan.name,
                 "auto_recurring": {
@@ -172,7 +172,7 @@ class CreateSubscriptionView(APIView):
                     "transaction_amount": float(plan.price),
                     "currency_id": "MXN",
                 },
-                "back_url": config("MP_BACK_URL", default="https://smartventa.com"),
+                "back_url": settings.MERCADO_PAGO_BACK_URL,
             }
             create_plan_response = requests.post(
                 "https://api.mercadopago.com/preapproval_plan",
@@ -193,7 +193,7 @@ class CreateSubscriptionView(APIView):
         tenant = request.user.get_tenant()
 
         # Crear suscripción en Mercado Pago
-        mp_access_token = config("MERCADO_PAGO_ACCESS_TOKEN")
+        mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
         external_reference = f"tenant-{tenant.short_name}-plan-{plan.name}".replace(" ", "-")
 
         payload = {
