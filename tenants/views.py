@@ -289,3 +289,53 @@ class CreateSubscriptionView(APIView):
             "status": subscription.status,
             "next_payment_date": subscription.next_payment_date,
         }, status=status.HTTP_201_CREATED)
+
+
+class MPWebhookView(APIView):
+    """Recibe notificaciones de pago de Mercado Pago."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        topic = request.data.get("type") or request.query_params.get("topic")
+        data = request.data.get("data", {})
+        payment_id = data.get("id") or request.query_params.get("id")
+
+        if topic != "payment" or not payment_id:
+            return Response(status=status.HTTP_200_OK)
+
+        # Consultar pago en MP
+        mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
+        response = requests.get(
+            f"https://api.mercadopago.com/v1/payments/{payment_id}",
+            headers={"Authorization": f"Bearer {mp_access_token}"},
+        )
+        if response.status_code != 200:
+            return Response(status=status.HTTP_200_OK)
+
+        mp_payment = response.json()
+        if mp_payment.get("status") != "approved":
+            return Response(status=status.HTTP_200_OK)
+
+        # Buscar suscripción por external_reference
+        external_reference = mp_payment.get("external_reference", "")
+        try:
+            subscription = Subscription.objects.get(external_reference=external_reference, status="authorized")
+        except Subscription.DoesNotExist:
+            return Response(status=status.HTTP_200_OK)
+
+        # Evitar duplicados
+        if SubscriptionPayment.objects.filter(mp_payment_id=str(payment_id)).exists():
+            return Response(status=status.HTTP_200_OK)
+
+        # Registrar pago
+        tenant = subscription.tenant
+        payment = Payment.objects.create(tenant=tenant, months=1)
+        SubscriptionPayment.objects.create(
+            subscription=subscription,
+            mp_payment_id=str(payment_id),
+            amount=mp_payment.get("transaction_amount", payment.total),
+            status="approved",
+            paid_at=datetime.now(),
+        )
+
+        return Response(status=status.HTTP_200_OK)
