@@ -246,6 +246,10 @@ class CreateSubscriptionView(APIView):
         # Cobrar si el último pago vence antes de mañana
         tomorrow = date.today() + timedelta(days=1)
         last_payment = Payment.objects.filter(tenant=tenant).last()
+        print(f"[DEBUG] tomorrow: {tomorrow}")
+        print(f"[DEBUG] last_payment: {last_payment}")
+        print(f"[DEBUG] last_payment.end_of_validity: {last_payment.end_of_validity if last_payment else 'N/A'}")
+        print(f"[DEBUG] condicion: {not last_payment or last_payment.end_of_validity < tomorrow}")
         if not last_payment or last_payment.end_of_validity < tomorrow:
             # Cobrar en Mercado Pago
             if plan.is_sandbox or tenant.is_sandbox:
@@ -261,11 +265,14 @@ class CreateSubscriptionView(APIView):
                 "payer": {"email": payer_email},
                 "external_reference": external_reference,
             }
+            print(f"[DEBUG] charge_payload: {charge_payload}")
             charge_response = requests.post(
                 "https://api.mercadopago.com/v1/payments",
                 json=charge_payload,
                 headers=headers,
             )
+            print(f"[DEBUG] charge_response status: {charge_response.status_code}")
+            print(f"[DEBUG] charge_response body: {charge_response.json()}")
             if charge_response.status_code in [200, 201]:
                 charge_data = charge_response.json()
                 payment = Payment.objects.create(tenant=tenant, months=1)
