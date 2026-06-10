@@ -194,7 +194,9 @@ class CreateSubscriptionView(APIView):
 
         # Crear suscripción en Mercado Pago
         mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
-        external_reference = f"tenant-{tenant.short_name}-plan-{plan.name}".replace(" ", "-").lower()
+        base_ref = f"tenant-{tenant.short_name}-plan-{plan.name}".replace(" ", "-").lower()
+        count = Subscription.objects.filter(external_reference__startswith=base_ref).count()
+        external_reference = f"{base_ref}-{count + 1}"
 
         payload = {
             "preapproval_plan_id": plan.mp_plan_id,
