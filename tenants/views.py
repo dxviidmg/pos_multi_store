@@ -1,7 +1,10 @@
 import hmac
 import hashlib
+import logging
 import requests
 from datetime import date, datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 import mercadopago
 
@@ -211,16 +214,14 @@ class CreateSubscriptionView(APIView):
             "Content-Type": "application/json",
         }
 
-        print('payload', payload)
-        print('headers', headers)
+        logger.info(f"[CreateSubscription] payload: {payload}")
         response = requests.post(
             "https://api.mercadopago.com/preapproval",
             json=payload,
             headers=headers
         )
 
-        print(response)
-        print(response.json())
+        logger.info(f"[CreateSubscription] response: {response.status_code} - {response.json()}")
 
         if response.status_code not in [200, 201]:
             return Response(
@@ -245,47 +246,6 @@ class CreateSubscriptionView(APIView):
         tenant.plan = None
         tenant.save(update_fields=["plan"])
 
-        # Cobrar si el último pago vence antes de mañana
-        tomorrow = date.today() + timedelta(days=1)
-        last_payment = Payment.objects.filter(tenant=tenant).last()
-        print(f"[DEBUG] tomorrow: {tomorrow}")
-        print(f"[DEBUG] last_payment: {last_payment}")
-        print(f"[DEBUG] last_payment.end_of_validity: {last_payment.end_of_validity if last_payment else 'N/A'}")
-        print(f"[DEBUG] condicion: {not last_payment or last_payment.end_of_validity < tomorrow}")
-        if not last_payment or last_payment.end_of_validity < tomorrow:
-            # Cobrar en Mercado Pago
-            if plan.is_sandbox or tenant.is_sandbox:
-                amount = 20
-            else:
-                amount = float(plan.price)
-
-            charge_payload = {
-                "transaction_amount": float(amount),
-                "token": card_token_id,
-                "description": f"Suscripción {plan.name} - {tenant.name}",
-                "installments": 1,
-                "payer": {"email": payer_email},
-                "external_reference": external_reference,
-            }
-            print(f"[DEBUG] charge_payload: {charge_payload}")
-            charge_response = requests.post(
-                "https://api.mercadopago.com/v1/payments",
-                json=charge_payload,
-                headers=headers,
-            )
-            print(f"[DEBUG] charge_response status: {charge_response.status_code}")
-            print(f"[DEBUG] charge_response body: {charge_response.json()}")
-            if charge_response.status_code in [200, 201]:
-                charge_data = charge_response.json()
-                payment = Payment.objects.create(tenant=tenant, months=1)
-                SubscriptionPayment.objects.create(
-                    subscription=subscription,
-                    mp_payment_id=str(charge_data["id"]),
-                    amount=payment.total,
-                    status=charge_data.get("status", "approved"),
-                    paid_at=datetime.now(),
-                )
-
         return Response({
             "id": subscription.id,
             "status": subscription.status,
@@ -298,11 +258,13 @@ class MPWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        logger.info(f"[MPWebhook] received: {request.data} params: {request.query_params}")
         topic = request.data.get("type") or request.query_params.get("topic")
         data = request.data.get("data", {})
         payment_id = data.get("id") or request.query_params.get("id")
 
         if topic != "payment" or not payment_id:
+            logger.info(f"[MPWebhook] ignored: topic={topic}, payment_id={payment_id}")
             return Response(status=status.HTTP_200_OK)
 
         # Consultar pago en MP
@@ -312,9 +274,11 @@ class MPWebhookView(APIView):
             headers={"Authorization": f"Bearer {mp_access_token}"},
         )
         if response.status_code != 200:
+            logger.warning(f"[MPWebhook] MP payment query failed: {response.status_code}")
             return Response(status=status.HTTP_200_OK)
 
         mp_payment = response.json()
+        logger.info(f"[MPWebhook] payment status={mp_payment.get('status')} ref={mp_payment.get('external_reference')} amount={mp_payment.get('transaction_amount')}")
         if mp_payment.get("status") != "approved":
             return Response(status=status.HTTP_200_OK)
 
@@ -323,10 +287,12 @@ class MPWebhookView(APIView):
         try:
             subscription = Subscription.objects.get(external_reference=external_reference, status="authorized")
         except Subscription.DoesNotExist:
+            logger.warning(f"[MPWebhook] subscription not found for ref={external_reference}")
             return Response(status=status.HTTP_200_OK)
 
         # Evitar duplicados
         if SubscriptionPayment.objects.filter(mp_payment_id=str(payment_id)).exists():
+            logger.info(f"[MPWebhook] duplicate payment_id={payment_id}, skipping")
             return Response(status=status.HTTP_200_OK)
 
         # Registrar pago
@@ -339,5 +305,6 @@ class MPWebhookView(APIView):
             status="approved",
             paid_at=datetime.now(),
         )
+        logger.info(f"[MPWebhook] payment registered: tenant={tenant.short_name} amount={mp_payment.get('transaction_amount')}")
 
         return Response(status=status.HTTP_200_OK)

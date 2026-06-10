@@ -239,3 +239,17 @@ RENDER_SERVICE_ID = config('RENDER_SERVICE_ID')
 
 MERCADO_PAGO_ACCESS_TOKEN = config('MERCADO_PAGO_ACCESS_TOKEN')
 MERCADO_PAGO_BACK_URL = config('MERCADO_PAGO_BACK_URL')
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
