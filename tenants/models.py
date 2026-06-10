@@ -28,7 +28,8 @@ class Plan(models.Model):
     billing_type = models.CharField(max_length=1, choices=BILLING_TYPE_CHOICES)
     # Mercado Pago (vacío si el plan no está en MP)
     mp_plan_id = models.CharField(max_length=100, blank=True, null=True)
-
+    is_sandbox = models.BooleanField(default=False) 
+    
     def __str__(self):
         return self.name
     
