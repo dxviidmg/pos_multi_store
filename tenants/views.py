@@ -139,20 +139,20 @@ class PlanEquivalentView(APIView):
 
 
 class CreateSubscriptionView(APIView):
-    """Crea una suscripción en Mercado Pago con plan asociado."""
+    """Guarda token de tarjeta y realiza pago con /v1/payments."""
 
     def post(self, request):
-        plan_id = request.data.get("plan_id")
         card_token_id = request.data.get("card_token_id")
         payer_email = request.data.get("payer_email")
+        plan_id = request.data.get("plan_id")
+        payment_method_id = request.data.get("payment_method_id", "credit_card")
 
-        if not all([plan_id, card_token_id, payer_email]):
+        if not all([card_token_id, payer_email, plan_id]):
             return Response(
-                {"error": "plan_id, card_token_id y payer_email son requeridos"},
+                {"error": "card_token_id, payer_email y plan_id son requeridos"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Verificar que el usuario es owner
         if request.user.get_role() != 'owner':
             return Response(
                 {"error": "Solo los propietarios pueden crear suscripciones"},
@@ -164,49 +164,18 @@ class CreateSubscriptionView(APIView):
         except Plan.DoesNotExist:
             return Response({"error": "Plan no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not plan.mp_plan_id:
-            # Crear el plan en Mercado Pago automáticamente
-            mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
-            create_plan_payload = {
-                "reason": plan.name,
-                "auto_recurring": {
-                    "frequency": 1,
-                    "frequency_type": "months",
-                    "transaction_amount": float(plan.price),
-                    "currency_id": "MXN",
-                },
-                "back_url": settings.MERCADO_PAGO_BACK_URL,
-            }
-            create_plan_response = requests.post(
-                "https://api.mercadopago.com/preapproval_plan",
-                json=create_plan_payload,
-                headers={
-                    "Authorization": f"Bearer {mp_access_token}",
-                    "Content-Type": "application/json",
-                },
-            )
-            if create_plan_response.status_code not in [200, 201]:
-                return Response(
-                    {"error": "No se pudo crear el plan en Mercado Pago", "detail": create_plan_response.json()},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-            plan.mp_plan_id = create_plan_response.json()["id"]
-            plan.save(update_fields=["mp_plan_id"])
-
         tenant = request.user.get_tenant()
-
-        # Crear suscripción en Mercado Pago
         mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
-        base_ref = f"tenant-{tenant.short_name}-plan-{plan.name}".replace(" ", "-").lower()
-        count = Subscription.objects.filter(external_reference__startswith=base_ref).count()
-        external_reference = f"{base_ref}-{count + 1}"
 
-        payload = {
-            "preapproval_plan_id": plan.mp_plan_id,
-            "card_token_id": card_token_id,
-            "payer_email": payer_email,
-            "status": "authorized",
-            "external_reference": external_reference,
+        # Pago con /v1/payments
+        payment_payload = {
+            "token": card_token_id,
+            "installments": 1,
+            "amount": float(plan.price),
+            "currency_id": "MXN",
+            "payment_method_id": payment_method_id,
+            "payer": {"email": payer_email},
+            "description": f"Pago plan: {plan.name}",
         }
 
         headers = {
@@ -214,42 +183,48 @@ class CreateSubscriptionView(APIView):
             "Content-Type": "application/json",
         }
 
-        logger.info(f"[CreateSubscription] payload: {payload}")
-        response = requests.post(
-            "https://api.mercadopago.com/preapproval",
-            json=payload,
+        logger.info(f"[CreateSubscription] payment payload: {payment_payload}")
+
+        payment_response = requests.post(
+            "https://api.mercadopago.com/v1/payments",
+            json=payment_payload,
             headers=headers
         )
 
-        logger.info(f"[CreateSubscription] response: {response.status_code} - {response.json()}")
+        logger.info(f"[CreateSubscription] payment response: {payment_response.status_code} - {payment_response.json()}")
 
-        if response.status_code not in [200, 201]:
+        if payment_response.status_code not in [200, 201]:
             return Response(
-                {"error": "Error al crear suscripción en Mercado Pago", "details": response.json()},
+                {"error": "Error al procesar pago", "details": payment_response.json()},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        mp_data = response.json()
+        payment_data = payment_response.json()
 
-        # Crear registro local
-        subscription = Subscription.objects.create(
+        # Guardar token en suscripción para futuros cobros por cron
+        subscription, created = Subscription.objects.update_or_create(
             tenant=tenant,
-            plan=plan,
-            mp_subscription_id=mp_data["id"],
-            payer_email=payer_email,
-            external_reference=external_reference,
-            status=mp_data.get("status", "authorized"),
-            next_payment_date=mp_data.get("next_payment_date", "")[:10] or None,
+            defaults={
+                "card_token_id": card_token_id,
+                "payer_email": payer_email,
+                "payment_method_id": payment_method_id,
+                "mp_subscription_id": str(payment_data.get("id")),
+                "status": "authorized",
+            }
         )
 
-        # Mover el plan del tenant a la suscripción
-        tenant.plan = None
+        # Registrar pago y extender vigencia
+        Payment.objects.create(tenant=tenant, months=1)
+
+        # Actualizar plan del tenant
+        tenant.plan = plan
         tenant.save(update_fields=["plan"])
 
         return Response({
             "id": subscription.id,
-            "status": subscription.status,
-            "next_payment_date": subscription.next_payment_date,
+            "payment_id": payment_data.get("id"),
+            "status": payment_data.get("status"),
+            "amount": float(plan.price),
         }, status=status.HTTP_201_CREATED)
 
 
