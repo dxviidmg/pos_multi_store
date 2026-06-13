@@ -105,20 +105,19 @@ class Payment(CreatedAtModel):
 
 
 class Subscription(CreatedAtModel):
-    """Suscripción activa de un tenant en Mercado Pago."""
+    """Suscripción activa de un tenant."""
     STATUS_CHOICES = [
-        ("pending", "Pendiente"),
-        ("authorized", "Autorizada"),
+        ("active", "Activa"),
         ("paused", "Pausada"),
         ("cancelled", "Cancelada"),
     ]
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True)
     mp_subscription_id = models.CharField(max_length=100, unique=True)
+    card_token_id = models.CharField(max_length=255, default='')
+    payment_method_id = models.CharField(max_length=50, default="credit_card")  # credit_card o debit_card
     payer_email = models.EmailField()
-    external_reference = models.CharField(max_length=100)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    next_payment_date = models.DateField(null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
 
     def __str__(self):
         return f"{self.tenant} - {self.status}"
