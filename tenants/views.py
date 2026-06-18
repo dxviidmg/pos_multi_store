@@ -142,14 +142,14 @@ class CreateSubscriptionView(APIView):
     """Guarda token de tarjeta y realiza pago con /v1/payments."""
 
     def post(self, request):
-        card_token_id = request.data.get("card_token_id")
+        card_token = request.data.get("card_token")
         payer_email = request.data.get("payer_email")
         plan_id = request.data.get("plan_id")
         payment_method_id = request.data.get("payment_method_id", "credit_card")
 
-        if not all([card_token_id, payer_email, plan_id]):
+        if not all([card_token, payer_email, plan_id]):
             return Response(
-                {"error": "card_token_id, payer_email y plan_id son requeridos"},
+                {"error": "card_token, payer_email y plan_id son requeridos"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -169,13 +169,13 @@ class CreateSubscriptionView(APIView):
 
         # Pago con /v1/payments
         payment_payload = {
-            "token": card_token_id,
+            "token": card_token,
             "installments": 1,
             "transaction_amount": float(plan.price),
-            "currency": "MXN",
             "payment_method_id": payment_method_id,
             "payer": {"email": payer_email},
             "description": f"Pago plan: {plan.name}",
+            "save_payment_method": True,
         }
 
         headers = {
@@ -205,7 +205,7 @@ class CreateSubscriptionView(APIView):
         subscription, created = Subscription.objects.update_or_create(
             tenant=tenant,
             defaults={
-                "card_token_id": card_token_id,
+                "card_token_id": card_token,
                 "payer_email": payer_email,
                 "payment_method_id": payment_method_id,
                 "mp_subscription_id": str(payment_data.get("id")),
