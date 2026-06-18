@@ -171,7 +171,7 @@ class CreateSubscriptionView(APIView):
         payment_payload = {
             "token": card_token_id,
             "installments": 1,
-            "amount": float(plan.price),
+            "transaction_amount": float(plan.price),
             "currency_id": "MXN",
             "payment_method_id": payment_method_id,
             "payer": {"email": payer_email},
