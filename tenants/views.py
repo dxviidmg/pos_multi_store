@@ -172,7 +172,7 @@ class CreateSubscriptionView(APIView):
             "token": card_token_id,
             "installments": 1,
             "transaction_amount": float(plan.price),
-            "currency_id": "MXN",
+            "currency": "MXN",
             "payment_method_id": payment_method_id,
             "payer": {"email": payer_email},
             "description": f"Pago plan: {plan.name}",
