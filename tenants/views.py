@@ -37,6 +37,7 @@ class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets
 class TenantInfoView(APIView):
     def get(self, request):
         tenant = request.user.get_tenant()
+        show_mp_modal = False
         
         if tenant.is_sandbox:
             notices = [{"notice": "Soy una cuenta de demostración", "variant": "success"}]
@@ -46,8 +47,10 @@ class TenantInfoView(APIView):
             
             if not payment:
                 notices.append({"notice": "No se encontró un pago activo. Regularice su cuenta para continuar.", "variant": "error"})
+                show_mp_modal = True
             else:
                 days_diff = (payment.end_of_validity - date.today()).days
+                show_mp_modal = days_diff < 5
                 if days_diff < 0:
                     notices.append({"notice": "Su periodo de servicio ha vencido. Renueve para mantener el acceso.", "variant": "error"})
                 elif days_diff == 0:
@@ -58,8 +61,39 @@ class TenantInfoView(APIView):
         return Response({
             "notices": notices,
             "product_count": tenant.count_products(),
+            "show_mp_modal": show_mp_modal,
         })
     
+
+
+class MercadoPagoPreferenceView(APIView):
+    def post(self, request):
+        tenant = request.user.get_tenant()
+        store_count = tenant.store_set.count()
+        amount = float(store_count * MONTHY_PRICE_BY_STORE)
+
+        sdk = mercadopago.SDK(settings.MERCADO_PAGO_ACCESS_TOKEN)
+        preference_data = {
+            "items": [{
+                "title": "Pago mensual SmartVenta",
+                "quantity": 1,
+                "unit_price": amount,
+                "currency_id": "MXN",
+            }],
+            "back_urls": {
+                "success": settings.MERCADO_PAGO_BACK_URL,
+                "failure": settings.MERCADO_PAGO_BACK_URL,
+                "pending": settings.MERCADO_PAGO_BACK_URL,
+            },
+            "external_reference": f"tenant_{tenant.id}",
+            "auto_return": "approved",
+        }
+
+        result = sdk.preference().create(preference_data)
+        if result["status"] != 201:
+            return Response({"error": result.get("response").get("message")}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"init_point": result["response"]["init_point"]})
 
 
 class CreateProductsOnSaleView(APIView):
