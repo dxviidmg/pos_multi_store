@@ -69,13 +69,38 @@ class TenantInfoView(APIView):
 class MercadoPagoPreferenceView(APIView):
     def post(self, request):
         tenant = request.user.get_tenant()
-        store_count = tenant.store_set.count()
-        amount = float(store_count * MONTHY_PRICE_BY_STORE)
+        plan = tenant.plan
+        if not plan:
+            return Response({"error": "No tiene un plan asignado."}, status=status.HTTP_400_BAD_REQUEST)
+
+        last_payment = Payment.objects.filter(tenant=tenant).last()
+        if last_payment:
+            months_owed = max(1, (date.today().year - last_payment.end_of_validity.year) * 12
+                             + date.today().month - last_payment.end_of_validity.month)
+        else:
+            months_owed = 1
+
+        amount = float(plan.price * months_owed)
+
+        from dateutil.relativedelta import relativedelta
+        if last_payment:
+            start = last_payment.end_of_validity + relativedelta(days=1)
+        else:
+            start = date.today()
+        end = start + relativedelta(months=months_owed) - relativedelta(days=1)
+
+        MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+        if months_owed == 1:
+            title = f"SmartVenta - {MESES[start.month-1]} {start.year}"
+        elif start.year == end.year:
+            title = f"SmartVenta - {MESES[start.month-1]} {MESES[end.month-1]} {start.year}"
+        else:
+            title = f"SmartVenta - {MESES[start.month-1]} {start.year} - {MESES[end.month-1]} {end.year}"
 
         sdk = mercadopago.SDK(settings.MERCADO_PAGO_ACCESS_TOKEN)
         preference_data = {
             "items": [{
-                "title": "Pago mensual SmartVenta",
+                "title": title,
                 "quantity": 1,
                 "unit_price": amount,
                 "currency_id": "MXN",
@@ -85,13 +110,15 @@ class MercadoPagoPreferenceView(APIView):
                 "failure": settings.MERCADO_PAGO_BACK_URL,
                 "pending": settings.MERCADO_PAGO_BACK_URL,
             },
-            "external_reference": f"tenant_{tenant.id}",
+            "external_reference": f"tenant_{tenant.id}_months_{months_owed}",
             "auto_return": "approved",
         }
 
         result = sdk.preference().create(preference_data)
         if result["status"] != 201:
             return Response({"error": result.get("response").get("message")}, status=status.HTTP_400_BAD_REQUEST)
+
+        Payment.objects.create(tenant=tenant, months=months_owed)
 
         return Response({"init_point": result["response"]["init_point"]})
 
