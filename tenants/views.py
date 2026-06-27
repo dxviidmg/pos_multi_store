@@ -110,7 +110,7 @@ class MercadoPagoPreferenceView(APIView):
                 "failure": settings.MERCADO_PAGO_BACK_URL,
                 "pending": settings.MERCADO_PAGO_BACK_URL,
             },
-            "external_reference": f"tenant_{tenant.id}_months_{months_owed}",
+            "external_reference": f"{tenant.short_name}_{start.strftime('%m%y')}",
             "auto_return": "approved",
         }
 
