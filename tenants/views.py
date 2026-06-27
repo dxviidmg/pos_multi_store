@@ -41,6 +41,11 @@ class TenantInfoView(APIView):
         
         if tenant.is_sandbox:
             notices = [{"notice": "Soy una cuenta de demostración", "variant": "success"}]
+            payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
+            if not payment:
+                show_mp_modal = True
+            else:
+                show_mp_modal = (payment.end_of_validity - date.today()).days < 5
         else:
             notices = []
             payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
