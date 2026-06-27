@@ -18,4 +18,5 @@ urlpatterns += [
     path('plan-equivalent/', views.PlanEquivalentView.as_view(), name='plan-equivalent'),
     path('subscriptions/create/', views.CreateSubscriptionView.as_view(), name='subscriptions-create'),
     path('webhooks/mp/', views.MPWebhookView.as_view(), name='mp-webhook'),
+    path('mercadopago/', views.MercadoPagoPreferenceView.as_view(), name='mercadopago-preference'),
 ]
