@@ -122,9 +122,6 @@ class MercadoPagoPreferenceView(APIView):
         result = sdk.preference().create(preference_data)
         if result["status"] != 201:
             return Response({"error": result.get("response").get("message")}, status=status.HTTP_400_BAD_REQUEST)
-
-        Payment.objects.create(tenant=tenant, months=months_owed)
-
         return Response({"init_point": result["response"]["init_point"]})
 
 
