@@ -80,6 +80,7 @@ class Payment(CreatedAtModel):
     total = models.DecimalField(decimal_places=2, max_digits=7, default=0)
     start_of_validity = models.DateField(default=timezone.now)
     end_of_validity = models.DateField(default=timezone.now)
+    mp_external_reference = models.CharField(max_length=100, blank=True, null=True)
 
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos

@@ -14,7 +14,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import MONTHY_PRICE_BY_STORE, Payment, Plan, Subscription, SubscriptionPayment, Tenant
+from .models import Payment, Plan, Subscription, SubscriptionPayment, Tenant
 from .serializers import PaymentSerializer, TenantSerializer
 from .utils import render_redeploy
 
@@ -320,33 +320,24 @@ class MPWebhookView(APIView):
         if mp_payment.get("status") != "approved":
             return Response(status=status.HTTP_200_OK)
 
-        # Buscar suscripción por external_reference o preapproval_id
+        # Buscar tenant por external_reference (short_name del tenant)
         external_reference = mp_payment.get("external_reference", "")
-        preapproval_id = mp_payment.get("metadata", {}).get("preapproval_id", "")
-        subscription = None
-        if external_reference and external_reference != "Recurring payment validation":
-            subscription = Subscription.objects.filter(external_reference=external_reference, status="authorized").first()
-        if not subscription and preapproval_id:
-            subscription = Subscription.objects.filter(mp_subscription_id=preapproval_id, status="authorized").first()
-        if not subscription:
-            logger.warning(f"[MPWebhook] subscription not found for ref={external_reference} preapproval={preapproval_id}")
+        if not external_reference:
+            logger.warning(f"[MPWebhook] payment without external_reference, payment_id={payment_id}")
+            return Response(status=status.HTTP_200_OK)
+
+        tenant = Tenant.objects.filter(short_name=external_reference).first()
+        if not tenant:
+            logger.warning(f"[MPWebhook] tenant not found for external_reference={external_reference}")
             return Response(status=status.HTTP_200_OK)
 
         # Evitar duplicados
-        if SubscriptionPayment.objects.filter(mp_payment_id=str(payment_id)).exists():
+        if Payment.objects.filter(mp_payment_id=str(payment_id)).exists():
             logger.info(f"[MPWebhook] duplicate payment_id={payment_id}, skipping")
             return Response(status=status.HTTP_200_OK)
 
         # Registrar pago
-        tenant = subscription.tenant
-        payment = Payment.objects.create(tenant=tenant, months=1)
-        SubscriptionPayment.objects.create(
-            subscription=subscription,
-            mp_payment_id=str(payment_id),
-            amount=mp_payment.get("transaction_amount", payment.total),
-            status="approved",
-            paid_at=datetime.now(),
-        )
+        Payment.objects.create(tenant=tenant, months=1, mp_payment_id=str(payment_id))
         logger.info(f"[MPWebhook] payment registered: tenant={tenant.short_name} amount={mp_payment.get('transaction_amount')}")
 
         return Response(status=status.HTTP_200_OK)
