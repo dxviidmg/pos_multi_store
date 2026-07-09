@@ -336,12 +336,12 @@ class MPWebhookView(APIView):
             return Response(status=status.HTTP_200_OK)
 
         # Evitar duplicados
-        if Payment.objects.filter(mp_payment_id=str(payment_id)).exists():
-            logger.info(f"[MPWebhook] duplicate payment_id={payment_id}, skipping")
+        if Payment.objects.filter(mp_external_reference=external_reference).exists():
+            logger.info(f"[MPWebhook] duplicate external_reference={external_reference}, skipping")
             return Response(status=status.HTTP_200_OK)
 
         # Registrar pago
-        Payment.objects.create(tenant=tenant, months=1, mp_payment_id=str(payment_id))
+        Payment.objects.create(tenant=tenant, months=1, mp_external_reference=external_reference)
         logger.info(f"[MPWebhook] payment registered: tenant={tenant.short_name} amount={mp_payment.get('transaction_amount')}")
 
         return Response(status=status.HTTP_200_OK)
