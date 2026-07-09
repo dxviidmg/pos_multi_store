@@ -320,15 +320,19 @@ class MPWebhookView(APIView):
         if mp_payment.get("status") != "approved":
             return Response(status=status.HTTP_200_OK)
 
-        # Buscar tenant por external_reference (short_name del tenant)
+        # Buscar tenant por external_reference (formato: short_name_MMYY)
         external_reference = mp_payment.get("external_reference", "")
         if not external_reference:
             logger.warning(f"[MPWebhook] payment without external_reference, payment_id={payment_id}")
             return Response(status=status.HTTP_200_OK)
 
-        tenant = Tenant.objects.filter(short_name=external_reference).first()
+        short_name = external_reference.split("_")[0]
+        try:
+            tenant = Tenant.objects.get(short_name=short_name)
+        except Tenant.DoesNotExist:
+            tenant = None
         if not tenant:
-            logger.warning(f"[MPWebhook] tenant not found for external_reference={external_reference}")
+            logger.warning(f"[MPWebhook] tenant not found for short_name={short_name} (external_reference={external_reference})")
             return Response(status=status.HTTP_200_OK)
 
         # Evitar duplicados
