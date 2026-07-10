@@ -10,7 +10,10 @@ class TenantAdmin(admin.ModelAdmin):
         return obj.plan.name if obj.plan else '-'
     plan_name.short_description = 'Plan'
 
-admin.site.register(Payment)
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ['id', 'tenant', 'months', 'total', 'start_of_validity', 'end_of_validity', 'mp_external_reference']
+    ordering = ['-id']
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
