@@ -85,7 +85,8 @@ class Payment(CreatedAtModel):
     def save(self, *args, **kwargs):
         if not self.pk:  # Solo para nuevos objetos
             tenant = self.tenant
-            self.total = tenant.store_set.count() * self.months * MONTHY_PRICE_BY_STORE
+            plan = tenant.get_plan()
+            self.total = plan.price * self.months if plan else 0
 
             last_payment = Payment.objects.filter(
                 tenant=tenant
