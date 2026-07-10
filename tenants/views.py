@@ -230,6 +230,14 @@ class CreateSubscriptionView(APIView):
         tenant = request.user.get_tenant()
         mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
 
+        # Calcular fecha de inicio de vigencia
+        from dateutil.relativedelta import relativedelta
+        last_payment = Payment.objects.filter(tenant=tenant).last()
+        if last_payment:
+            start = last_payment.end_of_validity + relativedelta(days=1)
+        else:
+            start = date.today()
+
         # Pago con /v1/payments
         payment_payload = {
             "token": card_token,
@@ -238,6 +246,7 @@ class CreateSubscriptionView(APIView):
             "payment_method_id": payment_method_id,
             "payer": {"email": payer_email},
             "description": f"Pago plan: {plan.name}",
+            "external_reference": f"{tenant.short_name}_{start.strftime('%m%y')}",
         }
 
         headers = {
@@ -264,16 +273,18 @@ class CreateSubscriptionView(APIView):
 
         payment_data = payment_response.json()
 
-        # Guardar token en suscripción para futuros cobros por cron
-        subscription, created = Subscription.objects.update_or_create(
+        # Guardar token en suscripción para futuros cobros
+        # Cancelar suscripciones anteriores del tenant
+        Subscription.objects.filter(tenant=tenant).update(status="cancelled")
+
+        subscription = Subscription.objects.create(
             tenant=tenant,
-            defaults={
-                "card_token_id": card_token,
-                "payer_email": payer_email,
-                "payment_method_id": payment_method_id,
-                "mp_subscription_id": str(payment_data.get("id")),
-                "status": "authorized",
-            }
+            card_token_id=card_token,
+            payer_email=payer_email,
+            payment_method_id=payment_method_id,
+            mp_subscription_id=str(payment_data.get("id")),
+            status="active",
+            amount=plan.price,
         )
 
         # Registrar pago y extender vigencia
