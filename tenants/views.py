@@ -238,7 +238,6 @@ class CreateSubscriptionView(APIView):
             "payment_method_id": payment_method_id,
             "payer": {"email": payer_email},
             "description": f"Pago plan: {plan.name}",
-            "save_payment_method": True,
         }
 
         headers = {
