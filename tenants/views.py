@@ -243,6 +243,7 @@ class CreateSubscriptionView(APIView):
         headers = {
             "Authorization": f"Bearer {mp_access_token}",
             "Content-Type": "application/json",
+            "X-Idempotency-Key": f"{tenant.short_name}_{plan_id}_{card_token}",
         }
 
         logger.info(f"[CreateSubscription] payment payload: {payment_payload}")
