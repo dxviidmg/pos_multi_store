@@ -208,8 +208,8 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
             'hosts': [config('REDIS_URL')],
-            'capacity': 1000,
-            'expiry': 60,
+            'capacity': 100,
+            'expiry': 30,
             'prefix': 'ws_',
         },
     },
@@ -220,6 +220,8 @@ CELERY_RESULT_BACKEND = config('REDIS_URL')
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_EXPIRES = 300  # Resultados expiran en 5 min
+CELERY_RESULT_COMPRESSION = "gzip"  # Comprime resultados en Redis
 
 # Optimizaciones para Render Standard (2GB RAM, 1 CPU)
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1

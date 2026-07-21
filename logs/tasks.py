@@ -1,5 +1,3 @@
-import time
-
 from celery import shared_task
 from django.db.models import OuterRef, Subquery
 
@@ -28,7 +26,7 @@ def get_logs_duplicates_or_inconsistens_task(self, store_ids, start_date, end_da
         self.update_state(state="PROGRESS", meta={"percent": 1, "total": total})
 
         ids = []
-        update_every = max(total // 20, 1)
+        update_every = max(total // 10, 1)
 
         # 🚀 Usar iterator() evita cargar todo en memoria
         for i, log in enumerate(logs_qs.iterator(), start=1):
@@ -89,7 +87,6 @@ def get_store_products_inconsistens_task(self, store_ids):
             self.update_state(state="PROGRESS", meta={"percent": 100, "total": 0})
             return []
 
-        time.sleep(0.5)
         self.update_state(
             state="PROGRESS",
             meta={"percent": 5, "total": total},
@@ -114,7 +111,6 @@ def get_store_products_inconsistens_task(self, store_ids):
                     state="PROGRESS",
                     meta={"percent": percent, "total": total},
                 )
-                time.sleep(0.5)
 
             # Detectar inconsistencias
             if sp.stock < 0 or (sp.last_log_stock is not None and sp.stock != sp.last_log_stock):
