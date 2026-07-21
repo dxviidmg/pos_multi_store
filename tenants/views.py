@@ -202,7 +202,7 @@ class PlanEquivalentView(APIView):
 
 
 class CreateSubscriptionView(APIView):
-    """Guarda token de tarjeta y realiza pago con /v1/payments."""
+    """Crea suscripción recurrente en Mercado Pago via Preapproval."""
 
     def post(self, request):
         card_token = request.data.get("card_token")
@@ -227,68 +227,69 @@ class CreateSubscriptionView(APIView):
         except Plan.DoesNotExist:
             return Response({"error": "Plan no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
+        if not plan.mp_plan_id:
+            return Response(
+                {"error": "Plan sin configuración de suscripción en Mercado Pago"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         tenant = request.user.get_tenant()
         mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
 
-        # Calcular fecha de inicio de vigencia
-        from dateutil.relativedelta import relativedelta
-        last_payment = Payment.objects.filter(tenant=tenant).last()
-        if last_payment:
-            start = last_payment.end_of_validity + relativedelta(days=1)
-        else:
-            start = date.today()
-
-        # Pago con /v1/payments
-        payment_payload = {
-            "token": card_token,
-            "installments": 1,
-            "transaction_amount": float(plan.price),
-            "payment_method_id": payment_method_id,
-            "payer": {"email": payer_email},
-            "description": f"Pago plan: {plan.name}",
-            "external_reference": f"{tenant.short_name}_{start.strftime('%m%y')}",
+        # Crear suscripción recurrente con Preapproval
+        payload = {
+            "preapproval_plan_id": plan.mp_plan_id,
+            "card_token_id": card_token,
+            "payer_email": payer_email,
+            "external_reference": tenant.short_name,
+            "status": "authorized",
         }
 
         headers = {
             "Authorization": f"Bearer {mp_access_token}",
             "Content-Type": "application/json",
-            "X-Idempotency-Key": f"{tenant.short_name}_{plan_id}_{card_token}",
         }
 
-        logger.info(f"[CreateSubscription] payment payload: {payment_payload}")
+        logger.info(f"[CreateSubscription] preapproval payload: {payload}")
 
-        payment_response = requests.post(
-            "https://api.mercadopago.com/v1/payments",
-            json=payment_payload,
+        response = requests.post(
+            "https://api.mercadopago.com/preapproval",
+            json=payload,
             headers=headers
         )
 
-        logger.info(f"[CreateSubscription] payment response: {payment_response.status_code} - {payment_response.json()}")
+        logger.info(f"[CreateSubscription] preapproval response: {response.status_code} - {response.json()}")
 
-        if payment_response.status_code not in [200, 201]:
+        if response.status_code not in [200, 201]:
             return Response(
-                {"error": "Error al procesar pago", "details": payment_response.json()},
+                {"error": "Error al crear suscripción", "details": response.json()},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        payment_data = payment_response.json()
+        data = response.json()
 
-        # Guardar token en suscripción para futuros cobros
-        # Cancelar suscripciones anteriores del tenant
-        Subscription.objects.filter(tenant=tenant).update(status="cancelled")
+        # Cancelar suscripciones anteriores del tenant en MP y localmente
+        old_subs = Subscription.objects.filter(tenant=tenant, status="active")
+        for old_sub in old_subs:
+            try:
+                requests.put(
+                    f"https://api.mercadopago.com/preapproval/{old_sub.mp_subscription_id}",
+                    json={"status": "cancelled"},
+                    headers=headers
+                )
+            except Exception as e:
+                logger.warning(f"[CreateSubscription] Error cancelling old sub {old_sub.mp_subscription_id}: {e}")
+        old_subs.update(status="cancelled")
 
         subscription = Subscription.objects.create(
             tenant=tenant,
-            card_token_id=card_token,
+            mp_subscription_id=data["id"],
+            card_token_id="",  # No se reutiliza, campo legacy
             payer_email=payer_email,
             payment_method_id=payment_method_id,
-            mp_subscription_id=str(payment_data.get("id")),
             status="active",
             amount=plan.price,
         )
-
-        # Registrar pago y extender vigencia
-        Payment.objects.create(tenant=tenant, months=1)
 
         # Actualizar plan del tenant
         tenant.plan = plan
@@ -296,27 +297,35 @@ class CreateSubscriptionView(APIView):
 
         return Response({
             "id": subscription.id,
-            "payment_id": payment_data.get("id"),
-            "status": payment_data.get("status"),
+            "mp_subscription_id": data["id"],
+            "status": data.get("status"),
             "amount": float(plan.price),
         }, status=status.HTTP_201_CREATED)
 
 
 class MPWebhookView(APIView):
-    """Recibe notificaciones de pago de Mercado Pago."""
+    """Recibe notificaciones de Mercado Pago (pagos y suscripciones)."""
     permission_classes = [AllowAny]
 
     def post(self, request):
         logger.info(f"[MPWebhook] received: {request.data} params: {request.query_params}")
         topic = request.data.get("type") or request.query_params.get("topic")
         data = request.data.get("data", {})
-        payment_id = data.get("id") or request.query_params.get("id")
 
-        if topic != "payment" or not payment_id:
-            logger.info(f"[MPWebhook] ignored: topic={topic}, payment_id={payment_id}")
+        if topic == "subscription_preapproval":
+            return self._handle_subscription_update(data, request)
+        elif topic == "payment":
+            return self._handle_payment(data)
+
+        logger.info(f"[MPWebhook] ignored: topic={topic}")
+        return Response(status=status.HTTP_200_OK)
+
+    def _handle_payment(self, data):
+        """Procesa notificación de pago (manual o recurrente via preapproval)."""
+        payment_id = data.get("id")
+        if not payment_id:
             return Response(status=status.HTTP_200_OK)
 
-        # Consultar pago en MP
         mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
         response = requests.get(
             f"https://api.mercadopago.com/v1/payments/{payment_id}",
@@ -328,10 +337,11 @@ class MPWebhookView(APIView):
 
         mp_payment = response.json()
         logger.info(f"[MPWebhook] payment status={mp_payment.get('status')} ref={mp_payment.get('external_reference')} amount={mp_payment.get('transaction_amount')}")
+
         if mp_payment.get("status") != "approved":
             return Response(status=status.HTTP_200_OK)
 
-        # Buscar tenant por external_reference (formato: short_name_MMYY)
+        # Buscar tenant por external_reference (formato: short_name_MMYY o solo short_name)
         external_reference = mp_payment.get("external_reference", "")
         if not external_reference:
             logger.warning(f"[MPWebhook] payment without external_reference, payment_id={payment_id}")
@@ -341,10 +351,14 @@ class MPWebhookView(APIView):
         try:
             tenant = Tenant.objects.get(short_name=short_name)
         except Tenant.DoesNotExist:
-            tenant = None
-        if not tenant:
             logger.warning(f"[MPWebhook] tenant not found for short_name={short_name} (external_reference={external_reference})")
             return Response(status=status.HTTP_200_OK)
+
+        # Para pagos recurrentes de preapproval, generar external_reference único
+        # MP usa el external_reference del preapproval (short_name), no incluye fecha
+        if "_" not in external_reference:
+            # Es un pago recurrente de preapproval, usar payment_id como referencia
+            external_reference = f"{short_name}_{mp_payment.get('id')}"
 
         # Evitar duplicados
         if Payment.objects.filter(mp_external_reference=external_reference).exists():
@@ -354,5 +368,40 @@ class MPWebhookView(APIView):
         # Registrar pago
         Payment.objects.create(tenant=tenant, months=1, mp_external_reference=external_reference)
         logger.info(f"[MPWebhook] payment registered: tenant={tenant.short_name} amount={mp_payment.get('transaction_amount')}")
+
+        return Response(status=status.HTTP_200_OK)
+
+    def _handle_subscription_update(self, data, request):
+        """Actualiza estado local de suscripción cuando MP notifica cambios."""
+        sub_id = data.get("id") or request.query_params.get("id")
+        if not sub_id:
+            return Response(status=status.HTTP_200_OK)
+
+        mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
+        response = requests.get(
+            f"https://api.mercadopago.com/preapproval/{sub_id}",
+            headers={"Authorization": f"Bearer {mp_access_token}"},
+        )
+        if response.status_code != 200:
+            logger.warning(f"[MPWebhook] preapproval query failed: {response.status_code}")
+            return Response(status=status.HTTP_200_OK)
+
+        mp_sub = response.json()
+        new_status = mp_sub.get("status")
+        logger.info(f"[MPWebhook] subscription update: id={sub_id} status={new_status}")
+
+        status_map = {
+            "authorized": "active",
+            "paused": "paused",
+            "cancelled": "cancelled",
+        }
+
+        try:
+            subscription = Subscription.objects.get(mp_subscription_id=str(sub_id))
+            subscription.status = status_map.get(new_status, subscription.status)
+            subscription.save(update_fields=["status"])
+            logger.info(f"[MPWebhook] subscription {sub_id} updated to {subscription.status}")
+        except Subscription.DoesNotExist:
+            logger.warning(f"[MPWebhook] subscription not found: mp_subscription_id={sub_id}")
 
         return Response(status=status.HTTP_200_OK)
