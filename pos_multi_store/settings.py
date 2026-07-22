@@ -174,6 +174,7 @@ CORS_ALLOW_HEADERS = [
     'content-type',
     'authorization',
     'accept',
+    'x-api-key',
 ]
 
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
@@ -255,3 +256,6 @@ LOGGING = {
         "level": "INFO",
     },
 }
+
+# API Key para endpoints públicos (registro de clientes, etc.)
+PUBLIC_API_KEY = config('PUBLIC_API_KEY')

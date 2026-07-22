@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from .models import Payment, Plan, Subscription, SubscriptionPayment, Tenant
 from .serializers import PaymentSerializer, TenantSerializer
 from .utils import render_redeploy
+from pos_multi_store.permissions import HasAPIKey
 
 # Create your views here.
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -32,6 +33,147 @@ class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets
     
     def get_object(self):
         return self.request.user.get_tenant()
+
+
+class TenantExistsView(APIView):
+    permission_classes = [HasAPIKey]
+    authentication_classes = []
+
+    def get(self, request):
+        short_name = request.query_params.get('short_name', '').strip()
+        if not short_name:
+            return Response({"error": "short_name is required"}, status=400)
+        exists = Tenant.objects.filter(short_name=short_name).exists()
+        return Response({"exists": exists})
+
+
+class PublicTenantCreateView(APIView):
+    permission_classes = [HasAPIKey]
+    authentication_classes = []
+
+    def post(self, request):
+        from django.contrib.auth.models import User
+        from django.contrib.auth.hashers import make_password
+        from django.db import transaction
+
+        data = request.data
+
+        # Validar campos requeridos
+        required = ['name', 'short_name', 'first_name', 'last_name', 'email', 'plan_id', 'card_token', 'payer_email']
+        missing = [f for f in required if not data.get(f)]
+        if missing:
+            return Response(
+                {"error": f"Campos requeridos: {', '.join(missing)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        short_name = data['short_name'].strip().upper()
+
+        # Verificar unicidad
+        if Tenant.objects.filter(short_name=short_name).exists():
+            return Response(
+                {"error": "El código de negocio ya está en uso."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(email=data['email']).exists():
+            return Response(
+                {"error": "Ya existe una cuenta con este correo."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validar plan
+        try:
+            plan = Plan.objects.get(id=data['plan_id'], billing_type="S")
+        except Plan.DoesNotExist:
+            return Response({"error": "Plan no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not plan.mp_plan_id:
+            return Response(
+                {"error": "Plan sin configuración de suscripción en Mercado Pago"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Procesar suscripción en Mercado Pago primero (antes de crear datos locales)
+        mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
+        payload = {
+            "preapproval_plan_id": plan.mp_plan_id,
+            "card_token_id": data['card_token'],
+            "payer_email": data['payer_email'],
+            "external_reference": short_name,
+            "status": "authorized",
+        }
+        headers = {
+            "Authorization": f"Bearer {mp_access_token}",
+            "Content-Type": "application/json",
+        }
+
+        logger.info(f"[PublicTenantCreate] preapproval payload: {payload}")
+
+        mp_response = requests.post(
+            "https://api.mercadopago.com/preapproval",
+            json=payload,
+            headers=headers
+        )
+
+        logger.info(f"[PublicTenantCreate] preapproval response: {mp_response.status_code} - {mp_response.json()}")
+
+        if mp_response.status_code not in [200, 201]:
+            mp_data = mp_response.json()
+            error_msg = mp_data.get("message", "Error al procesar el pago.")
+            return Response(
+                {"error": error_msg, "details": mp_data},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        mp_data = mp_response.json()
+
+        # Pago exitoso → crear tenant, owner y suscripción en transacción
+        with transaction.atomic():
+            username = f"{short_name}.propietario"
+            owner = User.objects.create(
+                username=username,
+                first_name=data['first_name'],
+                last_name=data['last_name'],
+                email=data['email'],
+                password=make_password(data.get('password', username)),
+            )
+
+            tenant = Tenant(
+                name=data['name'],
+                short_name=short_name,
+                plan=plan,
+            )
+            # Tenant.save() usará get_or_create y encontrará el owner ya creado
+            tenant.save()
+
+            Subscription.objects.create(
+                tenant=tenant,
+                mp_subscription_id=mp_data["id"],
+                card_token_id="",
+                payer_email=data['payer_email'],
+                payment_method_id=data.get('payment_method_id', 'credit_card'),
+                status="active",
+                amount=plan.price,
+            )
+
+        return Response({
+            "id": tenant.id,
+            "short_name": tenant.short_name,
+            "username": owner.username,
+            "mp_subscription_id": mp_data["id"],
+        }, status=status.HTTP_201_CREATED)
+
+
+class PublicPlansView(APIView):
+    permission_classes = [HasAPIKey]
+    authentication_classes = []
+
+    def get(self, request):
+        from .serializers import PlanSerializer
+        plans = Plan.objects.filter(billing_type="S", is_sandbox=False)
+        serializer = PlanSerializer(plans, many=True)
+        return Response(serializer.data)
 
 
 class TenantInfoView(APIView):
