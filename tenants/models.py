@@ -36,7 +36,7 @@ class Plan(models.Model):
 
 class Tenant(CreatedAtModel):
     name = models.CharField(max_length=100)
-    short_name = models.CharField(max_length=5, unique=True)
+    short_name = models.CharField(max_length=10, unique=True)
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
     is_sandbox = models.BooleanField(default=False)
     displays_stock_in_storages = models.BooleanField(default=False)
