@@ -11,6 +11,8 @@ router.register('tenant', views.TenantViewSet, basename='tenant')
 urlpatterns = router.urls
 
 urlpatterns += [
+    path('tenant-exists/', views.TenantExistsView.as_view(), name='tenant-exists'),
+    path('create-tenant/', views.PublicTenantCreateView.as_view(), name='public-tenant-create'),
     path('redeploy-render/', views.RenderRedeployView.as_view(), name='redeploy-render'),
     path('tenant-info/', views.TenantInfoView.as_view(), name='tenant-info'),
     path('create-products-on-sale/', views.CreateProductsOnSaleView.as_view(), name='create-products-on-sale'),

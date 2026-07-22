@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from .models import Payment, Plan, Subscription, SubscriptionPayment, Tenant
 from .serializers import PaymentSerializer, TenantSerializer
 from .utils import render_redeploy
+from pos_multi_store.permissions import HasAPIKey
 
 # Create your views here.
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -32,6 +33,30 @@ class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets
     
     def get_object(self):
         return self.request.user.get_tenant()
+
+
+class TenantExistsView(APIView):
+    permission_classes = [HasAPIKey]
+    authentication_classes = []
+
+    def get(self, request):
+        short_name = request.query_params.get('short_name', '').strip()
+        if not short_name:
+            return Response({"error": "short_name is required"}, status=400)
+        exists = Tenant.objects.filter(short_name=short_name).exists()
+        return Response({"exists": exists})
+
+
+class PublicTenantCreateView(APIView):
+    permission_classes = [HasAPIKey]
+    authentication_classes = []
+
+    def post(self, request):
+        from .serializers import TenantCreateSerializer
+        serializer = TenantCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class TenantInfoView(APIView):
