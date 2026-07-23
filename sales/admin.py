@@ -16,4 +16,6 @@ class ProductSaleAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ['sale__id', 'sale__created_at']
+    list_display = ['sale__id', 'sale__created_at', 'amount']
+    search_fields = ['sale__id']
+    list_filter = ['sale__store', 'sale__created_at']
