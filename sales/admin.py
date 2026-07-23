@@ -10,9 +10,12 @@ class SaleAdmin(admin.ModelAdmin):
 
 @admin.register(ProductSale)
 class ProductSaleAdmin(admin.ModelAdmin):
-    list_display = ['id', 'sale_id', 'product_id']
+    list_display = ['id', 'sale_id', 'product_id', 'quantity', 'price']
+    search_fields = ['sale__id']
 
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ['sale__id', 'sale__created_at']
+    list_display = ['sale__id', 'sale__created_at', 'amount']
+    search_fields = ['sale__id']
+    list_filter = ['sale__store', 'sale__created_at']
