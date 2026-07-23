@@ -10,7 +10,8 @@ class SaleAdmin(admin.ModelAdmin):
 
 @admin.register(ProductSale)
 class ProductSaleAdmin(admin.ModelAdmin):
-    list_display = ['id', 'sale_id', 'product_id']
+    list_display = ['id', 'sale_id', 'product_id', 'quantity', 'price']
+    search_fields = ['sale__id']
 
 
 @admin.register(Payment)
