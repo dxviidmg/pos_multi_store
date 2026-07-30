@@ -64,7 +64,7 @@ class Sale(CreatedAtModel):
         )
         if previous_obj:
             diff = self.created_at - previous_obj.created_at
-            return diff.total_seconds() < 1
+            return diff.total_seconds() < 1 and self.total == previous_obj.total
         return False
         
     def revert_stock_and_delete(self):
