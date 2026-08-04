@@ -89,10 +89,38 @@ class PublicTenantCreateView(APIView):
             return Response({"error": "Plan no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
         if not plan.mp_plan_id:
-            return Response(
-                {"error": "Plan sin configuración de suscripción en Mercado Pago"},
-                status=status.HTTP_400_BAD_REQUEST
+            # Crear plan en Mercado Pago automáticamente
+            mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
+            plan_payload = {
+                "reason": f"SmartVenta - {plan.name}",
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": float(plan.price),
+                    "currency_id": "MXN",
+                },
+                "back_url": settings.MERCADO_PAGO_BACK_URL,
+            }
+            plan_headers = {
+                "Authorization": f"Bearer {mp_access_token}",
+                "Content-Type": "application/json",
+            }
+            logger.info(f"[PublicTenantCreate] Creando plan en MP: {plan_payload}")
+            mp_plan_response = requests.post(
+                "https://api.mercadopago.com/preapproval_plan",
+                json=plan_payload,
+                headers=plan_headers,
             )
+            logger.info(f"[PublicTenantCreate] MP plan response: {mp_plan_response.status_code} - {mp_plan_response.json()}")
+
+            if mp_plan_response.status_code not in [200, 201]:
+                return Response(
+                    {"error": "No se pudo crear el plan en Mercado Pago", "details": mp_plan_response.json()},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            plan.mp_plan_id = mp_plan_response.json()["id"]
+            plan.save(update_fields=["mp_plan_id"])
 
         # Procesar suscripción en Mercado Pago primero (antes de crear datos locales)
         mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
@@ -370,10 +398,38 @@ class CreateSubscriptionView(APIView):
             return Response({"error": "Plan no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
         if not plan.mp_plan_id:
-            return Response(
-                {"error": "Plan sin configuración de suscripción en Mercado Pago"},
-                status=status.HTTP_400_BAD_REQUEST
+            # Crear plan en Mercado Pago automáticamente
+            mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
+            plan_payload = {
+                "reason": f"SmartVenta - {plan.name}",
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": float(plan.price),
+                    "currency_id": "MXN",
+                },
+                "back_url": settings.MERCADO_PAGO_BACK_URL,
+            }
+            plan_headers = {
+                "Authorization": f"Bearer {mp_access_token}",
+                "Content-Type": "application/json",
+            }
+            logger.info(f"[CreateSubscription] Creando plan en MP: {plan_payload}")
+            mp_plan_response = requests.post(
+                "https://api.mercadopago.com/preapproval_plan",
+                json=plan_payload,
+                headers=plan_headers,
             )
+            logger.info(f"[CreateSubscription] MP plan response: {mp_plan_response.status_code} - {mp_plan_response.json()}")
+
+            if mp_plan_response.status_code not in [200, 201]:
+                return Response(
+                    {"error": "No se pudo crear el plan en Mercado Pago", "details": mp_plan_response.json()},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            plan.mp_plan_id = mp_plan_response.json()["id"]
+            plan.save(update_fields=["mp_plan_id"])
 
         tenant = request.user.get_tenant()
         mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
