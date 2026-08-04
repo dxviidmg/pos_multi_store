@@ -11,4 +11,5 @@ class HasAPIKey(BasePermission):
 
     def has_permission(self, request, view):
         api_key = request.headers.get("X-API-Key", "")
+        print(api_key)
         return api_key == settings.PUBLIC_API_KEY
