@@ -76,7 +76,7 @@ ROOT_URLCONF = 'pos_multi_store.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'core' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -259,3 +259,28 @@ LOGGING = {
 
 # API Key para endpoints públicos (registro de clientes, etc.)
 PUBLIC_API_KEY = config('PUBLIC_API_KEY')
+
+
+# =============================================================================
+# EMAIL CONFIGURATION
+# =============================================================================
+# Proveedor activo: "smtp" | "ses" | "resend" | "sendgrid"
+# Cambiar este valor para migrar de proveedor sin modificar la lógica de negocio.
+EMAIL_BACKEND_PROVIDER = 'smtp'
+
+# Django email backend (SMTP por defecto)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# Configuración SMTP (Gmail)
+# Usar App Password: https://myaccount.google.com/apppasswords
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+
+# Remitente por defecto
+DEFAULT_FROM_EMAIL = f'SmartVenta <{EMAIL_HOST_USER}>'
+
+# URL base del frontend (para enlaces en correos: verificación, reset, etc.)
+FRONTEND_URL = MERCADO_PAGO_BACK_URL
