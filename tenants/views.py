@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Payment, Plan, Subscription, SubscriptionPayment, Tenant
-from .serializers import PaymentSerializer, TenantSerializer
+from .serializers import PaymentSerializer, SubscriptionSerializer, TenantSerializer
 from .utils import render_redeploy
 from pos_multi_store.permissions import HasAPIKey
 
@@ -369,6 +369,16 @@ class PlanEquivalentView(APIView):
             "price": str(plan.price),
             "stores": plan.stores,
         })
+
+
+class SubscriptionView(APIView):
+    """Retorna las suscripciones del tenant."""
+
+    def get(self, request):
+        tenant = request.user.get_tenant()
+        subscriptions = Subscription.objects.filter(tenant=tenant).order_by('-created_at')
+        serializer = SubscriptionSerializer(subscriptions, many=True)
+        return Response(serializer.data)
 
 
 class CreateSubscriptionView(APIView):

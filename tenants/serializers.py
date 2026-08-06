@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Payment, Plan, Tenant
+from .models import Payment, Plan, Subscription, Tenant
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -27,3 +27,11 @@ class PlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
         fields = ["id", "name", "price", "stores", "billing_type"]
+
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subscription
+        fields = ["id", "tenant", "mp_subscription_id", "payer_email",
+                  "amount", "status", "payment_method_id", "created_at"]
+        read_only_fields = fields
