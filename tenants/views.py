@@ -381,6 +381,36 @@ class SubscriptionView(APIView):
         return Response(serializer.data)
 
 
+class TenantDatesView(APIView):
+    """Retorna fechas clave del tenant: creación, domiciliación activa y primer pago."""
+
+    def get(self, request):
+        tenant = request.user.get_tenant()
+
+        # Fecha de creación del tenant
+        tenant_created = tenant.created_at
+
+        # Fecha de la domiciliación (suscripción) activa
+        active_subscription = Subscription.objects.filter(
+            tenant=tenant, status="active"
+        ).order_by('-created_at').first()
+
+        subscription_date = active_subscription.created_at if active_subscription else None
+
+        # Fecha del primer pago
+        first_payment = Payment.objects.filter(
+            tenant=tenant
+        ).order_by('created_at').first()
+
+        first_payment_date = first_payment.created_at if first_payment else None
+
+        return Response({
+            "tenant_created_at": tenant_created,
+            "active_subscription_date": subscription_date,
+            "first_payment_date": first_payment_date,
+        })
+
+
 class CreateSubscriptionView(APIView):
     """Crea suscripción recurrente en Mercado Pago via Preapproval."""
 
