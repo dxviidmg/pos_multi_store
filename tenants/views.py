@@ -208,18 +208,28 @@ class TenantInfoView(APIView):
     def get(self, request):
         tenant = request.user.get_tenant()
         show_mp_modal = False
-        
+        notices = []
+        payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
+        active_subscription = Subscription.objects.filter(tenant=tenant, status="active").exists()
+
         if tenant.is_sandbox:
             notices = [{"notice": "Soy una cuenta de demostración", "variant": "success"}]
-            payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
             if not payment:
                 show_mp_modal = True
             else:
                 show_mp_modal = (payment.end_of_validity - date.today()).days < 5
+        elif active_subscription:
+            # Tiene domiciliación activa: no mostrar modal de pago
+            show_mp_modal = False
+            if payment:
+                days_diff = (payment.end_of_validity - date.today()).days
+                if days_diff <= 5:
+                    notices.append({
+                        "notice": f"En próximos días se realizará el cobro automático de su suscripción. Asegúrese de tener saldo suficiente en su tarjeta para continuar usando el servicio.",
+                        "variant": "warning"
+                    })
         else:
-            notices = []
-            payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
-            
+            # Sin domiciliación: flujo manual
             if not payment:
                 notices.append({"notice": "No se encontró un pago activo. Regularice su cuenta para continuar.", "variant": "error"})
                 show_mp_modal = True
