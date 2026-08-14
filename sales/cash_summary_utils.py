@@ -34,27 +34,46 @@ def calculate_cash_summary(store, date=None, start_date=None, end_date=None):
     sales = Sale.objects.filter(sales_filter & date_filter, is_canceled=False)
     sales_canceled = Sale.objects.filter(sales_filter & date_filter, is_canceled=True)
 
+    # --- Apartados realizados en el período ---
+    reservations_filter = Q(store=store, reservation_in_progress=True)
+    reservations_created = Sale.objects.filter(reservations_filter & date_filter, is_canceled=False)
+
     total_profit = sum(sale.get_profit() for sale in sales)
 
-    # --- Pagos ---
-    related_payments = Payment.objects.filter(
-        sale__store=store, sale__is_canceled=False
+    # --- Pagos de ventas normales (del período) ---
+    sale_payments = Payment.objects.filter(
+        sale__store=store,
+        sale__is_canceled=False,
+        sale__sale_type="V",
+    ).filter(date_filter)
+    total_sold = sale_payments.aggregate(total=Sum("amount"))["total"] or 0
+
+    # --- Pagos de apartados (abonos del período) ---
+    reservation_payments = Payment.objects.filter(
+        sale__store=store,
+        sale__is_canceled=False,
+        sale__sale_type="A",
+    ).filter(date_filter)
+    total_reservations = reservation_payments.aggregate(total=Sum("amount"))["total"] or 0
+
+    # --- Todos los pagos del día (ventas + apartados) por método ---
+    all_payments = Payment.objects.filter(
+        sale__store=store,
+        sale__is_canceled=False,
     ).filter(date_filter)
 
-    payments_grouped = related_payments.values("payment_method").annotate(
+    all_payments_grouped = all_payments.values("payment_method").annotate(
         total_amount=Sum("amount")
     )
-
-    total_received = related_payments.aggregate(total=Sum("amount"))["total"] or 0
+    total_received = all_payments.aggregate(total=Sum("amount"))["total"] or 0
 
     # --- Métodos de pago ---
     payment_labels = dict(Payment.PAYMENT_METHOD_CHOICES)
     payments_dict = {method: 0 for method in payment_labels.keys()}
 
-    for p in payments_grouped:
+    for p in all_payments_grouped:
         payments_dict[p["payment_method"]] = p["total_amount"]
 
-    
     # --- Construcción de resultados ---
     cash_summary = [
         {
@@ -66,16 +85,24 @@ def calculate_cash_summary(store, date=None, start_date=None, end_date=None):
     ]
 
     # --- Totales generales ---
-    efectivo_amount = next(
-        (item["amount"] for item in cash_summary if item["name"] == "Efectivo"), 0
-    )
+    efectivo_amount = payments_dict.get("EF", 0)
     net_cash = efectivo_amount + net_cash_flow
 
     # --- Extensión con métricas ---
     cash_summary.extend(
         [
             {
-                "name": "Total de ventas",
+                "name": "Total vendido",
+                "amount": total_sold,
+                "sales_data": True,
+            },
+            {
+                "name": "Total apartado",
+                "amount": total_reservations,
+                "sales_data": True,
+            },
+            {
+                "name": "Total del día",
                 "amount": total_received,
                 "payment_method_data": True,
                 "sales_data": True,
@@ -101,6 +128,10 @@ def calculate_cash_summary(store, date=None, start_date=None, end_date=None):
                 "total_data": True,
             },
             {"name": "Número de ventas", "amount": sales.count()},
+            {
+                "name": "Apartados realizados",
+                "amount": reservations_created.count(),
+            },
             {
                 "name": "Ventas canceladas",
                 "amount": sales_canceled.count(),
