@@ -107,6 +107,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             queryset = queryset.only(
                 'id', 'total', 'created_at', 'reservation_in_progress', 'is_canceled',
+                'sale_type',
                 'store__id', 'store__name',
                 'seller__id', 'seller__username',
                 'client__id', 'client__first_name', 'client__last_name'
@@ -156,40 +157,28 @@ class SaleViewSet(viewsets.ModelViewSet):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                
-                if product_store.stock < product_data["quantity"]:
-                    previous_stock = product_store.stock
-                    product_store.stock = product_data["quantity"]
-                    product_store.save()
-
-                    StoreProductLog.objects.create(
-                        store_product=product_store,
-                        user=self.request.user,
-                        previous_stock=previous_stock,
-                        updated_stock=product_data["quantity"],
-                        action="A"
-                    )
 
                 previous_stock = product_store.stock
-                updated_stock = previous_stock - product_data["quantity"]
 
-                # Actualizar el stock del producto
-                product_store.stock = updated_stock
-                updated_store_products.append(product_store)
+                if reservation_in_progress:
+                    # Apartado: no descontar stock, no crear log
+                    pass
+                else:
+                    # Venta normal: descontar stock
+                    updated_stock = previous_stock - product_data["quantity"]
+                    product_store.stock = updated_stock
+                    updated_store_products.append(product_store)
 
-                # Crear el log correspondiente
-                logs.append(
-                    StoreProductLog(
-                        store_product=product_store,
-                        user=seller,
-                        previous_stock=previous_stock,
-                        updated_stock=(
-                            previous_stock if reservation_in_progress else updated_stock
-                        ),
-                        action="N" if reservation_in_progress else "S",
-                        movement="AP" if reservation_in_progress else "VE",
+                    logs.append(
+                        StoreProductLog(
+                            store_product=product_store,
+                            user=seller,
+                            previous_stock=previous_stock,
+                            updated_stock=updated_stock,
+                            action="S",
+                            movement="VE",
+                        )
                     )
-                )
 
             # Actualizar los stocks de los productos en una sola operación
             if not reservation_in_progress:
@@ -202,6 +191,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                 store=store,
                 seller=seller,
                 reservation_in_progress=reservation_in_progress,
+                sale_type="A" if reservation_in_progress else "V",
             )
 
             # Crear las relaciones de ProductSale
@@ -770,20 +760,35 @@ class StoresCashSummaryView(APIView):
         )
         sp_count_map = {r["store_id"]: r["count"] for r in sp_counts}
 
-        # 1 — Pagos agrupados por tienda y método
-        payments = (
+        # 1 — Pagos de ventas normales agrupados por tienda y método
+        sold_payments = (
             Payment.objects.filter(
                 sale__store_id__in=store_ids,
                 sale__is_canceled=False,
-                sale__reservation_in_progress=False,
-                sale__created_at__date__range=date_range,
+                sale__sale_type="V",
+                created_at__date__range=date_range,
             )
             .values("sale__store_id", "payment_method")
             .annotate(total=Sum("amount"))
         )
-        payments_map = defaultdict(lambda: {"EF": 0, "TA": 0, "TR": 0})
-        for p in payments:
-            payments_map[p["sale__store_id"]][p["payment_method"]] = p["total"] or 0
+        sold_map = defaultdict(lambda: {"EF": 0, "TA": 0, "TR": 0})
+        for p in sold_payments:
+            sold_map[p["sale__store_id"]][p["payment_method"]] = p["total"] or 0
+
+        # 1b — Pagos de apartados agrupados por tienda y método
+        reserved_payments = (
+            Payment.objects.filter(
+                sale__store_id__in=store_ids,
+                sale__is_canceled=False,
+                sale__sale_type="A",
+                created_at__date__range=date_range,
+            )
+            .values("sale__store_id", "payment_method")
+            .annotate(total=Sum("amount"))
+        )
+        reserved_map = defaultdict(lambda: {"EF": 0, "TA": 0, "TR": 0})
+        for p in reserved_payments:
+            reserved_map[p["sale__store_id"]][p["payment_method"]] = p["total"] or 0
 
         # 2 — Ganancia por tienda (aggregate en ProductSale)
         profits = (
@@ -818,6 +823,19 @@ class StoresCashSummaryView(APIView):
         )
         sales_map = {r["store_id"]: r for r in sales_counts}
 
+        # 3b — Conteo de apartados realizados por tienda
+        reservations_counts = (
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                reservation_in_progress=True,
+                is_canceled=False,
+                created_at__date__range=date_range,
+            )
+            .values("store_id")
+            .annotate(count=Count("id"))
+        )
+        reservations_map = {r["store_id"]: r["count"] for r in reservations_counts}
+
         # 4 — CashFlow por tienda
         cashflows = (
             CashFlow.objects.filter(
@@ -832,18 +850,35 @@ class StoresCashSummaryView(APIView):
             cashflow_map[cf["store_id"]][cf["transaction_type"]] = cf["total"] or 0
 
         # --- Construir response ---
-        totals = {"EF": 0, "TA": 0, "TR": 0, "total_payment": 0, "total_sales": 0, "canceled_sales": 0, "profit": 0, "cash": 0}
+        totals = {
+            "EF": 0, "TA": 0, "TR": 0,
+            "total_sold": 0, "total_reserved": 0, "total_day": 0,
+            "total_sales": 0, "reservations_created": 0, "canceled_sales": 0, "profit": 0, "cash": 0,
+        }
         stores_data = []
 
         for store in stores:
             sid = store.id
-            pay = payments_map[sid]
-            ef, ta, tr = pay["EF"], pay["TA"], pay["TR"]
-            total_payment = ef + ta + tr
+            sold = sold_map[sid]
+            reserved = reserved_map[sid]
+
+            sold_ef, sold_ta, sold_tr = sold["EF"], sold["TA"], sold["TR"]
+            res_ef, res_ta, res_tr = reserved["EF"], reserved["TA"], reserved["TR"]
+
+            # Métodos de pago combinados (ventas + apartados)
+            ef = sold_ef + res_ef
+            ta = sold_ta + res_ta
+            tr = sold_tr + res_tr
+
+            total_sold = sold_ef + sold_ta + sold_tr
+            total_reserved = res_ef + res_ta + res_tr
+            total_day = total_sold + total_reserved
+
             sc = sales_map.get(sid, {"total_sales": 0, "canceled_sales": 0})
+            reservations_created = reservations_map.get(sid, 0)
             cf = cashflow_map[sid]
-            income, expenses = cf["E"], cf["S"]
-            net_cashflow = income - expenses
+            cf_income, cf_expenses = cf["E"], cf["S"]
+            net_cashflow = cf_income - cf_expenses
             profit = profit_map.get(sid, 0)
             cash = ef + net_cashflow
 
@@ -860,13 +895,16 @@ class StoresCashSummaryView(APIView):
                     "EF": ef,
                     "TA": ta,
                     "TR": tr,
-                    "total_payment": total_payment,
-                    "income": income,
-                    "expenses": expenses,
+                    "total_sold": total_sold,
+                    "total_reserved": total_reserved,
+                    "total_day": total_day,
+                    "income": cf_income,
+                    "expenses": cf_expenses,
                     "net_cashflow": net_cashflow,
                     "cash": cash,
                     "profit": profit,
                     "total_sales": sc["total_sales"],
+                    "reservations_created": reservations_created,
                     "canceled_sales": sc["canceled_sales"],
                 },
             })
@@ -874,8 +912,11 @@ class StoresCashSummaryView(APIView):
             totals["EF"] += ef
             totals["TA"] += ta
             totals["TR"] += tr
-            totals["total_payment"] += total_payment
+            totals["total_sold"] += total_sold
+            totals["total_reserved"] += total_reserved
+            totals["total_day"] += total_day
             totals["total_sales"] += sc["total_sales"]
+            totals["reservations_created"] += reservations_created
             totals["canceled_sales"] += sc["canceled_sales"]
             totals["profit"] += profit
             totals["cash"] += cash

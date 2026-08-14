@@ -8,10 +8,16 @@ from tenants.models import CreatedAtModel
 
 
 class Sale(CreatedAtModel):
+    SALE_TYPE_CHOICES = [
+        ('A', 'Apartado'),
+        ('V', 'Venta'),
+    ]
+
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True, related_name='sales')
     total = models.DecimalField(max_digits=10, decimal_places=2)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
+    sale_type = models.CharField(max_length=12, choices=SALE_TYPE_CHOICES, default="V")
     reservation_in_progress = models.BooleanField(default=False)
     is_canceled = models.BooleanField(default=False)
     reason_cancel = models.CharField(max_length=50, null=True, blank=True)
