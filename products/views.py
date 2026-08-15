@@ -1023,17 +1023,21 @@ class ProductUpperCodeView(APIView):
 @method_decorator(get_store(), name="dispatch")
 class CashFlowViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
-        if self.request.method == "POST":
+        if self.request.method in ("POST", "PATCH", "PUT"):
             return CashFlowCreateSerializer
         return CashFlowSerializer
 
     def get_queryset(self):
         store = self.request.store
-        start_date = self.request.GET.get("start_date")
-        end_date = self.request.GET.get("end_date")
-        return CashFlow.objects.filter(store=store, created_at__date__range=(start_date, end_date)).order_by(
-            "id"
-        )
+        queryset = CashFlow.objects.filter(store=store)
+
+        if self.action == "list":
+            start_date = self.request.GET.get("start_date")
+            end_date = self.request.GET.get("end_date")
+            if start_date and end_date:
+                queryset = queryset.filter(created_at__date__range=(start_date, end_date))
+
+        return queryset.order_by("id")
 
     @action(detail=False, methods=["get"])
     def choices(self, request):
@@ -1043,10 +1047,12 @@ class CashFlowViewSet(viewsets.ModelViewSet):
         ]
         return Response(choices)
 
-    def perform_create(self, serializer):
-        store = self.request.store
-        sale_instance = serializer.save(store=store, user=self.request.user)
-        return sale_instance
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save(store=request.store, user=request.user)
+        response_serializer = CashFlowSerializer(instance)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ProductDeleteView(APIView):
