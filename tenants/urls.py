@@ -17,6 +17,7 @@ urlpatterns += [
     path('redeploy-render/', views.RenderRedeployView.as_view(), name='redeploy-render'),
     path('tenant-info/', views.TenantInfoView.as_view(), name='tenant-info'),
     path('create-products-on-sale/', views.CreateProductsOnSaleView.as_view(), name='create-products-on-sale'),
+    path('can-create-store/', views.CanCreateStoreView.as_view(), name='can-create-store'),
     path('current-plan/', views.CurrentPlanView.as_view(), name='current-plan'),
     path('plan-equivalent/', views.PlanEquivalentView.as_view(), name='plan-equivalent'),
     path('subscriptions/create/', views.CreateSubscriptionView.as_view(), name='subscriptions-create'),

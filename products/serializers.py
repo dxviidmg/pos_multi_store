@@ -126,6 +126,7 @@ class StoreBaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Store
         fields = "__all__"
+        read_only_fields = ["tenant", "manager"]
 
 
 class StoreProductBaseSerializer(serializers.ModelSerializer):

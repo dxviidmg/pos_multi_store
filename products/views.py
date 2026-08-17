@@ -395,6 +395,10 @@ class StoreViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def perform_create(self, serializer):
+        tenant = self.request.user.get_tenant()
+        serializer.save(tenant=tenant)
+
 
 @method_decorator(get_store(), name="dispatch")
 class TransferConfirmView(APIView):

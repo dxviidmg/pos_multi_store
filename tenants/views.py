@@ -231,7 +231,7 @@ class TenantInfoView(APIView):
         else:
             # Sin domiciliación: flujo manual
             if not payment:
-                notices.append({"notice": "No se encontró un pago activo. Regularice su cuenta para continuar.", "variant": "error"})
+                notices.append({"notice": "No se encontró un pago activo. Regularice su cuenta.", "variant": "error"})
                 show_mp_modal = True
             else:
                 days_diff = (payment.end_of_validity - date.today()).days
@@ -332,6 +332,20 @@ class RenderRedeployView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
+
+class CanCreateStoreView(APIView):
+    def get(self, request):
+        tenant = request.user.get_tenant()
+        plan = tenant.get_plan()
+
+        if not plan:
+            return Response({"can_create": False})
+
+        from products.models import Store
+        current_stores = Store.objects.filter(tenant=tenant).count()
+
+        return Response({"can_create": current_stores < plan.stores})
 
 
 class CurrentPlanView(APIView):
