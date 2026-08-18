@@ -536,6 +536,9 @@ class SaleCancelView(APIView):
             )
 
     def _cancel_full(self, request, sale):
+        if sale.sale_type == "A":
+            return self._cancel_reservation(request, sale)
+
         logs = []
         with transaction.atomic():
             for ps in sale.products_sale.all():
@@ -559,6 +562,37 @@ class SaleCancelView(APIView):
 
         return Response(
             {"sale": SaleSerializer(sale).data, "cash_back": sale.total},
+            status=status.HTTP_200_OK,
+        )
+
+    def _cancel_reservation(self, request, sale):
+        today = timezone.now().date()
+
+        with transaction.atomic():
+            # Pagos de días anteriores que ya se reflejaron en cortes pasados
+            previous_days_amount = (
+                sale.payments.exclude(created_at__date=today)
+                .aggregate(total=Sum("amount"))["total"] or 0
+            )
+
+            # Crear CashFlow de salida solo por pagos de días anteriores
+            if previous_days_amount > 0:
+                CashFlow.objects.create(
+                    store=sale.store,
+                    concept=f"Devolución apartado #{sale.pk}",
+                    transaction_type="S",
+                    amount=previous_days_amount,
+                    user=request.user,
+                )
+
+            sale.is_canceled = True
+            sale.reason_cancel = request.data.get("reason_cancel", "")
+            sale.save(update_fields=["is_canceled", "reason_cancel"])
+
+        cash_back = sale.get_paid()
+
+        return Response(
+            {"sale": SaleSerializer(sale).data, "cash_back": cash_back},
             status=status.HTTP_200_OK,
         )
 

@@ -37,6 +37,7 @@ from .models import (
     Store,
     StockUpdateRequest,
     StoreProduct,
+    StoreProductConversion,
     StoreWorker,
     Transfer,
 )
@@ -46,6 +47,7 @@ from .serializers import (
     CashFlowSerializer,
     DepartmentSerializer,
     DistributionSerializer,
+    StoreProductConversionSerializer,
     ProductSerializer,
     StockUpdateRequestSerializer,
     StoreBaseSerializer,
@@ -394,6 +396,10 @@ class StoreViewSet(viewsets.ModelViewSet):
             queryset = queryset.exclude(id=store.id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        tenant = self.request.user.get_tenant()
+        serializer.save(tenant=tenant)
 
 
 @method_decorator(get_store(), name="dispatch")
@@ -1023,17 +1029,21 @@ class ProductUpperCodeView(APIView):
 @method_decorator(get_store(), name="dispatch")
 class CashFlowViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
-        if self.request.method == "POST":
+        if self.request.method in ("POST", "PATCH", "PUT"):
             return CashFlowCreateSerializer
         return CashFlowSerializer
 
     def get_queryset(self):
         store = self.request.store
-        start_date = self.request.GET.get("start_date")
-        end_date = self.request.GET.get("end_date")
-        return CashFlow.objects.filter(store=store, created_at__date__range=(start_date, end_date)).order_by(
-            "id"
-        )
+        queryset = CashFlow.objects.filter(store=store)
+
+        if self.action == "list":
+            start_date = self.request.GET.get("start_date")
+            end_date = self.request.GET.get("end_date")
+            if start_date and end_date:
+                queryset = queryset.filter(created_at__date__range=(start_date, end_date))
+
+        return queryset.order_by("id")
 
     @action(detail=False, methods=["get"])
     def choices(self, request):
@@ -1043,10 +1053,12 @@ class CashFlowViewSet(viewsets.ModelViewSet):
         ]
         return Response(choices)
 
-    def perform_create(self, serializer):
-        store = self.request.store
-        sale_instance = serializer.save(store=store, user=self.request.user)
-        return sale_instance
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save(store=request.store, user=request.user)
+        response_serializer = CashFlowSerializer(instance)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ProductDeleteView(APIView):
@@ -1504,3 +1516,80 @@ class PendingTransfersDashboardView(APIView):
         store_ids = list(Store.objects.filter(tenant=tenant, store_type='T').values_list("id", flat=True))
         task = get_pending_transfers_dashboard.delay(store_ids)
         return Response({"task": task.id})
+
+
+class StoreProductConversionViewSet(viewsets.ModelViewSet):
+    serializer_class = StoreProductConversionSerializer
+
+    def get_queryset(self):
+        tenant = self.request.user.get_tenant()
+        return StoreProductConversion.objects.filter(
+            source_store_product__store__tenant=tenant
+        )
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def apply(self, request, pk=None):
+        conversion = self.get_object()
+
+        source_sp = StoreProduct.objects.select_for_update().get(pk=conversion.source_store_product_id)
+        target_sp = StoreProduct.objects.select_for_update().get(pk=conversion.target_store_product_id)
+
+        total_to_add = int(conversion.factor)
+
+        if source_sp.stock < 1:
+            raise ValidationError(
+                f"Stock insuficiente. Disponible: {source_sp.stock}, solicitado: 1"
+            )
+
+        previous_source_stock = source_sp.stock
+        previous_target_stock = target_sp.stock
+
+        source_sp.stock -= 1
+        source_sp.save()
+
+        target_sp.stock += total_to_add
+        target_sp.save()
+
+        StoreProductLog.objects.bulk_create([
+            StoreProductLog(
+                store_product=source_sp,
+                user=request.user,
+                previous_stock=previous_source_stock,
+                updated_stock=source_sp.stock,
+                action="S",
+                movement="CO",
+            ),
+            StoreProductLog(
+                store_product=target_sp,
+                user=request.user,
+                previous_stock=previous_target_stock,
+                updated_stock=target_sp.stock,
+                action="E",
+                movement="CO",
+            ),
+        ])
+
+        return Response({
+            "status": "Conversión aplicada",
+        })
+
+    @action(detail=False, methods=['get'])
+    def units(self, request):
+        from core.constants import Unit
+        choices = [{"value": value, "label": label} for value, label in Unit.choices]
+        return Response(choices)
+
+    def perform_create(self, serializer):
+        tenant = self.request.user.get_tenant()
+        source = serializer.validated_data['source_store_product']
+        target = serializer.validated_data['target_store_product']
+
+        if source.store.tenant != tenant or target.store.tenant != tenant:
+            raise ValidationError("Los productos deben pertenecer a tu negocio.")
+
+        if source.store != target.store:
+            raise ValidationError("Ambos productos deben estar en la misma tienda.")
+
+        serializer.save()
+

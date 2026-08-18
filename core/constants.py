@@ -21,6 +21,7 @@ class LogMovement(models.TextChoices):
     DEVOLUCION = "DE", "Devolución"
     VENTA = "VE", "Venta"
     APARTADO = "AP", "Apartado"
+    CONVERSION = "CO", "Conversión"
 
 
 class PaymentMethod(models.TextChoices):
@@ -46,3 +47,14 @@ class WorkerRole(models.TextChoices):
     """Roles de trabajadores"""
     ADMIN = "A", "Administrador"
     VENDEDOR = "V", "Vendedor"
+
+
+class Unit(models.TextChoices):
+    """Unidades de medida para conversiones"""
+    PIEZA = "PZ", "Pieza"
+    KG = "KG", "Kilogramo"
+    COSTAL = "CO", "Costal"
+    LITRO = "LT", "Litro"
+    METRO = "MT", "Metro"
+    ROLLO = "RL", "Rollo"
+    CAJA = "CJ", "Caja"
