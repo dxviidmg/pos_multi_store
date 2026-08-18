@@ -199,7 +199,7 @@ class PublicPlansView(APIView):
 
     def get(self, request):
         from .serializers import PlanSerializer
-        plans = Plan.objects.filter(billing_type="S", is_sandbox=False)
+        plans = Plan.objects.filter(billing_type="S", is_sandbox=False).order_by('stores')
         serializer = PlanSerializer(plans, many=True)
         return Response(serializer.data)
 
