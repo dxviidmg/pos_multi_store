@@ -18,7 +18,7 @@ from .models import (
     Store,
     StockUpdateRequest,
     StoreProduct,
-    StoreProductConversion,
+    ProductConversion,
     StoreWorker,
     Transfer,
 )
@@ -313,12 +313,12 @@ class StockUpdateRequestSerializer(serializers.ModelSerializer):
         read_only_fields = ['requested_by', 'applied']
 
 
-class StoreProductConversionSerializer(serializers.ModelSerializer):
+class ProductConversionSerializer(serializers.ModelSerializer):
     source_unit_display = serializers.CharField(source='get_source_unit_display', read_only=True)
     target_unit_display = serializers.CharField(source='get_target_unit_display', read_only=True)
-    source_product_name = serializers.CharField(source='source_store_product.product.get_description', read_only=True)
-    target_product_name = serializers.CharField(source='target_store_product.product.get_description', read_only=True)
+    source_product_name = serializers.CharField(source='source_product.get_description', read_only=True)
+    target_product_name = serializers.CharField(source='target_product.get_description', read_only=True)
 
     class Meta:
-        model = StoreProductConversion
+        model = ProductConversion
         fields = '__all__'

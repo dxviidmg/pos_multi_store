@@ -15,7 +15,7 @@ router.register('cash-flow', views.CashFlowViewSet, basename='cash-flow')
 router.register('store-worker', views.StoreWorkerViewSet, basename='store-worker')
 router.register('stock-update-request', views.StockUpdateRequestViewSet, basename='stock-update-request')
 router.register('distribution', views.DistributionViewSet, basename='distribution')
-router.register('store-product-conversion', views.StoreProductConversionViewSet, basename='store-product-conversion')
+router.register('product-conversion', views.ProductConversionViewSet, basename='product-conversion')
 
 urlpatterns = router.urls
 

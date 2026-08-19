@@ -284,16 +284,16 @@ class StockUpdateRequest(CreatedAtModel):
         return f"{self.store_product} -> {self.requested_stock} ({'Aplicada' if self.applied else 'Pendiente'})"
 
 
-class StoreProductConversion(models.Model):
-    source_store_product = models.ForeignKey(
-        StoreProduct, on_delete=models.CASCADE, related_name='conversions_from'
+class ProductConversion(models.Model):
+    source_product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name='conversions_from'
     )
-    target_store_product = models.ForeignKey(
-        StoreProduct, on_delete=models.CASCADE, related_name='conversions_to'
+    target_product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name='conversions_to'
     )
     factor = models.PositiveIntegerField(default=10)  # 1 source → N target
     source_unit = models.CharField(max_length=2, choices=Unit.choices)
     target_unit = models.CharField(max_length=2, choices=Unit.choices)
 
     def __str__(self):
-        return f"1 {self.get_source_unit_display()} → {self.factor} {self.get_target_unit_display()} ({self.source_store_product.product.name})"
+        return f"1 {self.get_source_unit_display()} → {self.factor} {self.get_target_unit_display()} ({self.source_product.name})"

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Store, Product, StoreProduct, Brand, Transfer, CashFlow, StoreWorker, Department, Distribution, StockUpdateRequest, StoreProductConversion
+from .models import Store, Product, StoreProduct, Brand, Transfer, CashFlow, StoreWorker, Department, Distribution, StockUpdateRequest, ProductConversion
 
 
 @admin.register(Product)
@@ -53,8 +53,8 @@ admin.site.register(Distribution)
 
 admin.site.register(StockUpdateRequest)
 
-@admin.register(StoreProductConversion)
-class StoreProductConversionAdmin(admin.ModelAdmin):
-    search_fields = ['source_store_product__product__name', 'target_store_product__product__name']
-    list_display = ['id', 'source_store_product', 'target_store_product', 'factor', 'source_unit', 'target_unit']
-    list_filter = ['source_store_product__store__tenant', 'source_store_product__store']
+@admin.register(ProductConversion)
+class ProductConversionAdmin(admin.ModelAdmin):
+    search_fields = ['source_product__name', 'target_product__name']
+    list_display = ['id', 'source_product', 'target_product', 'factor', 'source_unit', 'target_unit']
+    list_filter = ['source_product__brand__tenant']
