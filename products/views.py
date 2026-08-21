@@ -37,7 +37,7 @@ from .models import (
     Store,
     StockUpdateRequest,
     StoreProduct,
-    StoreProductConversion,
+    ProductConversion,
     StoreWorker,
     Transfer,
 )
@@ -47,7 +47,7 @@ from .serializers import (
     CashFlowSerializer,
     DepartmentSerializer,
     DistributionSerializer,
-    StoreProductConversionSerializer,
+    ProductConversionSerializer,
     ProductSerializer,
     StockUpdateRequestSerializer,
     StoreBaseSerializer,
@@ -1518,22 +1518,31 @@ class PendingTransfersDashboardView(APIView):
         return Response({"task": task.id})
 
 
-class StoreProductConversionViewSet(viewsets.ModelViewSet):
-    serializer_class = StoreProductConversionSerializer
+@method_decorator(get_store(), name="dispatch")
+class ProductConversionViewSet(viewsets.ModelViewSet):
+    serializer_class = ProductConversionSerializer
 
     def get_queryset(self):
         tenant = self.request.user.get_tenant()
-        return StoreProductConversion.objects.filter(
-            source_store_product__store__tenant=tenant
+        return ProductConversion.objects.filter(
+            source_product__brand__tenant=tenant
         )
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def apply(self, request, pk=None):
         conversion = self.get_object()
+        store = request.store
 
-        source_sp = StoreProduct.objects.select_for_update().get(pk=conversion.source_store_product_id)
-        target_sp = StoreProduct.objects.select_for_update().get(pk=conversion.target_store_product_id)
+        if not store:
+            raise ValidationError("Se requiere el header store-id.")
+
+        source_sp = StoreProduct.objects.select_for_update().get(
+            product=conversion.source_product, store=store
+        )
+        target_sp = StoreProduct.objects.select_for_update().get(
+            product=conversion.target_product, store=store
+        )
 
         total_to_add = int(conversion.factor)
 
@@ -1582,14 +1591,11 @@ class StoreProductConversionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant = self.request.user.get_tenant()
-        source = serializer.validated_data['source_store_product']
-        target = serializer.validated_data['target_store_product']
+        source = serializer.validated_data['source_product']
+        target = serializer.validated_data['target_product']
 
-        if source.store.tenant != tenant or target.store.tenant != tenant:
+        if source.brand.tenant != tenant or target.brand.tenant != tenant:
             raise ValidationError("Los productos deben pertenecer a tu negocio.")
-
-        if source.store != target.store:
-            raise ValidationError("Ambos productos deben estar en la misma tienda.")
 
         serializer.save()
 
