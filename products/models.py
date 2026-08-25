@@ -125,8 +125,11 @@ class Product(Base):
     min_wholesale_quantity = models.IntegerField(null=True, blank=True)
     wholesale_price_on_client_discount = models.BooleanField(default=False)
     image = models.ImageField(upload_to=path, null=True, blank=True)
-    sells_by_weight = models.BooleanField(default=False)
     unit = models.CharField(max_length=2, choices=Unit.choices, default=Unit.PIEZA)
+
+    @property
+    def sells_by_weight(self):
+        return self.unit == Unit.KG
 
     def clean(self):
         if (

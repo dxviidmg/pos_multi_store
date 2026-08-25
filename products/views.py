@@ -27,6 +27,8 @@ from .import_utils import (
     rename_store_product_columns,
     validate_quantities,
     clean_row_data,
+    parse_unit,
+    parse_sells_by_weight_to_unit,
 )
 from .models import (
     Brand,
@@ -862,6 +864,17 @@ class ProductImportValidationView(APIView):
                         if not is_positivo:
                             data_row["status"] = "Cantidad debe ser un número positivo"
 
+                    # Validar unidad
+                    if data_row.get("unit") is not None and str(data_row["unit"]).strip() != "":
+                        unit_val = str(data_row["unit"]).strip().upper()
+                        if unit_val not in ("PZ", "KG", "CO"):
+                            data_row["status"] = "Unidad inválida. Valores válidos: PZ, KG, CO"
+
+                    # Validar venta por peso + mayoreo
+                    unit_for_check = data_row.get("unit")
+                    if unit_for_check and str(unit_for_check).strip().upper() == "KG" and data_row.get("wholesale_price") is not None:
+                        data_row["status"] = "Productos a granel no pueden tener precio de mayoreo"
+
                 data.append(data_row)
 
             return Response(data, status=status.HTTP_200_OK)
@@ -914,7 +927,7 @@ class ProductImport(APIView):
 
                 data_row = clean_row_data(data_row)
 
-                quantity = data_row.pop("quantity")
+                quantity = data_row.pop("quantity", None)
                 brand_name = data_row["brand"]
                 if brand_name not in brand_cache:
                     brand_cache[brand_name], _ = Brand.objects.get_or_create(
@@ -943,6 +956,10 @@ class ProductImport(APIView):
                 data_row["wholesale_price_on_client_discount"] = bool(
                     data_row["wholesale_price_on_client_discount"]
                 )
+
+                # Parsear unit (la columna legacy "Venta por peso" ya no existe en el rename)
+                raw_unit = data_row.pop("unit", None)
+                data_row["unit"] = parse_unit(raw_unit)
 
                 if len(data_row["name"]) > 100:
                     data_row["name"] = data_row["name"][:100]

@@ -76,6 +76,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
 class ProductSearchSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source='brand.name', read_only=True)
     prices = serializers.SerializerMethodField()
+    sells_by_weight = serializers.BooleanField(read_only=True)
 
     def get_prices(self, obj):
         return {
@@ -96,6 +97,7 @@ class ProductSerializer(serializers.ModelSerializer):
     department_name = serializers.SerializerMethodField()
     apply_wholesale = serializers.SerializerMethodField()
     stock = serializers.SerializerMethodField()
+    sells_by_weight = serializers.BooleanField(read_only=True)
 
     def get_department_name(self, obj):
         return obj.department.name if obj.department else ''

@@ -1,0 +1,142 @@
+# =============================================================================
+# SmartVenta — Feature: Importación de productos con unidad y venta a granel
+# =============================================================================
+#
+# Problema:
+#   Con el nuevo campo `unit` y `sells_by_weight` en Product, la importación
+#   masiva de productos debe permitir definir la unidad de venta y si el
+#   producto se vende a granel desde el Excel.
+#
+# Solución:
+#   Agregar columnas opcionales "Unidad" y "Venta por peso" al Excel de
+#   importación. Si no se incluyen, se usan los defaults (PZ, No).
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Nuevas columnas en el Excel
+# -----------------------------------------------------------------------------
+excel_template:
+  columns:
+    existing:
+      - "Código"
+      - "Marca"
+      - "Departamento"
+      - "Nombre"
+      - "Costo"
+      - "Precio unitario"
+      - "Precio mayoreo"
+      - "Cantidad minima mayoreo"
+      - "Precio Mayoreo en descuento de clientes"
+      - "Cantidad"  # solo si import_stock == "Y"
+
+    new_optional:
+      - name: "Unidad"
+        description: "Unidad de venta del producto"
+        valid_values: ["PZ", "KG", "CO"]
+        default: "PZ"
+        case_insensitive: true
+        notes: "Si la columna no existe en el Excel, todos los productos se importan como PZ"
+
+      - name: "Venta por peso"
+        description: "Si el producto se vende a granel"
+        valid_values: ["Si", "No", "S", "N", "SI", "NO", "1", "0", "", null]
+        default: false (No)
+        notes: |
+          Valores truthy: "Si", "S", "SI", "1"
+          Valores falsy: "No", "N", "NO", "0", vacío, null
+          Si la columna no existe, todos se importan como sells_by_weight=False
+
+# -----------------------------------------------------------------------------
+# 2. Cambios en import_utils.py
+# -----------------------------------------------------------------------------
+changes:
+  validate_excel_columns:
+    - "NO agregar 'Unidad' ni 'Venta por peso' a expected_columns (son opcionales)"
+    - "La validación actual solo valida las columnas requeridas, esto no cambia"
+
+  rename_product_columns:
+    add_mappings:
+      - "Unidad": "unit"
+      - "Venta por peso": "sells_by_weight"
+
+  clean_row_data:
+    - "Sin cambios — ya maneja strips de strings"
+
+# -----------------------------------------------------------------------------
+# 3. Cambios en ProductImportValidationView
+# -----------------------------------------------------------------------------
+validation_view:
+  new_validations:
+    unit:
+      - "Si la columna 'unit' existe en el row:"
+      - "  Validar que el valor esté en ['PZ', 'KG', 'CO'] (case insensitive)"
+      - "  Si no es válido: status = 'Unidad inválida. Valores válidos: PZ, KG, CO'"
+      - "Si la columna no existe o el valor es vacío/null: no marcar error (usa default)"
+
+    sells_by_weight:
+      - "Si la columna 'sells_by_weight' existe en el row:"
+      - "  Parsear valor truthy/falsy"
+      - "  No requiere validación extra (cualquier valor no truthy = False)"
+
+    business_rules:
+      - "Si sells_by_weight=True y wholesale_price != null:"
+      - "  status = 'Productos a granel no pueden tener precio de mayoreo'"
+
+# -----------------------------------------------------------------------------
+# 4. Cambios en ProductImport (creación real)
+# -----------------------------------------------------------------------------
+import_view:
+  logic:
+    - "Antes de crear el Product, extraer y procesar los campos nuevos:"
+    - "  unit = data_row.pop('unit', None)"
+    - "  sells_by_weight = data_row.pop('sells_by_weight', None)"
+    - ""
+    - "  Parsear unit:"
+    - "    Si unit es None/vacío → 'PZ'"
+    - "    Si unit es string → upper().strip(), validar en ['PZ', 'KG', 'CO']"
+    - "    Si inválido → skip row (no debería llegar aquí si se validó antes)"
+    - ""
+    - "  Parsear sells_by_weight:"
+    - "    Si es None/vacío → False"
+    - "    Si es string → True si upper() in ['SI', 'S', '1'] else False"
+    - "    Si es bool → usar directo"
+    - "    Si es int/float → bool(value)"
+    - ""
+    - "  Asignar al data_row antes de Product(**data_row):"
+    - "    data_row['unit'] = parsed_unit"
+    - "    data_row['sells_by_weight'] = parsed_sells_by_weight"
+
+# -----------------------------------------------------------------------------
+# 5. Validación de quantities (ajuste)
+# -----------------------------------------------------------------------------
+validate_quantities:
+  current: "Valida que todas las cantidades sean enteros"
+  new: |
+    Cambiar validación para aceptar decimales:
+    - Si el producto tiene unit=KG o sells_by_weight=True → acepta decimal
+    - Si el producto tiene unit=PZ y sells_by_weight=False → acepta solo enteros
+    
+    Alternativa simple (recomendada):
+    - Aceptar siempre números positivos (int o float)
+    - Cambiar la validación a: "es un número > 0" sin importar si es entero o decimal
+    - El DecimalField del modelo se encarga del resto
+
+# -----------------------------------------------------------------------------
+# 6. Ejemplo de Excel
+# -----------------------------------------------------------------------------
+example:
+  headers: ["Código", "Marca", "Departamento", "Nombre", "Costo", "Precio unitario", "Precio mayoreo", "Cantidad minima mayoreo", "Precio Mayoreo en descuento de clientes", "Unidad", "Venta por peso", "Cantidad"]
+  rows:
+    - ["ARROZ1", "MarcaX", "Abarrotes", "Arroz 1kg", 15, 25, null, null, "No", "PZ", "No", 50]
+    - ["JAMON", "FUD", "Carnes frías", "Jamón premium", 80, 120, null, null, "No", "KG", "Si", 5.5]
+    - ["MAIZ25", "Purina", "Alimento", "Maíz costal 25kg", 200, 280, 260, 3, "No", "CO", "No", 10]
+
+# -----------------------------------------------------------------------------
+# 7. Respuesta de validación (sin cambios en estructura)
+# -----------------------------------------------------------------------------
+validation_response:
+  notes: |
+    La respuesta sigue siendo un array de objetos con los datos del row + campo "status".
+    Los campos "unit" y "sells_by_weight" aparecerán en la respuesta si existían en el Excel.
+    El frontend puede mostrarlos en la tabla de preview.
