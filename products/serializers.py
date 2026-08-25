@@ -173,7 +173,7 @@ class ProductForStockSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ["id", "code", "brand_name", "name", "image"]
+        fields = ["id", "code", "brand_name", "name", "image", "unit"]
 
 
 class StoreProductForStockSerializer(serializers.ModelSerializer):
