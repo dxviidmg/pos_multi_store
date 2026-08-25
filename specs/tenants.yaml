@@ -1,0 +1,839 @@
+# =============================================================================
+# SmartVenta — Módulo Tenants
+# Spec-Driven Development · OpenAPI 3.0
+# =============================================================================
+openapi: "3.0.3"
+
+info:
+  title: SmartVenta — Tenants API
+  version: "1.0.0"
+  description: |
+    Gestión del negocio (tenant), planes de suscripción, pagos manuales,
+    suscripciones recurrentes con Mercado Pago y webhooks.
+
+servers:
+  - url: /api
+    description: Base path de la API
+
+# =============================================================================
+# Seguridad global
+# =============================================================================
+security:
+  - tokenAuth: []
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  # ===========================================================================
+  # Tenant
+  # ===========================================================================
+  /tenant/{id}/:
+    get:
+      operationId: tenant_retrieve
+      summary: Obtener datos del tenant del usuario autenticado
+      description: Ignora el ID del path; siempre retorna el tenant del usuario.
+      tags: [Tenant]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Datos del tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      operationId: tenant_update
+      summary: Actualizar configuración del tenant
+      tags: [Tenant]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantUpdateRequest"
+      responses:
+        "200":
+          description: Tenant actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      operationId: tenant_partial_update
+      summary: Actualizar parcialmente el tenant
+      tags: [Tenant]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantUpdateRequest"
+      responses:
+        "200":
+          description: Tenant actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+
+  /tenant-info/:
+    get:
+      operationId: tenant_info
+      summary: Información de estado del tenant
+      description: |
+        Retorna avisos de vencimiento, si debe mostrarse el modal de pago
+        y la cantidad total de productos del catálogo.
+      tags: [Tenant]
+      responses:
+        "200":
+          description: Info del tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tenant-exists/:
+    get:
+      operationId: tenant_exists
+      summary: Verificar si un short_name ya está en uso
+      description: Endpoint público protegido por API Key.
+      tags: [Tenant]
+      security:
+        - apiKey: []
+      parameters:
+        - name: short_name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resultado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exists:
+                    type: boolean
+        "400":
+          description: short_name no proporcionado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /create-tenant/:
+    post:
+      operationId: tenant_create_public
+      summary: Crear nuevo negocio con suscripción
+      description: |
+        Endpoint público (API Key). Crea tenant + owner + suscripción en Mercado Pago.
+        Si el plan no tiene mp_plan_id, lo crea automáticamente en MP.
+      tags: [Tenant]
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantCreateRequest"
+      responses:
+        "201":
+          description: Tenant creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantCreateResponse"
+        "400":
+          description: Datos inválidos, short_name duplicado o error de pago
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Plan no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /create-products-on-sale/:
+    get:
+      operationId: tenant_create_products_on_sale
+      summary: Consultar si el tenant crea productos al vender
+      tags: [Tenant]
+      responses:
+        "200":
+          description: Configuración
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  create_products_on_sale:
+                    type: boolean
+
+  /can-create-store/:
+    get:
+      operationId: tenant_can_create_store
+      summary: Verificar si el tenant puede crear más tiendas
+      description: Compara la cantidad actual de tiendas con el límite del plan.
+      tags: [Tenant]
+      responses:
+        "200":
+          description: Resultado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  can_create:
+                    type: boolean
+
+  /tenant-dates/:
+    get:
+      operationId: tenant_dates
+      summary: Fechas clave del tenant
+      description: Retorna fecha de creación, fecha de suscripción activa y primer pago.
+      tags: [Tenant]
+      responses:
+        "200":
+          description: Fechas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenant_created_at:
+                    type: string
+                    format: date-time
+                  active_subscription_date:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  first_payment_date:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+  # ===========================================================================
+  # Plans
+  # ===========================================================================
+  /plans/:
+    get:
+      operationId: plan_list
+      summary: Listar planes de suscripción disponibles
+      description: Endpoint público (API Key). Retorna planes activos de tipo suscripción.
+      tags: [Plans]
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Lista de planes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+
+  /current-plan/:
+    get:
+      operationId: plan_current
+      summary: Plan actual del tenant
+      description: Solo accesible por owners.
+      tags: [Plans]
+      responses:
+        "200":
+          description: Plan actual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentPlanResponse"
+        "403":
+          description: Solo owners pueden consultar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /plan-equivalent/:
+    get:
+      operationId: plan_equivalent
+      summary: Plan equivalente de suscripción
+      description: Busca un plan de tipo "S" con la misma cantidad de tiendas que el plan actual.
+      tags: [Plans]
+      responses:
+        "200":
+          description: Plan equivalente encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  price:
+                    type: string
+                    format: decimal
+                  stores:
+                    type: integer
+        "404":
+          description: No hay plan equivalente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ===========================================================================
+  # Payments (manuales)
+  # ===========================================================================
+  /payment/:
+    get:
+      operationId: payment_list
+      summary: Listar pagos del tenant
+      description: Historial de pagos ordenados por más reciente.
+      tags: [Payments]
+      responses:
+        "200":
+          description: Lista de pagos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: payment_create
+      summary: Registrar pago manual
+      description: |
+        Crea un pago. El total y las fechas de vigencia se calculan automáticamente
+        basándose en el plan del tenant y el último pago registrado.
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [months]
+              properties:
+                months:
+                  type: integer
+                  minimum: 1
+                  description: Cantidad de meses a pagar
+      responses:
+        "201":
+          description: Pago registrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /payment/{id}/:
+    get:
+      operationId: payment_retrieve
+      summary: Detalle de un pago
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Detalle del pago
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+    delete:
+      operationId: payment_delete
+      summary: Eliminar pago
+      tags: [Payments]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminado
+
+  # ===========================================================================
+  # Subscriptions (Mercado Pago)
+  # ===========================================================================
+  /subscriptions/:
+    get:
+      operationId: subscription_list
+      summary: Listar suscripciones del tenant
+      tags: [Subscriptions]
+      responses:
+        "200":
+          description: Lista de suscripciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscription"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /subscriptions/create/:
+    post:
+      operationId: subscription_create
+      summary: Crear suscripción recurrente con Mercado Pago
+      description: |
+        Crea un preapproval en MP. Cancela suscripciones anteriores del tenant.
+        Solo accesible por owners.
+      tags: [Subscriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionCreateRequest"
+      responses:
+        "201":
+          description: Suscripción creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionCreateResponse"
+        "400":
+          description: Campos faltantes o error de MP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Solo owners
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Plan no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ===========================================================================
+  # Mercado Pago Preference (pago único)
+  # ===========================================================================
+  /mercadopago/:
+    post:
+      operationId: mercadopago_preference
+      summary: Crear preferencia de pago en Mercado Pago
+      description: |
+        Genera un link de pago (init_point) para pagos manuales.
+        Calcula automáticamente los meses adeudados.
+      tags: [Payments]
+      responses:
+        "200":
+          description: Preferencia creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  init_point:
+                    type: string
+                    format: uri
+                    description: URL de pago de Mercado Pago
+        "400":
+          description: No tiene plan asignado o error de MP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ===========================================================================
+  # Webhooks
+  # ===========================================================================
+  /webhooks/mp/:
+    post:
+      operationId: mp_webhook
+      summary: Webhook de Mercado Pago
+      description: |
+        Recibe notificaciones de pagos aprobados y cambios de estado de suscripciones.
+        - `payment`: registra el pago automáticamente para el tenant.
+        - `subscription_preapproval`: actualiza el estado local de la suscripción.
+      tags: [Webhooks]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: "Tipo de evento: 'payment' o 'subscription_preapproval'"
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+      responses:
+        "200":
+          description: Notificación procesada
+
+  # ===========================================================================
+  # Redeploy
+  # ===========================================================================
+  /redeploy-render/:
+    get:
+      operationId: redeploy_render
+      summary: Disparar redeploy en Render
+      description: Lanza un nuevo deploy del servicio web en Render.
+      tags: [System]
+      responses:
+        "200":
+          description: Deploy iniciado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deploy:
+                    type: object
+        "500":
+          description: Error al disparar deploy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  # ---------------------------------------------------------------------------
+  # Security Schemes
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Token authentication. Formato: `Token <tu-token>`"
+
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key para endpoints públicos
+
+  # ---------------------------------------------------------------------------
+  # Parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+        short_name:
+          type: string
+          readOnly: true
+        is_sandbox:
+          type: boolean
+          readOnly: true
+        displays_stock_in_storages:
+          type: boolean
+          description: Si true, muestra stock de almacenes a vendedores.
+        create_products_on_sale:
+          type: boolean
+          description: Si true, crea StoreProduct automáticamente al vender.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    TenantUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        displays_stock_in_storages:
+          type: boolean
+        create_products_on_sale:
+          type: boolean
+
+    TenantCreateRequest:
+      type: object
+      required: [name, short_name, first_name, last_name, email, plan_id, card_token, payer_email]
+      properties:
+        name:
+          type: string
+          description: Nombre del negocio
+        short_name:
+          type: string
+          description: Código corto único (se convierte a mayúsculas)
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          description: Si no se envía, usa el username generado.
+        plan_id:
+          type: integer
+          description: ID del plan de suscripción
+        card_token:
+          type: string
+          description: Token de tarjeta generado por Mercado Pago JS SDK
+        payer_email:
+          type: string
+          format: email
+        payment_method_id:
+          type: string
+          default: "credit_card"
+          enum: ["credit_card", "debit_card"]
+
+    TenantCreateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        short_name:
+          type: string
+        username:
+          type: string
+          description: Username generado para el owner
+        mp_subscription_id:
+          type: string
+
+    TenantInfo:
+      type: object
+      properties:
+        notices:
+          type: array
+          description: Avisos de vencimiento o estado
+          items:
+            type: object
+            properties:
+              notice:
+                type: string
+              variant:
+                type: string
+                enum: ["success", "warning", "error"]
+        product_count:
+          type: integer
+          description: Cantidad total de productos en el catálogo
+        show_mp_modal:
+          type: boolean
+          description: Si true, mostrar modal de pago al usuario
+
+    Plan:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        price:
+          type: string
+          format: decimal
+          description: Precio mensual en MXN
+        stores:
+          type: integer
+          description: Cantidad máxima de tiendas incluidas
+        billing_type:
+          type: string
+          enum: ["S", "M"]
+          description: "S = Suscripción, M = Manual"
+
+    CurrentPlanResponse:
+      type: object
+      properties:
+        has_plan:
+          type: boolean
+        message:
+          type: string
+          description: Solo presente si has_plan es false
+        plan:
+          type: object
+          description: Solo presente si has_plan es true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            price:
+              type: string
+              format: decimal
+            stores:
+              type: integer
+            billing_type:
+              type: string
+              enum: ["S", "M"]
+            billing_type_display:
+              type: string
+              example: "Suscripción"
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenant:
+          type: integer
+        months:
+          type: integer
+        total:
+          type: string
+          format: decimal
+          description: Calculado automáticamente (plan.price × months)
+        start_of_validity:
+          type: string
+          format: date
+        end_of_validity:
+          type: string
+          format: date
+        mp_external_reference:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenant:
+          type: integer
+        mp_subscription_id:
+          type: string
+        payer_email:
+          type: string
+          format: email
+        amount:
+          type: string
+          format: decimal
+        status:
+          type: string
+          enum: ["active", "paused", "cancelled"]
+        payment_method_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    SubscriptionCreateRequest:
+      type: object
+      required: [card_token, payer_email, plan_id]
+      properties:
+        card_token:
+          type: string
+          description: Token de tarjeta de Mercado Pago
+        payer_email:
+          type: string
+          format: email
+        plan_id:
+          type: integer
+        payment_method_id:
+          type: string
+          default: "credit_card"
+          enum: ["credit_card", "debit_card"]
+
+    SubscriptionCreateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID local de la suscripción
+        mp_subscription_id:
+          type: string
+        status:
+          type: string
+        amount:
+          type: number
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          description: Detalles adicionales del error (respuesta de MP, etc.)
+
+  # ---------------------------------------------------------------------------
+  # Responses
+  # ---------------------------------------------------------------------------
+  responses:
+    Unauthorized:
+      description: Token inválido o no proporcionado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."

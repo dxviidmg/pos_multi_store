@@ -1,0 +1,2198 @@
+# =============================================================================
+# SmartVenta — Módulo Products
+# Spec-Driven Development · OpenAPI 3.0
+# =============================================================================
+openapi: "3.0.3"
+
+info:
+  title: SmartVenta — Products API
+  version: "1.0.0"
+  description: |
+    Gestión de productos, tiendas/almacenes, marcas, departamentos, stock,
+    transferencias, distribuciones, flujo de caja, conversiones de unidad,
+    trabajadores e importación masiva.
+
+servers:
+  - url: /api
+    description: Base path de la API
+
+# =============================================================================
+# Seguridad global
+# =============================================================================
+security:
+  - tokenAuth: []
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  # ===========================================================================
+  # Store
+  # ===========================================================================
+  /store/:
+    get:
+      operationId: store_list
+      summary: Listar tiendas/almacenes del tenant
+      description: Retorna todas las tiendas del tenant excepto la sucursal activa (store-id).
+      tags: [Stores]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: store_type
+          in: query
+          description: "Filtrar por tipo: T (Tienda) o A (Almacén)"
+          schema:
+            type: string
+            enum: ["T", "A"]
+      responses:
+        "200":
+          description: Lista de tiendas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Store"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: store_create
+      summary: Crear tienda/almacén
+      description: Crea una nueva sucursal. El manager se genera automáticamente.
+      tags: [Stores]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreCreateRequest"
+      responses:
+        "201":
+          description: Tienda creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Store"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /store/{id}/:
+    get:
+      operationId: store_retrieve
+      summary: Detalle de una tienda
+      tags: [Stores]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Detalle de la tienda
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Store"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: store_update
+      summary: Actualizar tienda
+      tags: [Stores]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreCreateRequest"
+      responses:
+        "200":
+          description: Tienda actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Store"
+
+    delete:
+      operationId: store_delete
+      summary: Eliminar tienda
+      tags: [Stores]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminada
+
+  /store/{id}/investment/:
+    get:
+      operationId: store_investment
+      summary: Inversión total en inventario de una tienda
+      description: Calcula stock × costo de todos los productos con stock > 0.
+      tags: [Stores]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Monto de inversión
+          content:
+            application/json:
+              schema:
+                type: number
+                example: 125430.50
+
+  /store/{id}/reset-stock/:
+    post:
+      operationId: store_reset_stock
+      summary: Resetear todo el stock de una tienda a 0
+      tags: [Stores]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Stock reseteado
+
+  # ===========================================================================
+  # Brand
+  # ===========================================================================
+  /brand/:
+    get:
+      operationId: brand_list
+      summary: Listar marcas del tenant
+      tags: [Brands]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: audit
+          in: query
+          description: Si "true", filtra solo marcas con productos que requieren verificación de stock.
+          schema:
+            type: string
+            enum: ["true", "false"]
+      responses:
+        "200":
+          description: Lista de marcas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Brand"
+
+    post:
+      operationId: brand_create
+      summary: Crear marca
+      tags: [Brands]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 30
+      responses:
+        "201":
+          description: Marca creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+
+  /brand/{id}/:
+    put:
+      operationId: brand_update
+      summary: Actualizar marca
+      tags: [Brands]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 30
+      responses:
+        "200":
+          description: Marca actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+
+    delete:
+      operationId: brand_delete
+      summary: Eliminar marca
+      tags: [Brands]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminada
+
+  /brands/delete/:
+    post:
+      operationId: brand_bulk_delete
+      summary: Eliminar marcas en lote
+      tags: [Brands]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+              description: Lista de IDs de marcas a eliminar
+      responses:
+        "200":
+          description: Marcas eliminadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  # ===========================================================================
+  # Department
+  # ===========================================================================
+  /department/:
+    get:
+      operationId: department_list
+      summary: Listar departamentos del tenant
+      tags: [Departments]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: audit
+          in: query
+          description: Si "true", filtra solo departamentos con productos que requieren verificación.
+          schema:
+            type: string
+            enum: ["true", "false"]
+      responses:
+        "200":
+          description: Lista de departamentos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Department"
+
+    post:
+      operationId: department_create
+      summary: Crear departamento
+      tags: [Departments]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 30
+      responses:
+        "201":
+          description: Departamento creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+
+  /department/{id}/:
+    put:
+      operationId: department_update
+      summary: Actualizar departamento
+      tags: [Departments]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 30
+      responses:
+        "200":
+          description: Departamento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+
+    delete:
+      operationId: department_delete
+      summary: Eliminar departamento
+      tags: [Departments]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminado
+
+  /departments/delete/:
+    post:
+      operationId: department_bulk_delete
+      summary: Eliminar departamentos en lote
+      tags: [Departments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+              description: Lista de IDs de departamentos a eliminar
+      responses:
+        "200":
+          description: Departamentos eliminados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  # ===========================================================================
+  # Product
+  # ===========================================================================
+  /product/:
+    get:
+      operationId: product_list
+      summary: Listar productos del catálogo
+      description: Retorna productos del tenant con stock total anotado.
+      tags: [Products]
+      parameters:
+        - name: brand_id
+          in: query
+          schema:
+            type: integer
+        - name: department_id
+          in: query
+          schema:
+            type: integer
+        - name: max_stock
+          in: query
+          description: Filtrar productos con stock total ≤ este valor
+          schema:
+            type: integer
+        - name: code
+          in: query
+          description: Filtrar por código (icontains)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de productos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+
+    post:
+      operationId: product_create
+      summary: Crear producto
+      description: Valida que el código no exista en el tenant.
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProductCreateRequest"
+      responses:
+        "201":
+          description: Producto creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "400":
+          description: Código duplicado u otros errores de validación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /product/{id}/:
+    get:
+      operationId: product_retrieve
+      summary: Detalle de un producto
+      tags: [Products]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Detalle del producto
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+    put:
+      operationId: product_update
+      summary: Actualizar producto
+      description: Registra cambios de precio en ProductPriceLog.
+      tags: [Products]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProductCreateRequest"
+      responses:
+        "200":
+          description: Producto actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+    delete:
+      operationId: product_delete
+      summary: Eliminar producto
+      tags: [Products]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminado
+
+  /products/delete/:
+    post:
+      operationId: product_bulk_delete
+      summary: Eliminar productos en lote
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+              description: Lista de IDs de productos a eliminar
+      responses:
+        "200":
+          description: Productos eliminados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  /products/add/:
+    post:
+      operationId: product_add_stock
+      summary: Agregar stock a múltiples productos
+      description: Suma la cantidad indicada al stock actual de cada StoreProduct.
+      tags: [Products]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [store_products]
+              properties:
+                store_products:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, quantity]
+                    properties:
+                      id:
+                        type: integer
+                        description: StoreProduct ID
+                      quantity:
+                        type: integer
+                        minimum: 1
+      responses:
+        "200":
+          description: Stock agregado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  /products/update-prices/:
+    post:
+      operationId: product_update_prices
+      summary: Actualizar precios en lote
+      description: Aplica los mismos precios a múltiples productos. Genera logs de cambio.
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_ids]
+              properties:
+                product_ids:
+                  type: array
+                  items:
+                    type: integer
+                cost:
+                  type: string
+                  format: decimal
+                unit_price:
+                  type: string
+                  format: decimal
+                wholesale_price:
+                  type: string
+                  format: decimal
+                  nullable: true
+                min_wholesale_quantity:
+                  type: integer
+                  nullable: true
+      responses:
+        "200":
+          description: Precios actualizados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+
+  /products/reassign/:
+    post:
+      operationId: product_reassign
+      summary: Reasignar productos de una marca/departamento a otro
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reassign_type, origin_id, destination_id]
+              properties:
+                reassign_type:
+                  type: string
+                  enum: ["brand", "department"]
+                origin_id:
+                  type: integer
+                destination_id:
+                  type: integer
+                delete_origin:
+                  type: string
+                  enum: ["true", "false"]
+                  description: Si "true", elimina la marca/departamento origen.
+      responses:
+        "200":
+          description: Productos reasignados
+
+  /products/upper-code/:
+    post:
+      operationId: product_upper_code
+      summary: Convertir todos los códigos a mayúsculas
+      description: También reemplaza apóstrofes por guiones.
+      tags: [Products]
+      responses:
+        "200":
+          description: Códigos actualizados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  productos:
+                    type: integer
+                    description: Cantidad de productos modificados
+
+  /products/stock-other-stores/:
+    get:
+      operationId: product_stock_other_stores
+      summary: Consultar stock de un producto en otras tiendas
+      tags: [Products]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: store-product
+          in: query
+          required: true
+          description: ID del StoreProduct a consultar
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stock en otras tiendas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    store_id:
+                      type: integer
+                    store_name:
+                      type: string
+                    available_stock:
+                      type: integer
+
+  /products/import-validation/:
+    post:
+      operationId: product_import_validation
+      summary: Validar archivo Excel de productos
+      description: |
+        Valida códigos, marcas, departamentos, precios y cantidades antes de importar.
+        Retorna el status por fila.
+      tags: [Import]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                create_brands:
+                  type: string
+                  enum: ["Y", "N"]
+                create_departments:
+                  type: string
+                  enum: ["Y", "N"]
+                departments_mandatory:
+                  type: string
+                  enum: ["Y", "N"]
+                import_stock:
+                  type: string
+                  enum: ["Y", "N"]
+      responses:
+        "200":
+          description: Resultado de validación por fila
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductImportValidationRow"
+        "400":
+          description: Error de formato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /products/import/:
+    post:
+      operationId: product_import
+      summary: Importar productos desde Excel
+      description: Crea productos nuevos en el catálogo. Opcionalmente importa stock.
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                import_stock:
+                  type: string
+                  enum: ["Y", "N"]
+      responses:
+        "200":
+          description: Importación exitosa
+        "400":
+          description: Error de formato o datos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ===========================================================================
+  # StoreProduct
+  # ===========================================================================
+  /store-product/:
+    get:
+      operationId: store_product_list
+      summary: Listar stock por sucursal
+      description: |
+        Búsqueda de productos en inventario. Soporta búsqueda por texto,
+        código, marca, departamento y filtros de stock.
+      tags: [Store Products]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: q
+          in: query
+          description: Búsqueda por nombre o marca (icontains). Máx 200 resultados.
+          schema:
+            type: string
+        - name: code
+          in: query
+          description: Búsqueda directa por código de producto
+          schema:
+            type: string
+        - name: brand_id
+          in: query
+          schema:
+            type: integer
+        - name: department_id
+          in: query
+          schema:
+            type: integer
+        - name: all_stores
+          in: query
+          description: '"Y" para incluir todas las tiendas del tenant'
+          schema:
+            type: string
+            enum: ["Y", "N"]
+            default: "N"
+        - name: max_stock
+          in: query
+          description: Filtrar productos con stock ≤ este valor
+          schema:
+            type: integer
+        - name: requires_stock_verification
+          in: query
+          description: '"true" para mostrar solo productos marcados para verificación'
+          schema:
+            type: string
+            enum: ["true", "false"]
+        - name: only_stock
+          in: query
+          description: '"true" retorna serialización ligera (solo stock)'
+          schema:
+            type: string
+            enum: ["true", "false"]
+      responses:
+        "200":
+          description: Lista de store-products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreProduct"
+
+  /store-product/{id}/:
+    get:
+      operationId: store_product_retrieve
+      summary: Detalle de un store-product
+      tags: [Store Products]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Detalle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreProduct"
+
+    patch:
+      operationId: store_product_update
+      summary: Actualizar stock (ajuste manual)
+      description: |
+        Actualiza el stock de un StoreProduct. Genera log de ajuste si el valor cambia.
+        Si tenía requires_stock_verification=true, lo marca como verificado.
+      tags: [Store Products]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stock:
+                  type: integer
+                  minimum: 0
+      responses:
+        "200":
+          description: Stock actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreProduct"
+
+  /store-products/import-validation/:
+    post:
+      operationId: store_product_import_validation
+      summary: Validar archivo Excel de stock
+      description: Valida códigos y existencia en la tienda antes de importar stock.
+      tags: [Import]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Resultado de validación
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreProductImportValidationRow"
+        "400":
+          description: Error de formato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /store-products/import/:
+    post:
+      operationId: store_product_import
+      summary: Importar stock desde Excel
+      description: |
+        Actualiza stock de productos existentes en la tienda.
+        action="E" suma al stock actual, action="A" reemplaza el stock.
+      tags: [Import]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, action]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                action:
+                  type: string
+                  enum: ["A", "E"]
+                  description: "A = Ajuste (reemplaza), E = Entrada (suma)"
+      responses:
+        "200":
+          description: Stock importado
+
+  /store-products/import/can-include-quantity/:
+    get:
+      operationId: store_product_can_include_quantity
+      summary: Verificar si el tenant tiene una sola tienda
+      description: Retorna true si el tenant tiene exactamente 1 tienda (puede importar con cantidad).
+      tags: [Import]
+      responses:
+        "200":
+          description: Resultado booleano
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+  /store-product/distribution/confirm/:
+    post:
+      operationId: distribution_confirm
+      summary: Confirmar una distribución
+      description: |
+        Aplica todos los transfers de la distribución: suma stock en destino,
+        resta en origen. Genera logs para ambas tiendas.
+      tags: [Distributions]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: integer
+                  description: ID de la distribución
+      responses:
+        "200":
+          description: Distribución confirmada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "Distribution confirmed"
+
+  # ===========================================================================
+  # Transfer
+  # ===========================================================================
+  /transfer/:
+    get:
+      operationId: transfer_list
+      summary: Listar traspasos de la sucursal
+      description: Traspasos individuales (sin distribución) de la sucursal activa.
+      tags: [Transfers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: status
+          in: query
+          description: Filtrar por estado
+          schema:
+            type: string
+            enum: ["pending", "applied"]
+      responses:
+        "200":
+          description: Lista de traspasos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transfer"
+
+    post:
+      operationId: transfer_create
+      summary: Crear traspaso individual
+      tags: [Transfers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [origin_store, destination_store, product, quantity]
+              properties:
+                origin_store:
+                  type: integer
+                destination_store:
+                  type: integer
+                product:
+                  type: integer
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        "201":
+          description: Traspaso creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+
+  /transfer/{id}/:
+    get:
+      operationId: transfer_retrieve
+      summary: Detalle de un traspaso
+      tags: [Transfers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Detalle del traspaso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+
+    put:
+      operationId: transfer_update
+      summary: Actualizar traspaso (cantidad)
+      tags: [Transfers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Traspaso actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+
+    delete:
+      operationId: transfer_delete
+      summary: Eliminar traspaso pendiente
+      tags: [Transfers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminado
+
+  /transfers/confirm/:
+    post:
+      operationId: transfer_confirm
+      summary: Confirmar traspasos pendientes
+      description: |
+        Aplica una lista de traspasos: resta stock en origen, suma en destino.
+        Genera logs de inventario para ambas tiendas.
+      tags: [Transfers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transfers, destination_store]
+              properties:
+                destination_store:
+                  type: integer
+                transfers:
+                  type: array
+                  items:
+                    type: object
+                    required: [product, quantity]
+                    properties:
+                      product:
+                        type: object
+                        required: [id]
+                        properties:
+                          id:
+                            type: integer
+                      quantity:
+                        type: integer
+      responses:
+        "200":
+          description: Traspasos confirmados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "Transfer confirmed"
+        "400":
+          description: Stock insuficiente en origen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ===========================================================================
+  # Distribution
+  # ===========================================================================
+  /distribution/:
+    get:
+      operationId: distribution_list
+      summary: Listar distribuciones pendientes
+      tags: [Distributions]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      responses:
+        "200":
+          description: Lista de distribuciones pendientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Distribution"
+
+    post:
+      operationId: distribution_create
+      summary: Crear distribución (múltiples traspasos)
+      description: Crea una distribución con N traspasos desde la tienda activa.
+      tags: [Distributions]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destination_store, products]
+              properties:
+                destination_store:
+                  type: integer
+                products:
+                  type: array
+                  items:
+                    type: object
+                    required: [product, quantity]
+                    properties:
+                      product:
+                        type: object
+                        required: [id]
+                        properties:
+                          id:
+                            type: integer
+                      quantity:
+                        type: integer
+                        minimum: 1
+      responses:
+        "201":
+          description: Distribución creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Distribution"
+
+  /distribution/{id}/:
+    delete:
+      operationId: distribution_delete
+      summary: Eliminar distribución pendiente
+      tags: [Distributions]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminada
+
+  # ===========================================================================
+  # CashFlow
+  # ===========================================================================
+  /cash-flow/:
+    get:
+      operationId: cash_flow_list
+      summary: Listar flujos de caja de la sucursal
+      tags: [Cash Flow]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Lista de flujos de caja
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashFlow"
+
+    post:
+      operationId: cash_flow_create
+      summary: Registrar entrada/salida de caja
+      tags: [Cash Flow]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashFlowCreateRequest"
+      responses:
+        "201":
+          description: Flujo de caja registrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashFlow"
+
+  /cash-flow/{id}/:
+    delete:
+      operationId: cash_flow_delete
+      summary: Eliminar flujo de caja
+      tags: [Cash Flow]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminado
+
+  /cash-flow/choices/:
+    get:
+      operationId: cash_flow_choices
+      summary: Obtener tipos de transacción
+      tags: [Cash Flow]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      responses:
+        "200":
+          description: Choices de tipo de transacción
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                    label:
+                      type: string
+
+  # ===========================================================================
+  # StoreWorker
+  # ===========================================================================
+  /store-worker/:
+    get:
+      operationId: store_worker_list
+      summary: Listar trabajadores del tenant
+      tags: [Workers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: start_date
+          in: query
+          description: Fecha inicio para calcular total de ventas del vendedor
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: Fecha fin para calcular total de ventas del vendedor
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Lista de trabajadores con total de ventas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreWorker"
+
+    post:
+      operationId: store_worker_create
+      summary: Crear trabajador
+      description: Crea un User y lo asocia como worker de una tienda.
+      tags: [Workers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [worker, store_id]
+              properties:
+                worker:
+                  type: object
+                  required: [username, first_name]
+                  properties:
+                    username:
+                      type: string
+                    first_name:
+                      type: string
+                    last_name:
+                      type: string
+                store_id:
+                  type: integer
+      responses:
+        "201":
+          description: Trabajador creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreWorker"
+
+  /store-worker/{id}/:
+    delete:
+      operationId: store_worker_delete
+      summary: Eliminar trabajador
+      tags: [Workers]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminado
+
+  # ===========================================================================
+  # StockUpdateRequest
+  # ===========================================================================
+  /stock-update-request/:
+    get:
+      operationId: stock_update_request_list
+      summary: Listar solicitudes de ajuste de stock pendientes
+      tags: [Stock Requests]
+      responses:
+        "200":
+          description: Lista de solicitudes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockUpdateRequest"
+
+    post:
+      operationId: stock_update_request_create
+      summary: Crear solicitud de ajuste de stock
+      description: Solo una solicitud activa por StoreProduct.
+      tags: [Stock Requests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [store_product, requested_stock]
+              properties:
+                store_product:
+                  type: integer
+                requested_stock:
+                  type: integer
+      responses:
+        "201":
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockUpdateRequest"
+        "400":
+          description: Ya existe una solicitud activa para este producto
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /stock-update-request/{id}/:
+    delete:
+      operationId: stock_update_request_delete
+      summary: Eliminar solicitud de ajuste
+      tags: [Stock Requests]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminada
+
+  /stock-update-request/{id}/approve/:
+    post:
+      operationId: stock_update_request_approve
+      summary: Aprobar solicitud de ajuste de stock
+      description: |
+        Aplica el stock solicitado al StoreProduct. Genera log de ajuste
+        si el stock cambió. Marca la solicitud como aplicada.
+      tags: [Stock Requests]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Solicitud aprobada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockUpdateRequest"
+        "400":
+          description: Ya fue aplicada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ===========================================================================
+  # ProductConversion
+  # ===========================================================================
+  /product-conversion/:
+    get:
+      operationId: product_conversion_list
+      summary: Listar conversiones de unidad
+      tags: [Conversions]
+      responses:
+        "200":
+          description: Lista de conversiones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductConversion"
+
+    post:
+      operationId: product_conversion_create
+      summary: Crear regla de conversión
+      description: Define cuántas unidades del producto target se generan de 1 unidad del source.
+      tags: [Conversions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_product, target_product, factor, source_unit, target_unit]
+              properties:
+                source_product:
+                  type: integer
+                target_product:
+                  type: integer
+                factor:
+                  type: integer
+                  minimum: 1
+                  description: "1 source → N target"
+                source_unit:
+                  type: string
+                  description: Código de unidad (ej. "KG", "PZ")
+                target_unit:
+                  type: string
+      responses:
+        "201":
+          description: Conversión creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductConversion"
+
+  /product-conversion/{id}/:
+    put:
+      operationId: product_conversion_update
+      summary: Actualizar conversión
+      tags: [Conversions]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                factor:
+                  type: integer
+                source_unit:
+                  type: string
+                target_unit:
+                  type: string
+      responses:
+        "200":
+          description: Conversión actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductConversion"
+
+    delete:
+      operationId: product_conversion_delete
+      summary: Eliminar conversión
+      tags: [Conversions]
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Eliminada
+
+  /product-conversion/{id}/apply/:
+    post:
+      operationId: product_conversion_apply
+      summary: Aplicar conversión
+      description: |
+        Descuenta 1 del source_product y suma `factor` al target_product
+        en la tienda activa. Genera logs de conversión.
+      tags: [Conversions]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Conversión aplicada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "Conversión aplicada"
+        "400":
+          description: Stock insuficiente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /product-conversion/units/:
+    get:
+      operationId: product_conversion_units
+      summary: Obtener unidades disponibles
+      tags: [Conversions]
+      responses:
+        "200":
+          description: Choices de unidades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                    label:
+                      type: string
+
+  # ===========================================================================
+  # Dashboards & Notifications
+  # ===========================================================================
+  /pending-movements/:
+    get:
+      operationId: pending_movements
+      summary: Notificaciones de movimientos pendientes
+      description: |
+        Retorna traspasos y distribuciones pendientes agrupados por ruta,
+        más solicitudes de ajuste de stock del último minuto.
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      responses:
+        "200":
+          description: Lista de notificaciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PendingNotification"
+
+  /stock-verification-dashboard/:
+    get:
+      operationId: stock_verification_dashboard
+      summary: Dashboard de verificación de stock (asíncrono)
+      tags: [Dashboards]
+      responses:
+        "200":
+          description: Task ID de Celery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /pending-transfers-dashboard/:
+    get:
+      operationId: pending_transfers_dashboard
+      summary: Dashboard de traspasos pendientes (asíncrono)
+      tags: [Dashboards]
+      responses:
+        "200":
+          description: Task ID de Celery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /ping/:
+    get:
+      operationId: ping
+      summary: Health check
+      tags: [System]
+      security: []
+      responses:
+        "200":
+          description: Servicio activo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "alive"
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  # ---------------------------------------------------------------------------
+  # Security Schemes
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Token authentication. Formato: `Token <tu-token>`"
+
+  # ---------------------------------------------------------------------------
+  # Parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    StoreIdHeader:
+      name: store-id
+      in: header
+      required: true
+      description: ID de la sucursal activa
+      schema:
+        type: integer
+
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+    # --- Store ---
+    Store:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        store_type:
+          type: string
+          enum: ["T", "A"]
+          description: "T = Tienda, A = Almacén"
+        store_type_display:
+          type: string
+          example: "Tienda"
+        full_name:
+          type: string
+          example: "Centro (Tienda)"
+        tenant:
+          type: integer
+        tenant_name:
+          type: string
+        manager:
+          type: integer
+        manager_username:
+          type: string
+        address:
+          type: string
+          nullable: true
+        phone_number:
+          type: string
+          nullable: true
+        workers_count:
+          type: integer
+
+    StoreCreateRequest:
+      type: object
+      required: [name, store_type]
+      properties:
+        name:
+          type: string
+          maxLength: 30
+        store_type:
+          type: string
+          enum: ["T", "A"]
+        address:
+          type: string
+          maxLength: 30
+        phone_number:
+          type: string
+          maxLength: 10
+
+    # --- Brand ---
+    Brand:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        product_count:
+          type: integer
+          description: Cantidad de productos de esta marca
+
+    # --- Department ---
+    Department:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        product_count:
+          type: integer
+
+    # --- Product ---
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        cost:
+          type: string
+          format: decimal
+        unit_price:
+          type: string
+          format: decimal
+        wholesale_price:
+          type: string
+          format: decimal
+          nullable: true
+        min_wholesale_quantity:
+          type: integer
+          nullable: true
+        wholesale_price_on_client_discount:
+          type: boolean
+        image:
+          type: string
+          format: uri
+          nullable: true
+        brand:
+          type: integer
+        brand_name:
+          type: string
+        department:
+          type: integer
+          nullable: true
+        department_name:
+          type: string
+        apply_wholesale:
+          type: boolean
+        stock:
+          type: integer
+          description: Stock total en todas las tiendas
+
+    ProductCreateRequest:
+      type: object
+      required: [code, name, cost, unit_price, brand]
+      properties:
+        code:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 100
+        cost:
+          type: string
+          format: decimal
+        unit_price:
+          type: string
+          format: decimal
+        wholesale_price:
+          type: string
+          format: decimal
+        min_wholesale_quantity:
+          type: integer
+        wholesale_price_on_client_discount:
+          type: boolean
+          default: false
+        brand:
+          type: integer
+        department:
+          type: integer
+        image:
+          type: string
+          format: binary
+
+    # --- StoreProduct ---
+    StoreProduct:
+      type: object
+      properties:
+        id:
+          type: integer
+        store:
+          oneOf:
+            - type: integer
+            - $ref: "#/components/schemas/Store"
+          description: ID o detalle según el serializer usado
+        product:
+          $ref: "#/components/schemas/ProductSearch"
+        stock:
+          type: integer
+        requires_stock_verification:
+          type: boolean
+        available_stock:
+          type: integer
+          description: Stock menos reservas (transfers + apartados)
+        reserved_stock:
+          type: integer
+
+    ProductSearch:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        brand_name:
+          type: string
+        name:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        prices:
+          type: object
+          properties:
+            unit_price:
+              type: string
+              format: decimal
+            wholesale_price:
+              type: string
+              format: decimal
+              nullable: true
+            min_wholesale_quantity:
+              type: integer
+              nullable: true
+            apply_wholesale:
+              type: boolean
+            wholesale_price_on_client_discount:
+              type: boolean
+
+    # --- Transfer ---
+    Transfer:
+      type: object
+      properties:
+        id:
+          type: integer
+        origin_store:
+          type: integer
+        destination_store:
+          type: integer
+        product:
+          type: integer
+        product_code:
+          type: string
+        product_description:
+          type: string
+        quantity:
+          type: integer
+        transfer_datetime:
+          type: string
+          format: date-time
+          nullable: true
+        distribution:
+          type: integer
+          nullable: true
+        description:
+          type: string
+          description: Texto contextual según la tienda activa
+        editable_product_max_stock:
+          type: integer
+          description: Máximo que se puede asignar (cantidad actual + stock disponible en origen)
+        created_at:
+          type: string
+          format: date-time
+
+    # --- Distribution ---
+    Distribution:
+      type: object
+      properties:
+        id:
+          type: integer
+        origin_store:
+          type: integer
+        destination_store:
+          type: integer
+        transfer_datetime:
+          type: string
+          format: date-time
+          nullable: true
+        description:
+          type: string
+        transfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transfer"
+        created_at:
+          type: string
+          format: date-time
+
+    # --- CashFlow ---
+    CashFlow:
+      type: object
+      properties:
+        id:
+          type: integer
+        store:
+          type: integer
+        concept:
+          type: string
+        transaction_type:
+          type: string
+          enum: ["E", "S"]
+        transaction_type_display:
+          type: string
+          example: "Entrada"
+        amount:
+          type: string
+          format: decimal
+        user:
+          type: integer
+        user_username:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CashFlowCreateRequest:
+      type: object
+      required: [concept, amount, transaction_type]
+      properties:
+        concept:
+          type: string
+          maxLength: 50
+        amount:
+          type: string
+          format: decimal
+        transaction_type:
+          type: string
+          enum: ["E", "S"]
+          description: "E = Entrada, S = Salida"
+
+    # --- StoreWorker ---
+    StoreWorker:
+      type: object
+      properties:
+        id:
+          type: integer
+        store:
+          type: integer
+        store_detail:
+          $ref: "#/components/schemas/Store"
+        worker:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            first_name:
+              type: string
+            last_name:
+              type: string
+            email:
+              type: string
+        role:
+          type: string
+          enum: ["A", "V"]
+          description: "A = Administrador, V = Vendedor"
+        total_sales:
+          type: number
+          description: Total vendido en el rango de fechas
+
+    # --- StockUpdateRequest ---
+    StockUpdateRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        store_product:
+          type: integer
+        product_code:
+          type: string
+        product_name:
+          type: string
+        store_name:
+          type: string
+        requested_by:
+          type: integer
+        requested_by_username:
+          type: string
+        requested_stock:
+          type: integer
+        applied:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # --- ProductConversion ---
+    ProductConversion:
+      type: object
+      properties:
+        id:
+          type: integer
+        source_product:
+          type: integer
+        source_product_name:
+          type: string
+        target_product:
+          type: integer
+        target_product_name:
+          type: string
+        factor:
+          type: integer
+          description: "1 source → N target"
+        source_unit:
+          type: string
+        source_unit_display:
+          type: string
+        target_unit:
+          type: string
+        target_unit_display:
+          type: string
+
+    # --- Import validation rows ---
+    ProductImportValidationRow:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        brand:
+          type: string
+        department:
+          type: string
+          nullable: true
+        cost:
+          type: number
+        unit_price:
+          type: number
+        wholesale_price:
+          type: number
+          nullable: true
+        min_wholesale_quantity:
+          type: integer
+          nullable: true
+        quantity:
+          type: integer
+          nullable: true
+        excel_row:
+          type: integer
+        status:
+          type: string
+          description: |
+            "Exitoso", "Código existente en el sistema", "Sin código",
+            "Sin marca", "Marca inexistente", "Departamento inexistente",
+            "Precios o costos inválidos", etc.
+
+    StoreProductImportValidationRow:
+      type: object
+      properties:
+        code:
+          type: string
+        quantity:
+          type: integer
+        status:
+          type: string
+          enum:
+            - "Exitoso"
+            - "Código no encontrado"
+            - "Producto encontrado pero no existe en la tienda"
+            - "Codigo repetido en el archivo"
+
+    # --- Notifications ---
+    PendingNotification:
+      type: object
+      properties:
+        title:
+          type: string
+          example: "Centro → Bodega"
+        messages:
+          type: array
+          items:
+            type: string
+          example: ["2 distribución(es)", "3 traspaso(s)"]
+
+    # --- Dashboards ---
+    TaskResponse:
+      type: object
+      properties:
+        task:
+          type: string
+          description: Celery task ID
+
+    # --- Common ---
+    SuccessMessage:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+        error:
+          type: string
+
+  # ---------------------------------------------------------------------------
+  # Responses
+  # ---------------------------------------------------------------------------
+  responses:
+    Unauthorized:
+      description: Token inválido o no proporcionado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Not found."

@@ -1,0 +1,345 @@
+# =============================================================================
+# SmartVenta — Módulo Audit
+# Spec-Driven Development · OpenAPI 3.0
+# =============================================================================
+openapi: "3.0.3"
+
+info:
+  title: SmartVenta — Audit API
+  version: "1.0.0"
+  description: |
+    Auditorías automáticas del sistema: detección de ventas duplicadas,
+    logs inconsistentes, discrepancias de stock, códigos repetidos,
+    costos en cero, precios de mayoreo inconsistentes, productos faltantes
+    en tiendas y productos sin actividad.
+    
+    Las auditorías pesadas se ejecutan como tareas Celery y se consultan
+    vía el endpoint genérico `/task-result/{task_id}/`.
+
+servers:
+  - url: /api
+    description: Base path de la API
+
+# =============================================================================
+# Seguridad global
+# =============================================================================
+security:
+  - tokenAuth: []
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  # ---------------------------------------------------------------------------
+  # Product Audit (síncrono)
+  # ---------------------------------------------------------------------------
+  /product-audit/:
+    get:
+      operationId: product_audit
+      summary: Auditoría de catálogo de productos
+      description: |
+        Ejecuta verificaciones sincrónicas sobre el catálogo:
+        - **Códigos repetidos**: productos con el mismo código en el tenant.
+        - **Costo en cero**: productos sin costo o con costo = 0.
+        - **Precios mayoreo inconsistentes**: mayoreo ≥ menudeo, mayoreo sin cantidad mínima o viceversa.
+        - **Faltantes en tiendas**: productos que no existen en todas las tiendas del tenant.
+      tags: [Product Audit]
+      responses:
+        "200":
+          description: Resultado de la auditoría
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductAuditResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Product Activity Audit (asíncrono)
+  # ---------------------------------------------------------------------------
+  /product-audit-activity/:
+    get:
+      operationId: product_audit_activity
+      summary: Auditoría de productos sin actividad (asíncrono)
+      description: |
+        Detecta productos que nunca han sido vendidos, transferidos ni
+        tienen logs de inventario. Ejecuta vía Celery con reporte de progreso.
+      tags: [Product Audit]
+      responses:
+        "200":
+          description: Task ID para consultar resultado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskIdResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Sales & Logs Audit (asíncrono)
+  # ---------------------------------------------------------------------------
+  /sales-logs-audit/:
+    get:
+      operationId: sales_logs_audit
+      summary: Auditoría de ventas duplicadas y logs inconsistentes (asíncrono)
+      description: |
+        Lanza dos tareas Celery en paralelo:
+        - **task1**: Detecta ventas duplicadas (mismo total a <1s de diferencia).
+        - **task2**: Detecta logs duplicados e inconsistentes (previous_stock ≠ updated_stock anterior).
+      tags: [Sales & Logs Audit]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: store_id
+          in: query
+          description: ID de tienda específica. Si no se envía, audita todas.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task IDs de las dos auditorías
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task1:
+                    type: string
+                    description: Task ID — ventas duplicadas
+                  task2:
+                    type: string
+                    description: Task ID — logs duplicados/inconsistentes
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Stock Audit (asíncrono)
+  # ---------------------------------------------------------------------------
+  /stock-audit/:
+    get:
+      operationId: stock_audit
+      summary: Auditoría de discrepancias de stock (asíncrono)
+      description: |
+        Detecta StoreProducts cuyo stock actual no coincide con el último
+        log registrado (updated_stock del log más reciente ≠ stock actual).
+      tags: [Stock Audit]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: store_id
+          in: query
+          description: ID de tienda específica. Si no se envía, audita todas.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task ID para consultar resultado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task3:
+                    type: string
+                    description: Task ID — discrepancias de stock
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Task Result (genérico)
+  # ---------------------------------------------------------------------------
+  /task-result/{task_id}/:
+    get:
+      operationId: task_result
+      summary: Consultar resultado de tarea Celery
+      description: |
+        Endpoint genérico para consultar el estado y resultado de cualquier
+        tarea asíncrona del sistema (auditorías, dashboards, reportes).
+        
+        Estados posibles:
+        - `PENDING`: en cola
+        - `PROGRESS`: ejecutándose (puede incluir `percent`)
+        - `SUCCESS`: completada (incluye `result`)
+        - `FAILURE`: error (incluye `error`)
+      tags: [Tasks]
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: ID de la tarea Celery
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Estado y resultado de la tarea
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  # ---------------------------------------------------------------------------
+  # Security Schemes
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Token authentication. Formato: `Token <tu-token>`"
+
+  # ---------------------------------------------------------------------------
+  # Parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    StoreIdHeader:
+      name: store-id
+      in: header
+      required: true
+      description: ID de la sucursal activa
+      schema:
+        type: integer
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+    # --- Product Audit (síncrono) ---
+    ProductAuditResponse:
+      type: object
+      properties:
+        duplicate_codes:
+          type: array
+          description: Productos con códigos repetidos en el tenant
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              brand:
+                type: string
+              department:
+                type: string
+                nullable: true
+              name:
+                type: string
+        zero_cost:
+          type: array
+          description: Productos con costo = 0 o nulo
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              name:
+                type: string
+        wholesale_issues:
+          type: array
+          description: Productos con precios de mayoreo inconsistentes
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              name:
+                type: string
+              unit_price:
+                type: string
+                format: decimal
+              wholesale_price:
+                type: string
+                format: decimal
+                nullable: true
+              min_wholesale_quantity:
+                type: integer
+                nullable: true
+              reasons:
+                type: string
+                description: "Razones separadas por ' | '"
+                example: "mayoreo >= menudeo | tiene precio mayoreo sin cantidad mínima"
+        missing_in_stores:
+          type: array
+          description: Productos que no existen en todas las tiendas
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              name:
+                type: string
+              missing_in:
+                type: string
+                description: Nombres de tiendas separados por coma
+                example: "Centro, Bodega"
+
+    # --- Task responses ---
+    TaskIdResponse:
+      type: object
+      properties:
+        task:
+          type: string
+          description: Celery task ID
+
+    TaskResult:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: ["PENDING", "PROGRESS", "SUCCESS", "FAILURE", "REVOKED"]
+        result:
+          description: Resultado de la tarea (solo cuando status = SUCCESS). Estructura varía por tarea.
+        error:
+          type: object
+          description: Info del error (solo cuando status = FAILURE)
+          properties:
+            type:
+              type: string
+              example: "ValueError"
+            message:
+              type: string
+        info:
+          type: object
+          description: Metadata de progreso (solo cuando status = PROGRESS)
+        percent:
+          type: integer
+          description: Porcentaje de progreso (0-100, solo si la tarea lo reporta)
+          example: 70
+
+    # --- Common ---
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+  # ---------------------------------------------------------------------------
+  # Responses
+  # ---------------------------------------------------------------------------
+  responses:
+    Unauthorized:
+      description: Token inválido o no proporcionado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."

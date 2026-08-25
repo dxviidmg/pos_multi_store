@@ -1,0 +1,955 @@
+# =============================================================================
+# SmartVenta — Módulo Sales
+# Spec-Driven Development · OpenAPI 3.0
+# =============================================================================
+openapi: "3.0.3"
+
+info:
+  title: SmartVenta — Sales API
+  version: "1.0.0"
+  description: |
+    Gestión de ventas, apartados, pagos, corte de caja, devoluciones,
+    cancelaciones e importación masiva de ventas.
+
+servers:
+  - url: /api
+    description: Base path de la API
+
+# =============================================================================
+# Seguridad global
+# =============================================================================
+security:
+  - tokenAuth: []
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  # ---------------------------------------------------------------------------
+  # Sales CRUD (ViewSet)
+  # ---------------------------------------------------------------------------
+  /sale/:
+    get:
+      operationId: sale_list
+      summary: Listar ventas de la sucursal
+      description: |
+        Retorna las ventas de la sucursal activa, ordenadas por ID descendente.
+        Los vendedores solo ven sus propias ventas.
+      tags: [Sales]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: date
+          in: query
+          description: Filtrar por fecha (YYYY-MM-DD). Se ignora si se busca por cliente.
+          schema:
+            type: string
+            format: date
+        - name: reservation_in_progress
+          in: query
+          description: Si es "true", muestra solo apartados pendientes.
+          schema:
+            type: string
+            enum: ["true", "false"]
+        - name: sale_id
+          in: query
+          description: Filtrar ventas cuyo ID comience con este valor.
+          schema:
+            type: string
+        - name: first_name
+          in: query
+          description: Filtrar por nombre del cliente (icontains).
+          schema:
+            type: string
+        - name: last_name
+          in: query
+          description: Filtrar por apellido del cliente (icontains).
+          schema:
+            type: string
+        - name: is_repeatedd
+          in: query
+          description: Si es "true", indica filtro por ventas repetidas.
+          schema:
+            type: string
+            enum: ["true", "false"]
+      responses:
+        "200":
+          description: Lista de ventas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sale"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: sale_create
+      summary: Registrar una venta o apartado
+      description: |
+        Crea una venta con sus productos y pagos. Si `reservation_in_progress`
+        es true, se crea un apartado sin descontar stock.
+        Valida stock disponible antes de confirmar.
+      tags: [Sales]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleCreateRequest"
+      responses:
+        "201":
+          description: Venta creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "400":
+          description: Datos inválidos o stock insuficiente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sale/{id}/:
+    get:
+      operationId: sale_retrieve
+      summary: Obtener detalle de una venta
+      tags: [Sales]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/SaleId"
+      responses:
+        "200":
+          description: Detalle de la venta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      operationId: sale_update
+      summary: Actualizar venta (completar apartado)
+      description: |
+        Se usa para completar un apartado: agrega un pago y descuenta stock
+        cuando `reservation_in_progress` pasa a false.
+      tags: [Sales]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - $ref: "#/components/parameters/SaleId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleUpdateRequest"
+      responses:
+        "200":
+          description: Venta actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "400":
+          description: Pago requerido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Cancel / Return
+  # ---------------------------------------------------------------------------
+  /sales/cancel/:
+    post:
+      operationId: sale_cancel
+      summary: Cancelar venta o devolver productos
+      description: |
+        Tres modos de operación:
+        - **Cancelación completa**: `is_canceled: true` — revierte todo el stock y marca como cancelada.
+        - **Cancelación de apartado**: si la venta es tipo "A", genera CashFlow de salida por pagos anteriores.
+        - **Devolución parcial**: `products_to_return` — devuelve cantidades específicas y ajusta el total.
+      tags: [Sales]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/SaleCancelFullRequest"
+                - $ref: "#/components/schemas/SaleReturnPartialRequest"
+      responses:
+        "200":
+          description: Cancelación/devolución exitosa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleCancelResponse"
+        "400":
+          description: Faltan campos requeridos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Cash Summary (Corte de caja por sucursal)
+  # ---------------------------------------------------------------------------
+  /cash/summary/:
+    get:
+      operationId: cash_summary
+      summary: Corte de caja de una sucursal
+      description: |
+        Resumen financiero del día o rango: pagos por método, utilidad,
+        flujo de caja, número de ventas, cancelaciones y pendientes.
+      tags: [Cash Summary]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: date
+          in: query
+          description: Fecha del corte (YYYY-MM-DD)
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Resumen de caja
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashSummaryItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Stores Cash Summary (Corte bulk multi-sucursal)
+  # ---------------------------------------------------------------------------
+  /stores-cash-summary/:
+    get:
+      operationId: stores_cash_summary
+      summary: Corte de caja bulk multi-sucursal
+      description: |
+        Resumen financiero de todas las tiendas del tenant en un rango de fechas.
+        Opcionalmente filtrado por tipo de tienda o departamento.
+      tags: [Cash Summary]
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: store_type
+          in: query
+          description: "Filtrar por tipo: T (Tienda) o A (Almacén)"
+          schema:
+            type: string
+            enum: ["T", "A"]
+        - name: department_id
+          in: query
+          description: ID del departamento. "0" o vacío para todos.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resumen multi-sucursal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoresCashSummaryResponse"
+        "400":
+          description: Faltan start_date o end_date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Dashboards (asíncronos vía Celery)
+  # ---------------------------------------------------------------------------
+  /sales-dashboard/:
+    get:
+      operationId: sales_dashboard
+      summary: Dashboard de ventas (asíncrono)
+      description: Lanza tarea Celery y retorna el task ID para consultar resultado.
+      tags: [Dashboards]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: month
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task ID de Celery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sales-dashboard-cancellations/:
+    get:
+      operationId: cancellations_dashboard
+      summary: Dashboard de cancelaciones (asíncrono)
+      description: Lanza tarea Celery con estadísticas de cancelaciones.
+      tags: [Dashboards]
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: month
+          in: query
+          schema:
+            type: string
+            default: "0"
+      responses:
+        "200":
+          description: Task ID de Celery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /products-dashboard/:
+    get:
+      operationId: products_dashboard
+      summary: Dashboard de productos vendidos (asíncrono)
+      description: Lanza tarea Celery con ranking de productos más vendidos.
+      tags: [Dashboards]
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: month
+          in: query
+          schema:
+            type: string
+            default: "0"
+        - name: store_id
+          in: query
+          description: ID de tienda específica. Si no se envía, incluye todas.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task ID de Celery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Import
+  # ---------------------------------------------------------------------------
+  /sales/import-validation/:
+    post:
+      operationId: sale_import_validation
+      summary: Validar archivo Excel de ventas
+      description: |
+        Valida un archivo Excel antes de importar. Retorna el estado de cada fila:
+        "Exitoso", "Código no encontrado" o "Cantidad insuficiente".
+      tags: [Import]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo Excel (.xlsx, .xls). Máx 10MB, 10000 filas.
+      responses:
+        "200":
+          description: Resultado de validación por fila
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ImportValidationRow"
+        "400":
+          description: Archivo inválido o error de formato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sales/import/:
+    post:
+      operationId: sale_import
+      summary: Importar ventas desde Excel
+      description: |
+        Procesa el archivo Excel y crea una venta por fila.
+        Cada venta se registra con pago en efectivo al precio unitario del producto.
+        Descuenta stock y genera logs de inventario.
+      tags: [Import]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo Excel (.xlsx, .xls). Máx 10MB, 10000 filas.
+      responses:
+        "200":
+          description: Importación exitosa
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Stock insuficiente o error de formato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Duplicate Sales
+  # ---------------------------------------------------------------------------
+  /duplicate-sales/:
+    get:
+      operationId: duplicate_sales
+      summary: Detectar ventas duplicadas del día
+      description: |
+        Busca ventas del día actual que ocurrieron a menos de 1 segundo
+        de la venta anterior con el mismo total. Agrupa por tienda.
+      tags: [Sales]
+      parameters:
+        - $ref: "#/components/parameters/StoreIdHeader"
+      responses:
+        "200":
+          description: Notificaciones de duplicados agrupados por tienda
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DuplicateNotification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  # ---------------------------------------------------------------------------
+  # Security Schemes
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Token authentication. Formato: `Token <tu-token>`"
+
+  # ---------------------------------------------------------------------------
+  # Parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    StoreIdHeader:
+      name: store-id
+      in: header
+      required: true
+      description: ID de la sucursal activa
+      schema:
+        type: integer
+
+    SaleId:
+      name: id
+      in: path
+      required: true
+      description: ID de la venta
+      schema:
+        type: integer
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+    # --- Sale (read) ---
+    Sale:
+      type: object
+      properties:
+        id:
+          type: integer
+        total:
+          type: string
+          format: decimal
+          example: "1250.00"
+        store:
+          type: integer
+        seller:
+          type: integer
+        seller_username:
+          type: string
+        sale_type:
+          type: string
+          enum: ["A", "V"]
+          description: "A = Apartado, V = Venta"
+        reservation_in_progress:
+          type: boolean
+        is_canceled:
+          type: boolean
+        reason_cancel:
+          type: string
+          nullable: true
+        has_return:
+          type: boolean
+        reason_return:
+          type: string
+          nullable: true
+        is_cancelable:
+          type: boolean
+          description: Solo ventas con pago únicamente en efectivo, no canceladas y sin devolución.
+        is_repeated:
+          type: boolean
+          description: True si ocurrió a <1s de la anterior con mismo total.
+        payments_methods:
+          type: array
+          items:
+            type: string
+          example: ["Efectivo", "Tarjeta"]
+        reference:
+          type: string
+          nullable: true
+          description: Referencia del pago (si existe pago no-efectivo).
+        paid:
+          type: string
+          format: decimal
+          description: Total pagado (suma de todos los pagos).
+        client:
+          $ref: "#/components/schemas/Client"
+        products_sale:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductSale"
+        created_at:
+          type: string
+          format: date-time
+
+    ProductSale:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          description: Código del producto
+        name:
+          type: string
+          description: Nombre del producto
+        quantity:
+          type: integer
+        price:
+          type: string
+          format: decimal
+          example: "125.00"
+
+    Client:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: integer
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone_number:
+          type: string
+          nullable: true
+        discount:
+          type: integer
+          nullable: true
+          description: ID del nivel de descuento
+
+    # --- Sale create request ---
+    SaleCreateRequest:
+      type: object
+      required: [total, store_products]
+      properties:
+        total:
+          type: string
+          format: decimal
+          example: "1250.00"
+        client:
+          type: integer
+          nullable: true
+          description: ID del cliente
+        reservation_in_progress:
+          type: boolean
+          default: false
+          description: Si es true, crea apartado sin descontar stock.
+        store_products:
+          type: array
+          description: Productos a vender con su StoreProduct ID
+          items:
+            type: object
+            required: [id, quantity, price]
+            properties:
+              id:
+                type: integer
+                description: ID del StoreProduct
+              quantity:
+                type: integer
+                minimum: 1
+              price:
+                type: string
+                format: decimal
+                example: "125.00"
+        payments:
+          type: array
+          description: Requerido si no es apartado. Soporta pagos mixtos.
+          items:
+            type: object
+            required: [payment_method, amount]
+            properties:
+              payment_method:
+                type: string
+                enum: ["EF", "TA", "TR"]
+                description: "EF=Efectivo, TA=Tarjeta, TR=Transferencia"
+              amount:
+                type: string
+                format: decimal
+                example: "625.00"
+        reference_payment:
+          type: string
+          nullable: true
+          description: Referencia de transacción (aplica a pagos no-efectivo).
+        sale_exchange:
+          type: object
+          description: Datos de la venta original en caso de cambio/devolución.
+          properties:
+            id:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+            refunded:
+              type: string
+              format: decimal
+
+    # --- Sale update request (completar apartado) ---
+    SaleUpdateRequest:
+      type: object
+      required: [payment]
+      properties:
+        reservation_in_progress:
+          type: boolean
+          description: Pasar a false para completar el apartado.
+        payment:
+          type: object
+          required: [sale, payment_method, amount]
+          properties:
+            sale:
+              type: integer
+            payment_method:
+              type: string
+              enum: ["EF", "TA", "TR"]
+            amount:
+              type: string
+              format: decimal
+            reference:
+              type: string
+              nullable: true
+
+    # --- Cancel/Return requests ---
+    SaleCancelFullRequest:
+      type: object
+      required: [id, is_canceled]
+      properties:
+        id:
+          type: integer
+          description: ID de la venta a cancelar
+        is_canceled:
+          type: boolean
+          enum: [true]
+        reason_cancel:
+          type: string
+          maxLength: 50
+
+    SaleReturnPartialRequest:
+      type: object
+      required: [id, products_to_return]
+      properties:
+        id:
+          type: integer
+          description: ID de la venta
+        products_to_return:
+          type: object
+          description: "Mapa de ProductSale ID → cantidad a devolver"
+          additionalProperties:
+            type: integer
+            minimum: 1
+          example:
+            "42": 2
+            "43": 1
+        reason_return:
+          type: string
+          maxLength: 50
+
+    SaleCancelResponse:
+      type: object
+      properties:
+        sale:
+          $ref: "#/components/schemas/Sale"
+        cash_back:
+          type: string
+          format: decimal
+          description: Monto a devolver al cliente
+
+    # --- Cash Summary ---
+    CashSummaryItem:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Efectivo"
+        amount:
+          oneOf:
+            - type: number
+            - type: string
+          description: Monto o contador según el tipo de métrica
+        payment_method_data:
+          type: boolean
+          description: Presente si es un método de pago
+        sales_data:
+          type: boolean
+          description: Presente si es dato de ventas
+        cashflow_data:
+          type: boolean
+          description: Presente si es dato de flujo de caja
+        total_data:
+          type: boolean
+          description: Presente si es un total
+
+    StoresCashSummaryResponse:
+      type: object
+      properties:
+        stores:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreCashSummary"
+        totals:
+          type: object
+          properties:
+            EF:
+              type: number
+            TA:
+              type: number
+            TR:
+              type: number
+            total_sold:
+              type: number
+            total_reserved:
+              type: number
+            total_day:
+              type: number
+            total_sales:
+              type: integer
+            reservations_created:
+              type: integer
+            canceled_sales:
+              type: integer
+            profit:
+              type: number
+            cash:
+              type: number
+
+    StoreCashSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        full_name:
+          type: string
+          example: "Centro (Tienda)"
+        store_type:
+          type: string
+          enum: ["T", "A"]
+        manager:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            full_name:
+              type: string
+        has_all_products:
+          type: boolean
+          description: True si la tienda tiene todos los productos del catálogo
+        printer:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            brand:
+              type: string
+            model:
+              type: string
+        cash_summary:
+          type: object
+          properties:
+            EF:
+              type: number
+            TA:
+              type: number
+            TR:
+              type: number
+            total_sold:
+              type: number
+            total_reserved:
+              type: number
+            total_day:
+              type: number
+            income:
+              type: number
+            expenses:
+              type: number
+            net_cashflow:
+              type: number
+            cash:
+              type: number
+            profit:
+              type: number
+            total_sales:
+              type: integer
+            reservations_created:
+              type: integer
+            canceled_sales:
+              type: integer
+
+    # --- Dashboards ---
+    TaskResponse:
+      type: object
+      properties:
+        task:
+          type: string
+          description: Celery task ID para consultar resultado vía /api/audit/task-result/{task_id}/
+
+    # --- Import ---
+    ImportValidationRow:
+      type: object
+      properties:
+        code:
+          type: string
+        quantity:
+          type: integer
+        status:
+          type: string
+          enum: ["Exitoso", "Código no encontrado", "Cantidad insuficiente"]
+
+    # --- Duplicate Sales ---
+    DuplicateNotification:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Nombre de la tienda
+          example: "Centro (Tienda)"
+        messages:
+          type: array
+          items:
+            type: string
+          example: ["3 venta(s) duplicada(s)"]
+
+    # --- Common ---
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+        error:
+          type: string
+
+  # ---------------------------------------------------------------------------
+  # Responses
+  # ---------------------------------------------------------------------------
+  responses:
+    Unauthorized:
+      description: Token inválido o no proporcionado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Sale not found for this store."

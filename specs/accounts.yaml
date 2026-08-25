@@ -1,0 +1,401 @@
+# =============================================================================
+# SmartVenta — Módulo Accounts
+# Spec-Driven Development · OpenAPI 3.0
+# =============================================================================
+openapi: "3.0.3"
+
+info:
+  title: SmartVenta — Accounts API
+  version: "1.0.0"
+  description: |
+    Autenticación por token, gestión de usuarios y cambio de contraseña.
+    El login retorna contexto completo: tenant, tienda, rol e impresora.
+
+servers:
+  - url: /api
+    description: Base path de la API
+
+# =============================================================================
+# Paths
+# =============================================================================
+paths:
+  # ---------------------------------------------------------------------------
+  # Authentication
+  # ---------------------------------------------------------------------------
+  /api-token-auth/:
+    post:
+      operationId: auth_login
+      summary: Obtener token de autenticación
+      description: |
+        Autentica al usuario y retorna su token junto con contexto completo:
+        - Datos del usuario (nombre, email)
+        - Tenant (negocio) al que pertenece
+        - Tienda activa (si aplica)
+        - Rol: owner, manager o seller
+        - Impresora configurada en la tienda
+        - Cantidad de tiendas (solo para owners)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  non_field_errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Unable to log in with provided credentials."]
+
+  # ---------------------------------------------------------------------------
+  # User CRUD
+  # ---------------------------------------------------------------------------
+  /user/:
+    get:
+      operationId: user_list
+      summary: Listar usuarios
+      tags: [Users]
+      responses:
+        "200":
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: user_create
+      summary: Crear usuario
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "201":
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /user/{id}/:
+    get:
+      operationId: user_retrieve
+      summary: Detalle de un usuario
+      tags: [Users]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Detalle del usuario
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      operationId: user_update
+      summary: Actualizar usuario
+      tags: [Users]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "200":
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      operationId: user_partial_update
+      summary: Actualizar parcialmente un usuario
+      tags: [Users]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "200":
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    delete:
+      operationId: user_delete
+      summary: Eliminar usuario
+      tags: [Users]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Eliminado
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Change Password
+  # ---------------------------------------------------------------------------
+  /user/change_password/:
+    post:
+      operationId: user_change_password
+      summary: Cambiar contraseña
+      description: |
+        Permite cambiar la contraseña propia o la de un manager (solo owners).
+        
+        **Reglas:**
+        - Si `user_id` es el mismo que el usuario autenticado o no se envía: cambia su propia contraseña.
+        - Si `user_id` es diferente: solo el owner del tenant puede cambiar la contraseña
+          de los managers de sus tiendas. Se valida con la contraseña del owner.
+        - Al cambiar la contraseña de otro usuario, se invalida su token actual.
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Contraseña actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Contraseña actualizada exitosamente"
+        "400":
+          description: Contraseña incorrecta o campos faltantes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: No tiene permisos para cambiar la contraseña de este usuario
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  # ---------------------------------------------------------------------------
+  # Security Schemes
+  # ---------------------------------------------------------------------------
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Token authentication. Formato: `Token <tu-token>`"
+
+  # ---------------------------------------------------------------------------
+  # Parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+    LoginResponse:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        token:
+          type: string
+          description: Token para usar en el header Authorization
+        first_name:
+          type: string
+        last_name:
+          type: string
+        full_name:
+          type: string
+        email:
+          type: string
+        tenant_id:
+          type: integer
+          nullable: true
+        tenant_name:
+          type: string
+          nullable: true
+        tenant_short_name:
+          type: string
+          nullable: true
+        store_id:
+          type: integer
+          nullable: true
+          description: Tienda principal del usuario (null para owners)
+        store_name:
+          type: string
+          nullable: true
+        store_type:
+          type: string
+          nullable: true
+          enum: ["T", "A"]
+        store_type_display:
+          type: string
+          nullable: true
+          example: "Tienda"
+        store_printer:
+          oneOf:
+            - type: integer
+            - type: boolean
+          description: ID de la impresora configurada o false si no hay
+        role:
+          type: string
+          enum: ["owner", "manager", "seller", "Sin definir"]
+          description: |
+            - owner: propietario del tenant
+            - manager: administrador de una tienda
+            - seller: vendedor asignado a una tienda
+        store_count:
+          type: integer
+          description: Solo presente para owners. Cantidad de tiendas del tenant.
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+
+    UserCreateRequest:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      required: [old_password, new_password, confirm_password]
+      properties:
+        user_id:
+          type: integer
+          description: |
+            ID del usuario al que se le cambiará la contraseña.
+            Si no se envía o es el mismo que el autenticado, se cambia la propia.
+        old_password:
+          type: string
+          description: Contraseña actual (del usuario autenticado)
+        new_password:
+          type: string
+        confirm_password:
+          type: string
+          description: Debe coincidir con new_password
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+  # ---------------------------------------------------------------------------
+  # Responses
+  # ---------------------------------------------------------------------------
+  responses:
+    Unauthorized:
+      description: Token inválido o no proporcionado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Not found."
