@@ -1,12 +1,14 @@
 from rest_framework import serializers
 
-from products.serializers import ProductSerializer
+from products.serializers import ProductSerializer, SmartDecimalField
 from .models import ProductPriceLog, StoreProductLog
 
 
 class StoreProductLogSerializer(serializers.ModelSerializer):
     description = serializers.CharField(source='get_description', read_only=True)
-    difference = serializers.IntegerField(source='calculate_difference', read_only=True)
+    difference = SmartDecimalField(source='calculate_difference', read_only=True, max_digits=10, decimal_places=3)
+    previous_stock = SmartDecimalField(max_digits=10, decimal_places=3)
+    updated_stock = SmartDecimalField(max_digits=10, decimal_places=3)
     user_username = serializers.CharField(source='user.username', read_only=True)
     is_consistent = serializers.SerializerMethodField()
 
@@ -29,7 +31,7 @@ class StoreProductLogAuditSerializer(serializers.ModelSerializer):
     product_code = serializers.CharField(source='store_product.product.code', read_only=True)
     product_name = serializers.CharField(source='store_product.product.get_description', read_only=True)
     store_name = serializers.CharField(source='store_product.store.get_full_name', read_only=True)
-    current_stock = serializers.IntegerField(source='store_product.stock', read_only=True)
+    current_stock = SmartDecimalField(source='store_product.stock', read_only=True, max_digits=10, decimal_places=3)
 
     class Meta:
         model = StoreProductLog

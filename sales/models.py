@@ -99,7 +99,7 @@ class ProductSale(models.Model):
     sale = models.ForeignKey(
         Sale, on_delete=models.CASCADE, related_name="products_sale"
     )
-    quantity = models.IntegerField()
+    quantity = models.DecimalField(max_digits=10, decimal_places=3)
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def get_total(self):

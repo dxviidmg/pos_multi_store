@@ -20,6 +20,7 @@ router.register('product-conversion', views.ProductConversionViewSet, basename='
 urlpatterns = router.urls
 
 urlpatterns += [
+    path('products/units/', views.UnitListView.as_view(), name='units'),
     path('store/<int:pk>/investment/', views.StoreInvestmentView.as_view(), name='store-investment'),
     path('store/<int:pk>/reset-stock/', views.ResetStoreStockView.as_view(), name='store-reset-stock'),
     path('brands/delete/', views.BrandDeleteView.as_view(), name='brands-delete'),

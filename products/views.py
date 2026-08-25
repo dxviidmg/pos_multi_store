@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, DecimalField, F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.utils import timezone
@@ -126,9 +126,11 @@ def annotate_stock_info(queryset: QuerySet) -> QuerySet:
     
     return queryset.annotate(
         reserved_stock=Coalesce(
-            Subquery(reserved_transfers, output_field=IntegerField()), 0
+            Subquery(reserved_transfers, output_field=DecimalField()), 0,
+            output_field=DecimalField()
         ) + Coalesce(
-            Subquery(reserved_sales, output_field=IntegerField()), 0
+            Subquery(reserved_sales, output_field=DecimalField()), 0,
+            output_field=DecimalField()
         ),
         available_stock=F('stock') - F('reserved_stock')
     )
@@ -303,7 +305,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             Product.objects
             .filter(filters)
             .select_related("brand", "department")
-            .annotate(total_stock=Coalesce(Sum("product_stores__stock"), 0))
+            .annotate(total_stock=Coalesce(Sum("product_stores__stock"), 0, output_field=DecimalField()))
         )
 
         if max_stock:
@@ -1583,12 +1585,6 @@ class ProductConversionViewSet(viewsets.ModelViewSet):
             "status": "Conversión aplicada",
         })
 
-    @action(detail=False, methods=['get'])
-    def units(self, request):
-        from core.constants import Unit
-        choices = [{"value": value, "label": label} for value, label in Unit.choices]
-        return Response(choices)
-
     def perform_create(self, serializer):
         tenant = self.request.user.get_tenant()
         source = serializer.validated_data['source_product']
@@ -1599,3 +1595,10 @@ class ProductConversionViewSet(viewsets.ModelViewSet):
 
         serializer.save()
 
+
+
+class UnitListView(APIView):
+    def get(self, request):
+        from core.constants import Unit
+        choices = [{"value": value, "label": label} for value, label in Unit.choices]
+        return Response(choices)

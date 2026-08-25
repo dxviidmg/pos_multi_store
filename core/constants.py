@@ -50,11 +50,10 @@ class WorkerRole(models.TextChoices):
 
 
 class Unit(models.TextChoices):
-    """Unidades de medida para conversiones"""
+    """Unidades de medida"""
     PIEZA = "PZ", "Pieza"
     KG = "KG", "Kilogramo"
     COSTAL = "CO", "Costal"
-    LITRO = "LT", "Litro"
-    METRO = "MT", "Metro"
-    ROLLO = "RL", "Rollo"
-    CAJA = "CJ", "Caja"
+
+
+

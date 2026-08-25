@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 
 import pandas as pd
 from django.db import transaction
@@ -145,6 +146,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         # Usar una transacción para asegurar la atomicidad
         with transaction.atomic():
             for product_data in store_products_data:
+                product_data["quantity"] = Decimal(str(product_data["quantity"]))
                 product_store = StoreProduct.objects.select_for_update().get(id=product_data["id"])
                 
                 # Validar stock disponible
