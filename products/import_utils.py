@@ -60,6 +60,7 @@ def rename_product_columns(df: pd.DataFrame) -> pd.DataFrame:
             "Cantidad minima mayoreo": "min_wholesale_quantity",
             "Precio Mayoreo en descuento de clientes": "wholesale_price_on_client_discount",
             "Cantidad": "quantity",
+            "Unidad": "unit",
         }
     )
 
@@ -97,17 +98,23 @@ def rename_store_product_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def validate_quantities(df: pd.DataFrame) -> None:
-    """Valida que todas las cantidades sean números enteros
+    """Valida que todas las cantidades sean números positivos
     
     Args:
         df: DataFrame con columna 'quantity'
         
     Raises:
-        ValueError: Si hay valores no enteros
+        ValueError: Si hay valores no numéricos o negativos
     """
-    all_integers = df["quantity"].apply(lambda x: isinstance(x, int)).all()
-    if not all_integers:
-        raise ValueError("No todos los datos en la columna Cantidad son números")
+    def is_positive_number(x):
+        try:
+            return float(x) > 0
+        except (TypeError, ValueError):
+            return False
+
+    all_valid = df["quantity"].apply(is_positive_number).all()
+    if not all_valid:
+        raise ValueError("No todos los datos en la columna Cantidad son números positivos")
 
 
 def clean_row_data(row_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -123,3 +130,44 @@ def clean_row_data(row_data: Dict[str, Any]) -> Dict[str, Any]:
         key: value.strip() if isinstance(value, str) else value
         for key, value in row_data.items()
     }
+
+
+VALID_UNITS = {"PZ", "KG", "CO"}
+TRUTHY_VALUES = {"SI", "S", "1"}
+
+
+def parse_unit(value) -> str:
+    """Parsea el valor de unidad del Excel
+    
+    Args:
+        value: Valor de la celda (puede ser str, None, etc.)
+        
+    Returns:
+        Código de unidad válido ('PZ', 'KG', 'CO')
+        
+    Raises:
+        ValueError: Si el valor no es una unidad válida
+    """
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return "PZ"
+    unit = str(value).strip().upper()
+    if unit not in VALID_UNITS:
+        raise ValueError(f"Unidad inválida: '{value}'. Valores válidos: PZ, KG, CO")
+    return unit
+
+
+def parse_sells_by_weight_to_unit(value) -> str | None:
+    """Convierte el valor legacy 'Venta por peso' a unidad.
+
+    Si el valor indica venta por peso, retorna 'KG'.
+    Si no, retorna None (no sobreescribir la unidad).
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return "KG" if value else None
+    if isinstance(value, (int, float)):
+        return "KG" if value else None
+    if str(value).strip().upper() in TRUTHY_VALUES:
+        return "KG"
+    return None

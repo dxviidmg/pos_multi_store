@@ -125,6 +125,11 @@ class Product(Base):
     min_wholesale_quantity = models.IntegerField(null=True, blank=True)
     wholesale_price_on_client_discount = models.BooleanField(default=False)
     image = models.ImageField(upload_to=path, null=True, blank=True)
+    unit = models.CharField(max_length=2, choices=Unit.choices, default=Unit.PIEZA)
+
+    @property
+    def sells_by_weight(self):
+        return self.unit == Unit.KG
 
     def clean(self):
         if (
@@ -161,7 +166,7 @@ class StoreProduct(models.Model):
     product = models.ForeignKey(
         Product, on_delete=models.CASCADE, related_name="product_stores"
     )
-    stock = models.IntegerField(default=0)
+    stock = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     requires_stock_verification = models.BooleanField(default=False)
 
     class Meta:
@@ -226,7 +231,7 @@ class Transfer(CreatedAtModel):
         Store, related_name="transfers_to", on_delete=models.CASCADE
     )
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.IntegerField()
+    quantity = models.DecimalField(max_digits=10, decimal_places=3)
     transfer_datetime = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -272,7 +277,7 @@ class StoreWorker(models.Model):
 class StockUpdateRequest(CreatedAtModel):
     store_product = models.ForeignKey(StoreProduct, on_delete=models.CASCADE, related_name='update_requests')
     requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stock_requests')
-    requested_stock = models.IntegerField()
+    requested_stock = models.DecimalField(max_digits=10, decimal_places=3)
     applied = models.BooleanField(default=False)
 
     class Meta:
@@ -292,8 +297,6 @@ class ProductConversion(models.Model):
         Product, on_delete=models.CASCADE, related_name='conversions_to'
     )
     factor = models.PositiveIntegerField(default=10)  # 1 source → N target
-    source_unit = models.CharField(max_length=2, choices=Unit.choices)
-    target_unit = models.CharField(max_length=2, choices=Unit.choices)
 
     def __str__(self):
-        return f"1 {self.get_source_unit_display()} → {self.factor} {self.get_target_unit_display()} ({self.source_product.name})"
+        return f"1 {self.source_product.get_unit_display()} → {self.factor} {self.target_product.get_unit_display()} ({self.source_product.name})"

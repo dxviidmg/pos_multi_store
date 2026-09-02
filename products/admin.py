@@ -56,5 +56,5 @@ admin.site.register(StockUpdateRequest)
 @admin.register(ProductConversion)
 class ProductConversionAdmin(admin.ModelAdmin):
     search_fields = ['source_product__name', 'target_product__name']
-    list_display = ['id', 'source_product', 'target_product', 'factor', 'source_unit', 'target_unit']
+    list_display = ['id', 'source_product', 'target_product', 'factor']
     list_filter = ['source_product__brand__tenant']

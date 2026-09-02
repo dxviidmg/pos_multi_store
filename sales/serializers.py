@@ -1,12 +1,14 @@
 from rest_framework import serializers
 
 from clients.serializers import ClientSerializer
+from products.serializers import SmartDecimalField
 from .models import ProductSale, Sale
 
 
 class ProductSaleSerializer(serializers.ModelSerializer):
     code = serializers.CharField(source='product.code', read_only=True)
     name = serializers.CharField(source='product.name', read_only=True)
+    quantity = SmartDecimalField(max_digits=10, decimal_places=3)
 
     class Meta:
         model = ProductSale

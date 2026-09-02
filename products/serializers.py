@@ -1,8 +1,20 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
+
+
+class SmartDecimalField(serializers.DecimalField):
+    """Devuelve int si el valor no tiene decimales, decimal string si sí."""
+    def to_representation(self, value):
+        if value is None:
+            return None
+        value = Decimal(str(value))
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
 
 from sales.cash_summary_utils import (
     calculate_cash_summary,
@@ -64,6 +76,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
 class ProductSearchSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source='brand.name', read_only=True)
     prices = serializers.SerializerMethodField()
+    sells_by_weight = serializers.BooleanField(read_only=True)
 
     def get_prices(self, obj):
         return {
@@ -76,7 +89,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ["id", "code", "brand_name", "name", "prices", "image"]
+        fields = ["id", "code", "brand_name", "name", "prices", "image", "sells_by_weight", "unit"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -84,6 +97,7 @@ class ProductSerializer(serializers.ModelSerializer):
     department_name = serializers.SerializerMethodField()
     apply_wholesale = serializers.SerializerMethodField()
     stock = serializers.SerializerMethodField()
+    sells_by_weight = serializers.BooleanField(read_only=True)
 
     def get_department_name(self, obj):
         return obj.department.name if obj.department else ''
@@ -92,9 +106,12 @@ class ProductSerializer(serializers.ModelSerializer):
         return obj.wholesale_price is not None and obj.min_wholesale_quantity is not None
 
     def get_stock(self, obj):
-        if hasattr(obj, 'total_stock'):
-            return obj.total_stock
-        return obj.get_stock()
+        from decimal import Decimal
+        value = obj.total_stock if hasattr(obj, 'total_stock') else obj.get_stock()
+        value = Decimal(str(value))
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
 
     class Meta:
         model = Product
@@ -102,7 +119,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'code', 'name', 'cost', 'unit_price', 'wholesale_price',
             'min_wholesale_quantity', 'wholesale_price_on_client_discount',
             'image', 'brand', 'department', 'brand_name', 'department_name',
-            'apply_wholesale', 'stock',
+            'apply_wholesale', 'stock', 'sells_by_weight', 'unit',
         ]
 
     def validate(self, data):
@@ -132,6 +149,7 @@ class StoreBaseSerializer(serializers.ModelSerializer):
 
 class StoreProductBaseSerializer(serializers.ModelSerializer):
     product = ProductSearchSerializer(read_only=True)
+    stock = SmartDecimalField(max_digits=10, decimal_places=3)
 
     class Meta:
         model = StoreProduct
@@ -139,14 +157,14 @@ class StoreProductBaseSerializer(serializers.ModelSerializer):
 
 
 class StoreProductCodeSerializer(StoreProductBaseSerializer):
-    available_stock = serializers.IntegerField(read_only=True)
-    reserved_stock = serializers.IntegerField(read_only=True)
+    available_stock = SmartDecimalField(read_only=True, max_digits=10, decimal_places=3)
+    reserved_stock = SmartDecimalField(read_only=True, max_digits=10, decimal_places=3)
     store_name = serializers.CharField(source='store.name', read_only=True)
 
 
 class StoreProductSerializer(StoreProductBaseSerializer):
-    available_stock = serializers.IntegerField(read_only=True)
-    reserved_stock = serializers.IntegerField(read_only=True)
+    available_stock = SmartDecimalField(read_only=True, max_digits=10, decimal_places=3)
+    reserved_stock = SmartDecimalField(read_only=True, max_digits=10, decimal_places=3)
     store = StoreBaseSerializer(read_only=True)
 
 
@@ -155,11 +173,12 @@ class ProductForStockSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ["id", "code", "brand_name", "name", "image"]
+        fields = ["id", "code", "brand_name", "name", "image", "unit"]
 
 
 class StoreProductForStockSerializer(serializers.ModelSerializer):
     product = ProductForStockSerializer(read_only=True)
+    stock = SmartDecimalField(max_digits=10, decimal_places=3)
 
     class Meta:
         model = StoreProduct
@@ -275,7 +294,7 @@ class StoreProductAuditSerializer(serializers.ModelSerializer):
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_name = serializers.CharField(source='product.get_description', read_only=True)
     store_name = serializers.CharField(source='store.get_full_name', read_only=True)
-    current_stock = serializers.IntegerField(source='stock', read_only=True)
+    current_stock = SmartDecimalField(source='stock', read_only=True, max_digits=10, decimal_places=3)
     last_log_stock = serializers.SerializerMethodField()
 
     class Meta:
@@ -314,8 +333,8 @@ class StockUpdateRequestSerializer(serializers.ModelSerializer):
 
 
 class ProductConversionSerializer(serializers.ModelSerializer):
-    source_unit_display = serializers.CharField(source='get_source_unit_display', read_only=True)
-    target_unit_display = serializers.CharField(source='get_target_unit_display', read_only=True)
+    source_unit_display = serializers.CharField(source='source_product.get_unit_display', read_only=True)
+    target_unit_display = serializers.CharField(source='target_product.get_unit_display', read_only=True)
     source_product_name = serializers.CharField(source='source_product.get_description', read_only=True)
     target_product_name = serializers.CharField(source='target_product.get_description', read_only=True)
 

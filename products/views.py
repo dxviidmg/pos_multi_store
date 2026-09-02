@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, DecimalField, F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.utils import timezone
@@ -27,6 +27,8 @@ from .import_utils import (
     rename_store_product_columns,
     validate_quantities,
     clean_row_data,
+    parse_unit,
+    parse_sells_by_weight_to_unit,
 )
 from .models import (
     Brand,
@@ -126,9 +128,11 @@ def annotate_stock_info(queryset: QuerySet) -> QuerySet:
     
     return queryset.annotate(
         reserved_stock=Coalesce(
-            Subquery(reserved_transfers, output_field=IntegerField()), 0
+            Subquery(reserved_transfers, output_field=DecimalField()), 0,
+            output_field=DecimalField()
         ) + Coalesce(
-            Subquery(reserved_sales, output_field=IntegerField()), 0
+            Subquery(reserved_sales, output_field=DecimalField()), 0,
+            output_field=DecimalField()
         ),
         available_stock=F('stock') - F('reserved_stock')
     )
@@ -303,7 +307,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             Product.objects
             .filter(filters)
             .select_related("brand", "department")
-            .annotate(total_stock=Coalesce(Sum("product_stores__stock"), 0))
+            .annotate(total_stock=Coalesce(Sum("product_stores__stock"), 0, output_field=DecimalField()))
         )
 
         if max_stock:
@@ -860,6 +864,17 @@ class ProductImportValidationView(APIView):
                         if not is_positivo:
                             data_row["status"] = "Cantidad debe ser un número positivo"
 
+                    # Validar unidad
+                    if data_row.get("unit") is not None and str(data_row["unit"]).strip() != "":
+                        unit_val = str(data_row["unit"]).strip().upper()
+                        if unit_val not in ("PZ", "KG", "CO"):
+                            data_row["status"] = "Unidad inválida. Valores válidos: PZ, KG, CO"
+
+                    # Validar venta por peso + mayoreo
+                    unit_for_check = data_row.get("unit")
+                    if unit_for_check and str(unit_for_check).strip().upper() == "KG" and data_row.get("wholesale_price") is not None:
+                        data_row["status"] = "Productos a granel no pueden tener precio de mayoreo"
+
                 data.append(data_row)
 
             return Response(data, status=status.HTTP_200_OK)
@@ -912,7 +927,7 @@ class ProductImport(APIView):
 
                 data_row = clean_row_data(data_row)
 
-                quantity = data_row.pop("quantity")
+                quantity = data_row.pop("quantity", None)
                 brand_name = data_row["brand"]
                 if brand_name not in brand_cache:
                     brand_cache[brand_name], _ = Brand.objects.get_or_create(
@@ -941,6 +956,10 @@ class ProductImport(APIView):
                 data_row["wholesale_price_on_client_discount"] = bool(
                     data_row["wholesale_price_on_client_discount"]
                 )
+
+                # Parsear unit (la columna legacy "Venta por peso" ya no existe en el rename)
+                raw_unit = data_row.pop("unit", None)
+                data_row["unit"] = parse_unit(raw_unit)
 
                 if len(data_row["name"]) > 100:
                     data_row["name"] = data_row["name"][:100]
@@ -1583,12 +1602,6 @@ class ProductConversionViewSet(viewsets.ModelViewSet):
             "status": "Conversión aplicada",
         })
 
-    @action(detail=False, methods=['get'])
-    def units(self, request):
-        from core.constants import Unit
-        choices = [{"value": value, "label": label} for value, label in Unit.choices]
-        return Response(choices)
-
     def perform_create(self, serializer):
         tenant = self.request.user.get_tenant()
         source = serializer.validated_data['source_product']
@@ -1599,3 +1612,10 @@ class ProductConversionViewSet(viewsets.ModelViewSet):
 
         serializer.save()
 
+
+
+class UnitListView(APIView):
+    def get(self, request):
+        from core.constants import Unit
+        choices = [{"value": value, "label": label} for value, label in Unit.choices]
+        return Response(choices)

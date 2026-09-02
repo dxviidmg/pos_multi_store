@@ -1,0 +1,201 @@
+# =============================================================================
+# SmartVenta — Feature: Venta a Granel
+# Spec-Driven Development · Cambio de contrato
+# =============================================================================
+#
+# Problema de negocio:
+#   Los clientes necesitan vender productos a granel (por peso/volumen),
+#   por ejemplo "1.5 kg de comida para perro" o "20 pesos de jamón".
+#   Actualmente solo se permite venta por unidades enteras.
+#
+# Solución:
+#   Agregar bandera `sells_by_weight` y campo `unit` al producto.
+#   Convertir campos de cantidad/stock de entero a decimal.
+#   El frontend calcula quantity = monto / precio cuando aplica.
+#   Productos existentes no se ven afectados (default PZ, entero visual).
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Cambios en modelos (migración)
+# -----------------------------------------------------------------------------
+models:
+  Product:
+    new_fields:
+      - name: sells_by_weight
+        type: BooleanField
+        default: false
+        description: |
+          Si true, el producto se vende a granel (permite cantidades decimales).
+          Si false, se vende por pieza (comportamiento actual).
+
+      - name: unit
+        type: CharField
+        max_length: 2
+        choices: [PZ, KG, CO]  # Pieza, Kilogramo, Costal
+        default: "PZ"
+        description: Unidad de venta del producto.
+
+    business_rules:
+      - "Si sells_by_weight=True, precio mayoreo NO aplica (se ignora wholesale_price)"
+      - "Productos existentes migran con sells_by_weight=False, unit='PZ'"
+
+  StoreProduct:
+    changed_fields:
+      - name: stock
+        from: IntegerField
+        to: DecimalField(max_digits=10, decimal_places=3)
+        migration_note: "ALTER COLUMN, sin pérdida de datos (20 → 20.000)"
+
+    constraints:
+      - "CheckConstraint stock >= 0 se mantiene (funciona igual con decimal)"
+
+  ProductSale:
+    changed_fields:
+      - name: quantity
+        from: IntegerField
+        to: DecimalField(max_digits=10, decimal_places=3)
+
+  Transfer:
+    changed_fields:
+      - name: quantity
+        from: IntegerField
+        to: DecimalField(max_digits=10, decimal_places=3)
+
+  StoreProductLog:
+    changed_fields:
+      - name: previous_stock
+        from: IntegerField
+        to: DecimalField(max_digits=10, decimal_places=3)
+      - name: updated_stock
+        from: IntegerField
+        to: DecimalField(max_digits=10, decimal_places=3)
+
+  StockUpdateRequest:
+    changed_fields:
+      - name: requested_stock
+        from: IntegerField
+        to: DecimalField(max_digits=10, decimal_places=3)
+
+# -----------------------------------------------------------------------------
+# 2. Cambios en API (contratos)
+# -----------------------------------------------------------------------------
+api_changes:
+
+  # --- Product ---
+  "GET /product/, POST /product/, PUT /product/{id}/":
+    added_fields:
+      - name: sells_by_weight
+        type: boolean
+        default: false
+      - name: unit
+        type: string
+        enum: ["PZ", "KG", "CO"]
+        default: "PZ"
+      - name: unit_display
+        type: string
+        read_only: true
+        example: "Kilogramo"
+
+  # --- StoreProduct ---
+  "GET /store-product/":
+    changed_fields:
+      - name: stock
+        from: integer
+        to: string (decimal)
+        example: "20.000"
+    added_fields:
+      - name: sells_by_weight
+        type: boolean
+        source: product.sells_by_weight
+        read_only: true
+      - name: unit
+        type: string
+        source: product.unit
+        read_only: true
+
+  # --- Sale create ---
+  "POST /sale/":
+    changed_fields:
+      - path: store_products[].quantity
+        from: integer
+        to: string (decimal)
+        example: "1.500"
+        validation: "must be > 0"
+
+  # --- ProductSale (in sale response) ---
+  "GET /sale/, GET /sale/{id}/":
+    changed_fields:
+      - path: products_sale[].quantity
+        from: integer
+        to: string (decimal)
+
+  # --- Transfer ---
+  "POST /transfer/, PUT /transfer/{id}/, POST /transfers/confirm/":
+    changed_fields:
+      - path: quantity
+        from: integer
+        to: string (decimal)
+        validation: "must be > 0; for PZ products frontend should send integer values"
+
+  # --- Logs ---
+  "GET /store-product-logs/":
+    changed_fields:
+      - path: previous_stock
+        from: integer
+        to: string (decimal)
+      - path: updated_stock
+        from: integer
+        to: string (decimal)
+      - path: difference
+        from: string (integer with sign)
+        to: string (decimal with sign)
+        example: "+1.500"
+
+# -----------------------------------------------------------------------------
+# 3. Lógica de negocio (sin cambios en el backend)
+# -----------------------------------------------------------------------------
+business_logic:
+  sale_creation:
+    - "Backend recibe quantity como decimal"
+    - "Valida stock disponible >= quantity (comparación decimal)"
+    - "Descuenta stock normalmente"
+    - "Si sells_by_weight=True, NO evalúa wholesale_price"
+    - "El cálculo 'monto / precio = quantity' lo hace el frontend"
+
+  display_rules:
+    - "Frontend: si product.sells_by_weight=False → mostrar stock/quantity como entero"
+    - "Frontend: si product.sells_by_weight=True → mostrar con decimales + unidad"
+    - "Backend: siempre almacena y retorna decimal, no formatea"
+
+# -----------------------------------------------------------------------------
+# 4. Migración de datos
+# -----------------------------------------------------------------------------
+migration:
+  steps:
+    - "Add sells_by_weight=False to Product"
+    - "Add unit='PZ' to Product"
+    - "ALTER StoreProduct.stock → DecimalField (20 → 20.000)"
+    - "ALTER ProductSale.quantity → DecimalField"
+    - "ALTER Transfer.quantity → DecimalField"
+    - "ALTER StoreProductLog.previous_stock → DecimalField"
+    - "ALTER StoreProductLog.updated_stock → DecimalField"
+    - "ALTER StockUpdateRequest.requested_stock → DecimalField"
+  
+  risk: LOW
+  notes:
+    - "Integer → Decimal es una conversión segura sin pérdida de datos"
+    - "CheckConstraint stock >= 0 funciona igual con DecimalField"
+    - "No se requiere backfill: valores existentes son válidos como decimal"
+
+# -----------------------------------------------------------------------------
+# 5. Qué NO cambia
+# -----------------------------------------------------------------------------
+unchanged:
+  - "Flujo de venta por pieza (frontend sigue mandando enteros como '2.000' o '2')"
+  - "Corte de caja — trabaja con totales monetarios, no con quantities"
+  - "Apartados — misma lógica, solo quantity pasa a decimal"
+  - "Importación Excel — quantity column acepta decimales"
+  - "Auditorías — misma lógica de detección"
+  - "CashFlow — no tiene quantities"
+  - "Precio mayoreo — sigue funcionando para productos PZ (sells_by_weight=False)"

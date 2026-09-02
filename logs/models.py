@@ -14,8 +14,8 @@ class StoreProductLog(CreatedAtModel):
         Store, on_delete=models.CASCADE, related_name="store_related", null=True, blank=True
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    previous_stock = models.IntegerField()
-    updated_stock = models.IntegerField()
+    previous_stock = models.DecimalField(max_digits=10, decimal_places=3)
+    updated_stock = models.DecimalField(max_digits=10, decimal_places=3)
     action = models.CharField(max_length=1, choices=LogAction.choices)
     movement = models.CharField(max_length=2, choices=LogMovement.choices, default=LogMovement.MANUAL)
 
