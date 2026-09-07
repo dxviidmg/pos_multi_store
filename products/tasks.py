@@ -1,6 +1,18 @@
+from decimal import Decimal
+
 from celery import shared_task
 from .models import StoreProduct, Store, Transfer
 from .serializers import StoreProductForStockSerializer, TransferSerializer
+
+
+def normalize_quantity(value):
+    """Devuelve int si el valor no tiene decimales, float si sí."""
+    if value is None:
+        return None
+    value = Decimal(str(value))
+    if value == value.to_integral_value():
+        return int(value)
+    return float(value)
 
 @shared_task
 def get_store_products_task(tenant_id, start_date, end_date):
@@ -63,7 +75,7 @@ def get_pending_transfers_dashboard(store_ids):
     return {
         "transfers": [
             {
-                "quantity": t["quantity"],
+                "quantity": normalize_quantity(t["quantity"]),
                 "destination_store": stores.get(t["destination_store_id"], ""),
                 "origin_store": stores.get(t.get("origin_store_id"), ""),
                 "created_at": t["created_at"],
