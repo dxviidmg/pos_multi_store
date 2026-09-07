@@ -186,6 +186,7 @@ class StoreProductForStockSerializer(serializers.ModelSerializer):
 
 
 class TransferSerializer(serializers.ModelSerializer):
+    quantity = SmartDecimalField(max_digits=10, decimal_places=3)
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_description = serializers.CharField(source='product.get_description', read_only=True)
     editable_product_max_stock = serializers.SerializerMethodField()
@@ -209,7 +210,10 @@ class TransferSerializer(serializers.ModelSerializer):
 
     def get_editable_product_max_stock(self, obj):
         store_product = StoreProduct.objects.get(product=obj.product, store=obj.origin_store)
-        return obj.quantity + store_product.calculate_available_stock()
+        value = Decimal(str(obj.quantity + store_product.calculate_available_stock()))
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
 
     class Meta:
         model = Transfer
