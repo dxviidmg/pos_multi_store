@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 import mercadopago
 
 from django.conf import settings
+from django.utils import timezone
+from django.db import transaction
 from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -183,7 +185,7 @@ class PublicTenantCreateView(APIView):
                 card_token_id="",
                 payer_email=data['payer_email'],
                 payment_method_id=data.get('payment_method_id', 'credit_card'),
-                status="active",
+                status="authorized",
                 amount=plan.price,
             )
 
@@ -220,7 +222,7 @@ class TenantInfoView(APIView):
         show_mp_modal = False
         notices = []
         payment = Payment.objects.filter(tenant=tenant).only('end_of_validity').last()
-        active_subscription = Subscription.objects.filter(tenant=tenant, status="active").exists()
+        active_subscription = Subscription.objects.filter(tenant=tenant, status="authorized").exists()
 
         if tenant.is_sandbox:
             notices = [{"notice": "Soy una cuenta de demostración", "variant": "success"}]
@@ -369,13 +371,25 @@ class CurrentPlanView(APIView):
         
         tenant = request.user.get_tenant()
         plan = tenant.get_plan()
-        
+
+        # Estado de negocio (derivado de cancelled_at) y fecha de acceso.
+        subscription_status = "cancelled" if tenant.is_cancelled else "active"
+        access_until = tenant.access_until()
+        access_until_iso = (
+            timezone.make_aware(
+                datetime.combine(access_until, datetime.min.time())
+            ).isoformat()
+            if access_until else None
+        )
+
         if not plan:
             return Response({
                 "has_plan": False,
-                "message": "No hay un plan asignado"
+                "message": "No hay un plan asignado",
+                "subscription_status": subscription_status,
+                "access_until": access_until_iso,
             })
-        
+
         return Response({
             "has_plan": True,
             "plan": {
@@ -385,7 +399,9 @@ class CurrentPlanView(APIView):
                 "stores": plan.stores,
                 "billing_type": plan.billing_type,
                 "billing_type_display": plan.get_billing_type_display()
-            }
+            },
+            "subscription_status": subscription_status,
+            "access_until": access_until_iso,
         })
 
 
@@ -426,7 +442,7 @@ class TenantDatesView(APIView):
 
         # Fecha de la domiciliación (suscripción) activa
         active_subscription = Subscription.objects.filter(
-            tenant=tenant, status="active"
+            tenant=tenant, status="authorized"
         ).order_by('-created_at').first()
 
         subscription_date = active_subscription.created_at if active_subscription else None
@@ -541,7 +557,7 @@ class CreateSubscriptionView(APIView):
         data = response.json()
 
         # Cancelar suscripciones anteriores del tenant en MP y localmente
-        old_subs = Subscription.objects.filter(tenant=tenant, status="active")
+        old_subs = Subscription.objects.filter(tenant=tenant, status="authorized")
         for old_sub in old_subs:
             try:
                 requests.put(
@@ -559,13 +575,16 @@ class CreateSubscriptionView(APIView):
             card_token_id="",  # No se reutiliza, campo legacy
             payer_email=payer_email,
             payment_method_id=payment_method_id,
-            status="active",
+            status="authorized",
             amount=plan.price,
         )
 
-        # Actualizar plan del tenant
+        # Reactivación: al crear una nueva suscripción se limpia el estado de
+        # cancelación de negocio (sin historial, por decisión de diseño).
+        tenant.cancelled_at = None
+        tenant.cancellation_reason = ""
         tenant.plan = plan
-        tenant.save(update_fields=["plan"])
+        tenant.save(update_fields=["plan", "cancelled_at", "cancellation_reason"])
 
         return Response({
             "id": subscription.id,
@@ -573,6 +592,99 @@ class CreateSubscriptionView(APIView):
             "status": data.get("status"),
             "amount": float(plan.price),
         }, status=status.HTTP_201_CREATED)
+
+
+class SubscriptionCancelView(APIView):
+    """Cancela la suscripción del tenant (a nivel MP y a nivel negocio)."""
+
+    def post(self, request):
+        # Solo el owner puede cancelar (aunque el tenant tenga varios managers).
+        if request.user.get_role() != 'owner':
+            return Response(
+                {"detail": "Solo el propietario puede cancelar la suscripción"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        tenant = request.user.get_tenant()
+
+        # Idempotencia: si ya está cancelado a nivel negocio -> 409.
+        if tenant.cancelled_at is not None:
+            return Response(
+                {"detail": "La suscripción ya está cancelada"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Validar motivo contra el enum permitido.
+        reason = request.data.get("reason")
+        valid_reasons = {c[0] for c in Tenant.CANCELLATION_REASON_CHOICES}
+        if reason not in valid_reasons:
+            return Response(
+                {"detail": "reason inválido"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Obtener la última suscripción activa (authorized) del tenant.
+        subscription = (
+            Subscription.objects.filter(tenant=tenant, status="authorized")
+            .order_by("-created_at")
+            .first()
+        )
+        if not subscription:
+            return Response(
+                {"detail": "No hay una suscripción activa"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Cancelar el preapproval en Mercado Pago (paso irreversible: va primero).
+        mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
+        try:
+            mp_response = requests.put(
+                f"https://api.mercadopago.com/preapproval/{subscription.mp_subscription_id}",
+                json={"status": "cancelled"},
+                headers={
+                    "Authorization": f"Bearer {mp_access_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+        except Exception as e:
+            logger.error(f"[SubscriptionCancel] MP request error: {e}")
+            return Response(
+                {"detail": "No se pudo cancelar la suscripción. Contacta a soporte técnico."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if mp_response.status_code not in (200, 201):
+            logger.error(
+                f"[SubscriptionCancel] MP cancel failed: {mp_response.status_code} - {mp_response.text}"
+            )
+            return Response(
+                {"detail": "No se pudo cancelar la suscripción. Contacta a soporte técnico."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Guardado local atómico: Subscription (MP) + Tenant (negocio) juntos.
+        with transaction.atomic():
+            subscription.status = "cancelled"
+            subscription.save(update_fields=["status"])
+            tenant.cancelled_at = timezone.now()
+            tenant.cancellation_reason = reason
+            tenant.save(update_fields=["cancelled_at", "cancellation_reason"])
+
+        access_until = tenant.access_until()
+        access_until_iso = (
+            timezone.make_aware(
+                datetime.combine(access_until, datetime.min.time())
+            ).isoformat()
+            if access_until else None
+        )
+
+        logger.info(
+            f"[SubscriptionCancel] tenant={tenant.short_name} cancelled reason={reason}"
+        )
+        return Response(
+            {"status": "cancelled", "access_until": access_until_iso},
+            status=status.HTTP_200_OK,
+        )
 
 
 class MPWebhookView(APIView):
@@ -662,17 +774,29 @@ class MPWebhookView(APIView):
         new_status = mp_sub.get("status")
         logger.info(f"[MPWebhook] subscription update: id={sub_id} status={new_status}")
 
-        status_map = {
-            "authorized": "active",
-            "paused": "paused",
-            "cancelled": "cancelled",
-        }
+        # Vocabulario alineado con MP: se persiste el status directo, validando
+        # contra los choices. Un estado desconocido se ignora (no corromper datos).
+        valid_statuses = {choice[0] for choice in Subscription.STATUS_CHOICES}
+        if new_status not in valid_statuses:
+            logger.warning(f"[MPWebhook] unknown subscription status from MP: {new_status} (id={sub_id}), ignoring")
+            return Response(status=status.HTTP_200_OK)
 
         try:
             subscription = Subscription.objects.get(mp_subscription_id=str(sub_id))
-            subscription.status = status_map.get(new_status, subscription.status)
+            subscription.status = new_status
             subscription.save(update_fields=["status"])
             logger.info(f"[MPWebhook] subscription {sub_id} updated to {subscription.status}")
+
+            # Red de seguridad: si MP cancela (por fallo de cobro o cancelación
+            # externa a SmartVenta) y el tenant no está marcado como cancelado,
+            # reflejarlo a nivel negocio con motivo 'other' (MP no envía motivo).
+            if new_status == "cancelled":
+                tenant = subscription.tenant
+                if tenant.cancelled_at is None:
+                    tenant.cancelled_at = timezone.now()
+                    tenant.cancellation_reason = "other"
+                    tenant.save(update_fields=["cancelled_at", "cancellation_reason"])
+                    logger.info(f"[MPWebhook] tenant {tenant.short_name} marked cancelled (reason=other) via webhook")
         except Subscription.DoesNotExist:
             logger.warning(f"[MPWebhook] subscription not found: mp_subscription_id={sub_id}")
 

@@ -35,6 +35,16 @@ class Plan(models.Model):
     
 
 class Tenant(CreatedAtModel):
+    CANCELLATION_REASON_CHOICES = [
+        ("price", "Precio"),
+        ("not_using", "No lo uso"),
+        ("switched_tool", "Cambié de herramienta"),
+        ("missing_features", "Faltan funciones"),
+        ("technical_issues", "Problemas técnicos"),
+        ("business_closed", "Cerró el negocio"),
+        ("other", "Otro"),
+    ]
+
     name = models.CharField(max_length=100)
     short_name = models.CharField(max_length=10, unique=True)
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -42,6 +52,12 @@ class Tenant(CreatedAtModel):
     displays_stock_in_storages = models.BooleanField(default=False)
     create_products_on_sale = models.BooleanField(default=True)
     plan = models.ForeignKey(Plan, on_delete=models.CASCADE, null=True, blank=True)
+    # Cancelación a nivel negocio (no es el status de MP, que vive en Subscription).
+    # Estado cancelado = (cancelled_at IS NOT NULL).
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(
+        max_length=30, choices=CANCELLATION_REASON_CHOICES, blank=True, default=""
+    )
 
     def __str__(self):
         return self.name
@@ -64,10 +80,36 @@ class Tenant(CreatedAtModel):
         super().save(*args, **kwargs)
 
     def get_plan(self):
-        sub = self.subscription_set.filter(status="authorized").first()
-        if sub and sub.plan:
-            return sub.plan
+        # Subscription ya no tiene campo 'plan' (eliminado en migración 0013).
+        # El plan del tenant vive en self.plan; el filtro por suscripción se
+        # mantiene solo por claridad histórica, pero la fuente es self.plan.
         return self.plan
+
+    @property
+    def is_cancelled(self):
+        """Estado de negocio derivado: cancelado si cancelled_at tiene valor."""
+        return self.cancelled_at is not None
+
+    def access_until(self):
+        """Fecha (date) hasta la que el tenant conserva acceso: fin del último periodo pagado."""
+        last_payment = (
+            Payment.objects.filter(tenant=self).order_by("-end_of_validity").first()
+        )
+        return last_payment.end_of_validity if last_payment else None
+
+    def has_access(self):
+        """
+        True si hoy <= end_of_validity (inclusive), en hora local (America/Mexico_City).
+
+        PROVISIONAL: si el tenant aún no tiene ningún Payment se concede acceso
+        (return True), porque hoy el primer Payment se crea vía webhook de MP y
+        puede tardar/fallar. TODO: endurecer a False cuando el Payment se cree
+        en el alta (PublicTenantCreateView).
+        """
+        until = self.access_until()
+        if until is None:
+            return True
+        return timezone.localdate() <= until
 
     def count_products(self):
         from products.models import Product
@@ -109,7 +151,8 @@ class Payment(CreatedAtModel):
 class Subscription(CreatedAtModel):
     """Suscripción activa de un tenant."""
     STATUS_CHOICES = [
-        ("active", "Activa"),
+        ("pending", "Pendiente"),
+        ("authorized", "Autorizada"),
         ("paused", "Pausada"),
         ("cancelled", "Cancelada"),
     ]
@@ -119,7 +162,7 @@ class Subscription(CreatedAtModel):
     payment_method_id = models.CharField(max_length=50, default="credit_card")  # credit_card o debit_card
     payer_email = models.EmailField()
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="authorized")
 
     def __str__(self):
         return f"{self.tenant} - {self.status}"

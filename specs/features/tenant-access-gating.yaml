@@ -1,0 +1,211 @@
+# =============================================================================
+# SmartVenta — Feature: Bloqueo de acceso por vigencia (Tenant Access Gating)
+# Spec-Driven Development · Control de acceso por fin de periodo pagado
+# Módulos afectados: accounts (login), pos_multi_store (permissions), tenants
+# Relacionado: subscription-cancellation.yaml, subscription-status-mp-alignment.yaml
+# =============================================================================
+#
+# Problema de negocio:
+#   Tras cancelar (o al vencer un pago), el tenant debe dejar de acceder al
+#   sistema una vez terminado el periodo ya pagado. Hoy el login y los
+#   endpoints NO validan vigencia, por lo que un tenant vencido sigue entrando.
+#
+# Solución (convención SaaS):
+#   El acceso se determina por la VIGENCIA DEL PAGO, no por el estado de la
+#   suscripción. Fuente de verdad única: el último Payment.end_of_validity del
+#   tenant.
+#     acceso válido  <=>  today <= end_of_validity   (inclusive)
+#   El día siguiente a end_of_validity el acceso queda bloqueado.
+#
+#   Excepción para el owner (opción B): un owner con tenant vencido SÍ puede
+#   iniciar sesión, pero solo en "modo pago/renovación" (acceso restringido a
+#   endpoints de plan/suscripción/pago). Managers y vendedores quedan
+#   totalmente bloqueados cuando el tenant está vencido.
+#
+# Decisiones (confirmadas):
+#   - Vigencia inclusive hasta end_of_validity. (1: sí)
+#   - Owner entra vencido en modo pago; resto bloqueado. (2: b)
+#   - Independiente del estado cancelled: un tenant cancelado con vigencia
+#     futura SIGUE teniendo acceso hasta end_of_validity.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Cambios en modelos (migración)
+# -----------------------------------------------------------------------------
+models:
+  Tenant:
+    changed_fields: []
+    new_method:
+      - name: has_access(self) -> bool
+        logic: |
+          from django.utils import timezone
+          last_payment = Payment.objects.filter(tenant=self).order_by('-end_of_validity').first()
+          if not last_payment:
+              return True   # PROVISIONAL (decisión b): sin Payment -> con acceso
+          return timezone.localdate() <= last_payment.end_of_validity
+        description: |
+          True si hoy <= end_of_validity (inclusive).
+          DECISIÓN: usar timezone.localdate() (hora America/Mexico_City, ya
+          configurada), NO date.today()/timezone.now() (UTC del servidor), para
+          no cortar el acceso horas antes del fin real del día en México.
+          PROVISIONAL (decisión b): si el tenant aún no tiene ningún Payment,
+          se concede acceso (return True). Motivo: el primer Payment hoy se
+          crea vía webhook de MP, que puede tardar o fallar (comprobado en
+          prueba), y no debemos bloquear a un cliente que sí pagó.
+          TODO: cuando se cree el Payment en el alta (PublicTenantCreateView),
+          endurecer a 'return False' (sin pago -> sin acceso).
+
+      - name: access_until(self) -> date | None
+        logic: "último Payment.end_of_validity del tenant."
+        description: "Fecha hasta la que el tenant conserva acceso."
+
+    note: |
+      Sin campos nuevos ni flag is_active en User. El acceso es una propiedad
+      derivada del tenant (vigencia), no un estado por usuario.
+
+# -----------------------------------------------------------------------------
+# 2. Cambios en API (contratos)
+# -----------------------------------------------------------------------------
+api_changes:
+
+  # --- Login ---
+  "POST /api-token-auth/ (CustomAuthToken) [MODIFICADO]":
+    behavior_change:
+      - "Tras resolver user + tenant + role, evaluar tenant.has_access()."
+      - "Si tiene acceso: comportamiento actual (emitir token + datos)."
+      - "Si NO tiene acceso y role == 'owner': emitir token PERO marcar modo pago."
+      - "Si NO tiene acceso y role != 'owner': 403, no emitir token."
+    added_response_fields:
+      - name: access_blocked
+        type: boolean
+        description: "True cuando el tenant está vencido (solo se ve en respuesta de owner en modo pago)."
+      - name: access_until
+        type: string (date ISO)
+        description: "Fecha de fin de vigencia; para mostrar aviso de renovación."
+    responses:
+      "200 (owner vencido, modo pago)":
+        body:
+          token: "..."
+          role: owner
+          access_blocked: true
+          access_until: "2026-10-08"
+          # el frontend redirige a pantalla de pago/renovación
+      "403 (manager/seller vencido)":
+        body: { detail: "La suscripción del negocio venció el 2026-10-08. Contacta al propietario." }
+
+  # --- Todos los endpoints protegidos ---
+  "Permission class global: TenantHasAccess [NUEVO]":
+    description: |
+      Revalida vigencia en CADA request (los tokens emitidos no caducan solos;
+      sin esto, un token de ayer seguiría funcionando tras el vencimiento).
+    behavior:
+      - "Si tenant.has_access() -> permitir."
+      - "Si NO y user es owner -> permitir SOLO endpoints de la allowlist de pago; 402/403 en el resto."
+      - "Si NO y user no es owner -> 403 en todo."
+    payment_allowlist:
+      description: |
+        Endpoints que el owner vencido SÍ puede usar (modo pago). Regla simple:
+        SOLO endpoints de pago/suscripción; todo lo demás bloqueado.
+        La experiencia visual (qué pantalla se muestra, redirección a pago) la
+        maneja el FRONTEND. El backend solo garantiza el bloqueo de seguridad.
+      endpoints:
+        - "GET /current-plan/"
+        - "GET /plan-equivalent/"
+        - "POST /subscriptions/create/"
+        - "GET /subscriptions/"
+        - "POST /mercadopago/  (preferencia de pago manual)"
+        - "GET /tenant-info/ , GET /tenant-dates/"
+      excluded:
+        - "POST /subscriptions/cancel/ NO está en la allowlist: un owner ya vencido no cancela."
+        - "Todo lo demás (products, sales, clients, etc.) -> bloqueado."
+    error_body: { detail: "Tu suscripción venció el 2026-10-08. Renueva para continuar." }
+    http_status:
+      status: "PENDIENTE — confirmar con el equipo de frontend."
+      recommended_default: "403 Forbidden + body {detail, code: 'subscription_expired'}"
+      alternative: "402 Payment Required (semánticamente exacto; solo si el frontend lo maneja)."
+      questions_for_frontend:
+        - "¿403 o 402 para 'suscripción vencida'?"
+        - "¿Tienen manejador global que haga logout/redirect ante 401/403? (no debe desloguear al owner que va a pagar)."
+        - "¿Distinguen el caso por un 'code' en el body? Propuesta: code='subscription_expired'."
+        - "¿El frontend ya redirige al owner vencido a la pantalla de pago ante ese error?"
+
+  # --- Alcance del gate (qué queda dentro/fuera) ---
+  "Gate scope [CONFIRMADO]":
+    outside_gate:
+      description: "SIEMPRE accesibles, aunque el tenant esté vencido o no exista."
+      endpoints:
+        - "POST /api-token-auth/ (login) — si se bloquea, nadie entra a ver que venció."
+        - "POST /webhooks/mp/ — CRÍTICO: registra el pago de renovación que devuelve el acceso."
+        - "POST /create-tenant/ , GET /tenant-exists/ , GET /plans/ — alta pública (aún no hay tenant)."
+        - "/admin/ (Django admin) — es del equipo, no de tenants; no pasa por este gate."
+    inside_gate:
+      description: "Se bloquean si el tenant está vencido (salvo payment_allowlist para owner)."
+      endpoints:
+        - "Toda la API de negocio: products, sales, clients, logs, printers, audit."
+        - "Endpoints de tenants que NO sean de pago/suscripción."
+
+# -----------------------------------------------------------------------------
+# 3. Lógica de negocio
+# -----------------------------------------------------------------------------
+business_logic:
+  access_rule:
+    - "Fuente de verdad: último Payment.end_of_validity del tenant."
+    - "today <= end_of_validity  => acceso (inclusive)."
+    - "today  > end_of_validity  => bloqueado."
+    - "El estado de cancelación de negocio (Tenant.cancelled_at) NO decide el acceso."
+    - "El status de MP (Subscription.status) tampoco decide el acceso."
+    - "Cancelado + vigencia futura => sigue con acceso hasta end_of_validity."
+
+  role_matrix:
+    owner_vigente:   "acceso completo"
+    owner_vencido:   "login permitido, solo endpoints de la payment_allowlist (modo pago)"
+    manager_vigente: "acceso completo"
+    manager_vencido: "bloqueado (403 en login y en requests)"
+    seller_vigente:  "acceso completo"
+    seller_vencido:  "bloqueado (403 en login y en requests)"
+
+  helpers_existentes:
+    - "user.get_role() -> owner|manager|seller  (accounts/models.py)"
+    - "user.get_tenant() -> Tenant             (accounts/models.py)"
+
+# -----------------------------------------------------------------------------
+# 4. Cambios de código (plan de implementación)
+# -----------------------------------------------------------------------------
+code_changes:
+  - file: tenants/models.py
+    changes:
+      - "Tenant.has_access() y Tenant.access_until() (o propiedad)."
+  - file: accounts/views.py
+    changes:
+      - "CustomAuthToken.post: evaluar has_access; owner vencido -> token + access_blocked; resto -> 403."
+  - file: pos_multi_store/permissions.py
+    changes:
+      - "Nueva permission class TenantHasAccess con payment_allowlist para owner vencido."
+  - file: settings.py / views
+    changes:
+      - "Aplicar TenantHasAccess globalmente (DEFAULT_PERMISSION_CLASSES) o por viewset."
+      - "Excluir endpoints públicos (login, webhooks MP, create-tenant, plans públicos)."
+
+# -----------------------------------------------------------------------------
+# 5. Consideraciones y riesgos
+# -----------------------------------------------------------------------------
+considerations:
+  risk: HIGH
+  notes:
+    - "Es un candado de acceso: un error bloquea a clientes que sí pagaron. Probar exhaustivamente."
+    - "Zona horaria: usar timezone.localdate() (America/Mexico_City), NO UTC del servidor."
+    - "Tokens ya emitidos: por eso el permission class (no basta validar en login)."
+    - "Endpoints públicos NO deben quedar tras el gate (login, webhook MP, alta pública, planes)."
+    - "Definir con precisión la payment_allowlist para no dejar fuera algo que el owner necesita para pagar."
+    - "Elegir 403 vs 402 y confirmar que el frontend lo maneja (redirige a pantalla de pago)."
+    - "Webhook de MP registra el nuevo Payment al renovar -> has_access() vuelve a true automáticamente."
+
+# -----------------------------------------------------------------------------
+# 6. Qué NO cambia
+# -----------------------------------------------------------------------------
+unchanged:
+  - "No se usa User.is_active para el bloqueo (se descartó: mezcla conceptos y corta acceso inmediato)."
+  - "Cálculo de vigencia en Payment (se reutiliza tal cual)."
+  - "Flujo de creación/cancelación de suscripción."
+  - "Endpoints públicos (login, webhooks, alta pública, planes públicos)."

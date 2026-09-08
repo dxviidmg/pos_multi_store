@@ -1,0 +1,94 @@
+# =============================================================================
+# SmartVenta — Feature: Correo de bienvenida al crear tenant
+# Spec-Driven Development · Cambio de comportamiento
+# Commit: acb2578 · 2026-09-07
+# =============================================================================
+#
+# Problema de negocio:
+#   El servicio EmailService.send_welcome_email() ya existía pero no se
+#   invocaba en ningún punto del flujo. Al dar de alta un nuevo negocio
+#   (tenant), el propietario nunca recibía el correo con sus credenciales
+#   de acceso.
+#
+# Solución:
+#   Invocar el envío del correo de bienvenida en PublicTenantCreateView,
+#   inmediatamente después de crear tenant + owner + suscripción. El envío
+#   se hace FUERA de la transacción atómica para que un fallo de correo no
+#   revierta el alta ya consumada (el pago en Mercado Pago fue autorizado).
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Cambios en modelos (migración)
+# -----------------------------------------------------------------------------
+models:
+  note: "Sin cambios en modelos. Solo lógica de vista."
+
+# -----------------------------------------------------------------------------
+# 2. Cambios en API (contratos)
+# -----------------------------------------------------------------------------
+api_changes:
+
+  # --- Alta pública de tenant ---
+  "POST /public/tenant/ (PublicTenantCreateView)":
+    behavior_change:
+      - name: welcome_email
+        description: |
+          Tras crear tenant, owner y suscripción, se envía un correo de
+          bienvenida con credenciales al email del propietario.
+        trigger: "Después de Subscription.objects.create(), fuera de transaction.atomic()"
+        recipient: "owner.email (data['email'])"
+    response:
+      unchanged: true
+      note: "El contrato de respuesta 201 no cambia (id, short_name, username, mp_subscription_id)."
+
+# -----------------------------------------------------------------------------
+# 3. Lógica de negocio
+# -----------------------------------------------------------------------------
+business_logic:
+  tenant_creation_flow:
+    - "1. Autorización de pago en Mercado Pago (preapproval)"
+    - "2. transaction.atomic(): crear User (owner), Tenant y Subscription"
+    - "3. raw_password capturado antes de make_password para incluirlo en el correo"
+    - "4. Fuera de la transacción: email_service.send_welcome_email(email, username, raw_password)"
+    - "5. Respuesta 201 Created"
+
+  email_send:
+    - "send_welcome_email captura excepciones y retorna bool (no lanza)"
+    - "Un fallo de envío NO revierte el alta del tenant"
+    - "Envío síncrono dentro del request/response"
+
+# -----------------------------------------------------------------------------
+# 4. Cambios de código
+# -----------------------------------------------------------------------------
+code_changes:
+  file: tenants/views.py
+  diff_summary:
+    - "import: from core.services.email import email_service"
+    - "raw_password = data.get('password', username)  # antes inline en make_password"
+    - "password=make_password(raw_password)"
+    - |
+      email_service.send_welcome_email(
+          user_email=owner.email,
+          username=owner.username,
+          password=raw_password,
+      )  # fuera de transaction.atomic(), antes del Response
+
+# -----------------------------------------------------------------------------
+# 5. Consideraciones y riesgos
+# -----------------------------------------------------------------------------
+considerations:
+  risk: LOW
+  notes:
+    - "Envío síncrono: añade latencia al request. Mejora futura: tarea Celery (shared_task)."
+    - "Destinatario owner.email puede diferir de data['payer_email']; confirmar cuál es el correcto."
+    - "send_welcome_email ya loguea errores vía logger.error."
+
+# -----------------------------------------------------------------------------
+# 6. Qué NO cambia
+# -----------------------------------------------------------------------------
+unchanged:
+  - "Flujo de pago en Mercado Pago"
+  - "Creación de User, Tenant y Subscription (misma lógica, misma transacción)"
+  - "Contrato de la respuesta 201 del endpoint"
+  - "Plantilla de correo (templates/email/welcome.html)"

@@ -157,6 +157,7 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES':(
                 'rest_framework.permissions.IsAuthenticated',
+                'pos_multi_store.permissions.TenantHasAccess',
     ),
 }
 

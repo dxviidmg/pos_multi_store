@@ -1,0 +1,243 @@
+# =============================================================================
+# SmartVenta — Feature: Cancelación de suscripción
+# Spec-Driven Development · Nuevo endpoint + cambio de contrato
+# Módulos afectados: tenants (Tenant, Subscription)
+# Prerequisito: subscription-status-mp-alignment.yaml
+#   (los estados ya están alineados a MP: pending/authorized/paused/cancelled;
+#    "authorized" es el estado activo/vigente)
+# =============================================================================
+#
+# Problema de negocio:
+#   El propietario de un negocio no tiene forma de cancelar su suscripción
+#   recurrente desde SmartVenta. El estado "cancelled" ya existe en el modelo
+#   y el webhook de MP ya lo sincroniza de forma reactiva, pero no hay un
+#   endpoint que permita INICIAR la cancelación desde la app (llamando a MP
+#   para cancelar el preapproval).
+#
+# Solución:
+#   Nuevo endpoint POST /subscriptions/cancel/ que:
+#     - Cancela el cobro recurrente en Mercado Pago (preapproval).
+#     - Marca la suscripción local como "cancelled" (espejo MP).
+#     - Marca en Tenant: cancelled_at (fecha) y cancellation_reason (motivo).
+#     - MANTIENE el acceso del tenant hasta el fin del periodo ya pagado
+#       (sin corte inmediato, sin reembolso ni prorrateo).
+#   Además, el endpoint del plan actual (GET /current-plan/) expone dos campos
+#   nuevos que el frontend necesita: subscription_status y access_until.
+#
+# Decisiones de negocio (confirmadas):
+#   - Cancelación al final del periodo pagado (NO inmediata).
+#   - Sin reembolso ni prorrateo.
+#   - Solo rol owner puede cancelar (validar en backend, no solo ocultar en UI).
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Cambios en modelos (migración)
+# -----------------------------------------------------------------------------
+models:
+  Subscription:
+    changed_fields: []
+    note: |
+      Subscription es el ESPEJO de Mercado Pago (histórico del preapproval).
+      NO se le añaden campos de cancelación de negocio. Su status refleja MP.
+
+  Tenant:
+    new_fields:
+      - name: cancelled_at
+        type: DateTimeField
+        null: true
+        blank: true
+        description: |
+          Fecha/hora a partir de la cual el tenant pasa a estado cancelado.
+          NULL = no cancelado. Es la fuente de verdad del estado de cancelación
+          de negocio (no se usa booleano; se deriva de cancelled_at IS NOT NULL).
+          El "subscription_status" que consume el frontend se deriva de aquí.
+
+      - name: cancellation_reason
+        type: CharField
+        max_length: 30
+        blank: true
+        default: ""
+        choices:
+          - price
+          - not_using
+          - switched_tool
+          - missing_features
+          - technical_issues
+          - business_closed
+          - other
+        description: |
+          Motivo de cancelación. Los valores deben coincidir EXACTAMENTE con
+          los que envía la UI del frontend.
+
+    business_rules:
+      - "Estado cancelado = (cancelled_at IS NOT NULL). No hay campo booleano."
+      - "cancelled_at/reason los marca SOLO el endpoint POST /subscriptions/cancel/."
+      - "El webhook de MP actualiza Subscription.status y, como red de seguridad, marca Tenant.cancelled_at (reason='other') si aún es NULL (ver webhook_interaction)."
+      - "access_until NO se persiste: se deriva del último Payment.end_of_validity del tenant."
+      - "Estar cancelado NO corta el acceso; el acceso depende de la vigencia (ver tenant-access-gating)."
+      - "Al reactivar (nuevo pago) se resetea: cancelled_at=NULL, cancellation_reason=''."
+      - "DECISIÓN: al resetear se pierde la cancelación anterior (sin historial). Aceptado: casos escasos y baja tasa de retorno; no justifica historial."
+
+    migration_note: "Add fields en Tenant (cancelled_at=NULL, cancellation_reason=''); sin backfill."
+
+# -----------------------------------------------------------------------------
+# 2. Cambios en API (contratos)
+# -----------------------------------------------------------------------------
+api_changes:
+
+  # --- Nuevo endpoint: cancelar suscripción ---
+  "POST /subscriptions/cancel/ (SubscriptionCancelView) [NUEVO]":
+    auth: "Token auth. El backend identifica tenant y suscripción activa desde el token."
+    authorization: |
+      Solo rol owner. 403 si es manager o vendedor. Exclusivo del owner aunque
+      el tenant tenga varias tiendas con varios managers (ninguno puede cancelar).
+      Consistente con CreateSubscriptionView (crear suscripción también es solo-owner).
+    request_body:
+      type: object
+      properties:
+        - name: reason
+          type: string
+          required: true
+          enum: [price, not_using, switched_tool, missing_features, technical_issues, business_closed, other]
+      example:
+        reason: price
+    responses:
+      "200":
+        description: Suscripción cancelada correctamente.
+        body:
+          status: cancelled
+          access_until: "2026-10-08T00:00:00Z"   # ISO 8601; fin del periodo pagado
+      "400":
+        description: reason inválido o ausente.
+        body: { detail: "reason inválido" }
+      "403":
+        description: Usuario no es owner.
+        body: { detail: "Solo el propietario puede cancelar la suscripción" }
+      "404":
+        description: No hay suscripción activa (authorized) para el tenant.
+        body: { detail: "No hay una suscripción activa" }
+      "409":
+        description: La suscripción ya está cancelada.
+        body: { detail: "La suscripción ya está cancelada" }
+      "500":
+        description: Error al cancelar en Mercado Pago.
+        body: { detail: "No se pudo cancelar la suscripción. Contacta a soporte técnico." }
+    error_format:
+      note: "El frontend muestra 'detail' o 'error' (string legible) tal cual + código HTTP."
+    field_decision:
+      note: |
+        DECISIÓN: un único campo 'reason' (enum cerrado). Se elimina 'comment'
+        (no hay texto libre). El frontend unifica y solo envía 'reason' con uno
+        de los valores del enum.
+
+  # --- Endpoint existente: plan actual (campos añadidos) ---
+  "GET /current-plan/ (CurrentPlanView) [MODIFICADO]":
+    added_fields:
+      - name: subscription_status
+        type: string
+        enum: [active, cancelled]
+        description: |
+          Estado de NEGOCIO derivado de Tenant.cancelled_at:
+          "cancelled" si cancelled_at IS NOT NULL, "active" si es NULL.
+          Permite al frontend ocultar el botón de cancelar y mostrar el aviso
+          "suscripción cancelada" al recargar. (No es el status de MP; ese vive
+          en Subscription.)
+      - name: access_until
+        type: string (date-time ISO 8601)
+        nullable: true
+        description: |
+          Hasta cuándo el tenant conserva acceso (fin del periodo pagado).
+          Derivado de Payment.end_of_validity más reciente convertido a
+          datetime ISO. Muestra "Tendrás acceso hasta [fecha]".
+          Puede ser null si el tenant aún no tiene Payment (ventana inicial
+          antes de que el webhook de MP registre el primer pago).
+    unchanged: "has_plan, plan{...} se mantienen igual."
+
+# -----------------------------------------------------------------------------
+# 3. Lógica de negocio
+# -----------------------------------------------------------------------------
+business_logic:
+  cancel_flow:
+    - "1. Validar rol owner (403 si no)."
+    - "2. Si Tenant.cancelled_at ya tiene valor -> 409 (ya cancelada)."
+    - "3. Obtener la última suscripción activa del tenant (status='authorized'). 404 si no existe."
+    - "4. Validar reason contra el enum permitido (400 si inválido)."
+    - "5. Cancelar preapproval en MP: PUT /preapproval/{mp_subscription_id} {status: 'cancelled'}."
+    - "   (Mismo patrón que ya usa CreateSubscriptionView al reemplazar suscripciones.)"
+    - "6. Si MP falla -> 500 con mensaje 'contacta a soporte técnico'; NO marcar nada como cancelado."
+    - "7. Guardado local en transaction.atomic() (Subscription y Tenant juntos o ninguno):"
+    - "   7a. Subscription.status='cancelled' (espejo de MP)."
+    - "   7b. Tenant: cancelled_at=now, cancellation_reason=reason."
+    - "8. Si el guardado local (paso 7) falla tras MP OK: queda MP cancelado; el webhook de MP"
+    - "   reconciliará (marca Subscription y Tenant.cancelled_at con reason='other') -> ver webhook_interaction."
+    - "9. Calcular access_until = último Payment.end_of_validity del tenant (null si aún no hay Payment)."
+    - "10. Responder {status: 'cancelled', access_until}."
+
+  access_until_derivation:
+    - "access_until = Payment.objects.filter(tenant=tenant).order_by('-end_of_validity').first().end_of_validity"
+    - "access_until = último Payment.end_of_validity; puede ser null si el webhook aún no registró el primer pago (ver tenant-access-gating, decisión provisional b)."
+    - "end_of_validity es DateField -> convertir a datetime ISO 8601 (medianoche UTC)."
+    - "El acceso NO se corta al cancelar; se respeta hasta esa fecha."
+
+  webhook_interaction:
+    - "MPWebhookView actualiza Subscription.status (espejo de MP)."
+    - "Tras la alineación a MP, el webhook persiste el status directo (sin traducción)."
+    - "RED DE SEGURIDAD (opción b): si MP notifica 'cancelled' y Tenant.cancelled_at es NULL,"
+    - "  el webhook TAMBIÉN marca Tenant.cancelled_at=now y cancellation_reason='other'."
+    - "  Cubre: (1) fallo parcial (MP OK pero guardado local falló) y"
+    - "         (2) cancelaciones externas a SmartVenta (usuario cancela en MP, o MP cancela por fallos de cobro)."
+    - "Si Tenant.cancelled_at ya tiene valor (canceló por nuestro endpoint), el webhook NO lo sobrescribe (conserva el reason real)."
+    - "Nota: 'other' se usa porque MP no envía el motivo de negocio."
+
+# -----------------------------------------------------------------------------
+# 4. Cambios de código (plan de implementación)
+# -----------------------------------------------------------------------------
+code_changes:
+  - file: tenants/models.py
+    changes:
+      - "Tenant: agregar cancelled_at, cancellation_reason."
+      - "Migración correspondiente (la genera el equipo)."
+
+  - file: tenants/views.py
+    changes:
+      - "Nueva clase SubscriptionCancelView(APIView) con la lógica de cancel_flow."
+      - "SubscriptionCancelView marca Subscription.status='cancelled' (MP) y Tenant.cancelled_at/reason (negocio)."
+      - "CurrentPlanView: agregar subscription_status (derivado de Tenant.cancelled_at) y access_until."
+      - "CreateSubscriptionView: al reactivar, resetear Tenant.cancelled_at=NULL, cancellation_reason=''."
+
+  - file: tenants/urls.py
+    changes:
+      - "path('subscriptions/cancel/', views.SubscriptionCancelView.as_view(), name='subscription-cancel')"
+
+  - file: tenants/serializers.py
+    changes:
+      - "Opcional: serializer para validar reason (ChoiceField)."
+
+# -----------------------------------------------------------------------------
+# 5. Consideraciones y riesgos
+# -----------------------------------------------------------------------------
+considerations:
+  risk: MEDIUM
+  notes:
+    - "Consistencia MP<->negocio: cancelar primero en MP; guardado local en transaction.atomic()."
+    - "Fallo parcial (MP OK, guardado local falla): el webhook de MP reconcilia (marca Tenant.cancelled_at con reason='other')."
+    - "Cancelaciones externas a SmartVenta (usuario cancela en MP / MP cancela por cobro fallido): también las refleja el webhook con reason='other'."
+    - "Idempotencia: si Tenant.cancelled_at ya tiene valor, el endpoint devuelve 409 (evita doble acción)."
+    - "Validar reason en backend aunque el frontend restrinja las opciones."
+    - "access_until debe ser consistente entre GET /current-plan/ y la respuesta del cancel."
+    - "Sin reembolso/prorrateo: no se crea nota de crédito ni se modifican Payments."
+    - "El enum de reason vive en dos lugares (frontend y backend): documentar para mantenerlos sincronizados."
+    - "Separación de niveles: Subscription=MP, Tenant.cancelled_at=negocio, vigencia=acceso."
+
+# -----------------------------------------------------------------------------
+# 6. Qué NO cambia
+# -----------------------------------------------------------------------------
+unchanged:
+  - "Subscription NO recibe campos de cancelación de negocio (solo refleja MP)."
+  - "STATUS_CHOICES de Subscription (ya incluye 'cancelled')."
+  - "Flujo de creación de suscripción (CreateSubscriptionView)."
+  - "Registro de pagos (Payment) y cálculo de vigencia."
+  - "MPWebhookView actualiza Subscription.status y marca Tenant.cancelled_at (reason='other') si estaba NULL (red de seguridad)."
+  - "El acceso: sigue derivándose de la vigencia, no de cancelled_at."
+  - "No hay reembolsos ni prorrateo."
