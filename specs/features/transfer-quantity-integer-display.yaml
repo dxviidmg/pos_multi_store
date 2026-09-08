@@ -1,0 +1,93 @@
+# =============================================================================
+# SmartVenta — Feature: Cantidades enteras sin decimales en traspasos
+# Spec-Driven Development · Cambio de contrato
+# Commit: 0a5f64e · 2026-09-07
+# =============================================================================
+#
+# Problema de negocio:
+#   Los endpoints de traspasos (transfers) devolvían las cantidades como
+#   decimales con ceros a la derecha (ej. "5.000") incluso cuando el valor
+#   era entero. Esto es poco natural para el frontend y para cantidades por
+#   pieza.
+#
+# Solución:
+#   Normalizar la representación de quantity para que devuelva int cuando el
+#   valor no tiene parte decimal (ej. 5) y float cuando sí la tiene (ej. 5.25).
+#   Aplicable a los endpoints GET de traspasos y al dashboard de traspasos
+#   pendientes.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Cambios en modelos (migración)
+# -----------------------------------------------------------------------------
+models:
+  note: "Sin cambios en modelos. Solo serialización/representación."
+
+# -----------------------------------------------------------------------------
+# 2. Cambios en API (contratos)
+# -----------------------------------------------------------------------------
+api_changes:
+
+  # --- Transfer (serializer) ---
+  "GET /transfer/, GET /transfer/{id}/":
+    changed_fields:
+      - name: quantity
+        from: string (decimal)   # "5.000"
+        to: integer | number     # 5  ó  5.25
+        note: "Vía SmartDecimalField(max_digits=10, decimal_places=3)"
+      - name: editable_product_max_stock
+        from: string (decimal)
+        to: integer | number
+        note: "int si es entero, float si tiene decimales"
+
+  # --- Dashboard de traspasos pendientes ---
+  "get_pending_transfers_dashboard (task)":
+    changed_fields:
+      - path: transfers[].quantity
+        from: string (decimal)
+        to: integer | number
+        note: "Normalizado con helper normalize_quantity()"
+
+# -----------------------------------------------------------------------------
+# 3. Lógica de negocio (regla de normalización)
+# -----------------------------------------------------------------------------
+business_logic:
+  normalization_rule:
+    - "value = Decimal(str(value))"
+    - "si value == value.to_integral_value() -> int(value)"
+    - "en caso contrario -> float(value)"
+    - "None se preserva como None (en normalize_quantity)"
+
+# -----------------------------------------------------------------------------
+# 4. Cambios de código
+# -----------------------------------------------------------------------------
+code_changes:
+  - file: products/serializers.py
+    diff_summary:
+      - "TransferSerializer.quantity = SmartDecimalField(max_digits=10, decimal_places=3)"
+      - "get_editable_product_max_stock() ahora retorna int/float según to_integral_value()"
+
+  - file: products/tasks.py
+    diff_summary:
+      - "from decimal import Decimal"
+      - "def normalize_quantity(value): int si entero, float si decimal, None si None"
+      - "get_pending_transfers_dashboard: quantity = normalize_quantity(t['quantity'])"
+
+# -----------------------------------------------------------------------------
+# 5. Consideraciones y riesgos
+# -----------------------------------------------------------------------------
+considerations:
+  risk: LOW
+  notes:
+    - "Cambio de tipo en respuesta: quantity ahora es int o float (antes cadena '5.000'). El frontend debe tolerar ambos."
+    - "Lógica de normalización duplicada en 3 puntos (SmartDecimalField, get_editable_product_max_stock, normalize_quantity); mejora futura: centralizar en un utilitario."
+    - "Verificar que ningún consumidor dependa del formato de cadena '5.000'."
+
+# -----------------------------------------------------------------------------
+# 6. Qué NO cambia
+# -----------------------------------------------------------------------------
+unchanged:
+  - "Almacenamiento en BD (sigue siendo DecimalField)"
+  - "Validaciones de stock y flujo de creación/confirmación de traspasos"
+  - "Otros endpoints que no serializan quantity de Transfer"

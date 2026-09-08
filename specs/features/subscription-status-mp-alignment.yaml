@@ -1,0 +1,184 @@
+# =============================================================================
+# SmartVenta — Feature: Alineación de estados de suscripción a Mercado Pago
+# Spec-Driven Development · Refactor transversal + migración de datos
+# Módulos afectados: tenants (Subscription, Tenant.get_plan)
+# Prerequisito de: subscription-cancellation.yaml
+# =============================================================================
+#
+# Problema de negocio / técnico:
+#   El estado local de Subscription usa un vocabulario propio (active, paused,
+#   cancelled) distinto al de Mercado Pago (pending, authorized, paused,
+#   cancelled). El webhook traduce entre ambos con un status_map, lo que añade
+#   una capa de mapeo innecesaria y ya provocó un bug:
+#     - Tenant.get_plan() filtra por status="authorized" (que localmente NO
+#       existe desde la migración 0013 que renombró authorized->active) y
+#       accede a sub.plan (campo eliminado en esa misma migración). Resultado:
+#       ese bloque nunca funciona y siempre cae a return self.plan.
+#
+# Solución:
+#   Unificar el vocabulario local al de Mercado Pago. Subscription.status pasa
+#   a usar los mismos valores que MP: pending, authorized, paused, cancelled.
+#   El webhook deja de traducir (guarda el status de MP directo). Se corrige
+#   Tenant.get_plan() para filtrar por "authorized" y se elimina la referencia
+#   al campo inexistente sub.plan.
+#
+# Decisiones (confirmadas):
+#   - Renombre completo active -> authorized, con migración de datos. (A: sí)
+#   - Incluir el estado "pending". (B: sí)
+#   - Spec independiente, prerequisito de la cancelación. (C)
+#
+# Nota de ejecución:
+#   Las migraciones de Django las genera/ejecuta el equipo (David), NO este
+#   spec. Aquí solo se documenta el cambio de datos requerido.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Cambios en modelos (migración)
+# -----------------------------------------------------------------------------
+models:
+  Subscription:
+    changed_fields:
+      - name: status
+        from:
+          choices: [active, paused, cancelled]
+          default: active
+        to:
+          choices: [pending, authorized, paused, cancelled]
+          default: authorized
+        description: |
+          Vocabulario alineado con Mercado Pago (preapproval status).
+          - pending:    creada, aún no autorizada por MP.
+          - authorized: activa/vigente (equivale al antiguo "active").
+          - paused:     pausada en MP.
+          - cancelled:  cancelada.
+          DECISIÓN: se incluye 'pending' por paridad total con MP aunque hoy
+          ningún flujo lo cree (se crean en 'authorized'). Es defensivo: si MP
+          envía 'pending' por webhook, el estado ya existe y se guarda sin error.
+
+    data_migration:
+      owner: "Equipo (David) — makemigrations/migrate para el schema; datos por UPDATE manual."
+      strategy: "B — UPDATE manual (una sola vez), NO RunPython versionado."
+      required_changes:
+        - "makemigrations/migrate: genera el AlterField (choices/default). NO migra datos."
+        - "UPDATE manual (shell Django o SQL), una vez:"
+        - "  Subscription.objects.filter(status='active').update(status='authorized')"
+      order_of_deployment:
+        - "IMPORTANTE: correr el UPDATE de datos junto/antes del deploy del código nuevo."
+        - "Si no, quedan filas en 'active' (valor fuera de choices) y el código que filtra 'authorized' no las encuentra."
+      risk: MEDIUM
+      notes:
+        - "Renombre puro de valor; no hay pérdida de datos."
+        - "paused y cancelled se mantienen idénticos."
+        - "makemigrations NO genera el cambio de datos; es responsabilidad del UPDATE manual."
+
+  Tenant:
+    changed_fields: []
+    method_fix:
+      - name: get_plan()
+        current_bug: |
+          sub = self.subscription_set.filter(status="authorized").first()
+          if sub and sub.plan:   # 'plan' fue eliminado de Subscription en migración 0013
+              return sub.plan
+          return self.plan
+        fix: |
+          Mantener el filtro status="authorized" (ahora sí existe localmente) y
+          ELIMINAR el acceso a sub.plan (campo inexistente). Devolver self.plan.
+          Resultado: get_plan() deja de tener código muerto/roto.
+
+# -----------------------------------------------------------------------------
+# 2. Cambios en API (contratos)
+# -----------------------------------------------------------------------------
+api_changes:
+  note: |
+    Cambio de valores posibles en el campo 'status' de las respuestas que
+    serializan Subscription. Los consumidores que dependan del string "active"
+    deben pasar a "authorized".
+
+  "GET /subscriptions/ (SubscriptionView)":
+    changed_fields:
+      - name: status
+        from: "active | paused | cancelled"
+        to: "pending | authorized | paused | cancelled"
+
+  "SubscriptionSerializer":
+    note: "El campo status ahora puede devolver 'authorized'/'pending' además de paused/cancelled."
+
+# -----------------------------------------------------------------------------
+# 3. Lógica de negocio (puntos a actualizar)
+# -----------------------------------------------------------------------------
+business_logic:
+  write_points:
+    - file: tenants/views.py
+      location: PublicTenantCreateView
+      change: 'Subscription.objects.create(..., status="active") -> status="authorized"'
+    - file: tenants/views.py
+      location: CreateSubscriptionView (creación)
+      change: 'Subscription.objects.create(..., status="active") -> status="authorized"'
+    - file: tenants/views.py
+      location: CreateSubscriptionView (cancelación de anteriores)
+      change: 'filter(tenant=tenant, status="active") -> status="authorized"'
+
+  read_points:
+    - file: tenants/views.py
+      location: TenantDatesView
+      change: 'filter(tenant=tenant, status="active") -> status="authorized"'
+    - file: tenants/models.py
+      location: Tenant.get_plan()
+      change: 'ya filtra "authorized"; corregir sub.plan (ver method_fix)'
+
+  webhook:
+    - file: tenants/views.py
+      location: MPWebhookView._handle_subscription_update
+      change: |
+        El status_map {authorized: active, paused: paused, cancelled: cancelled}
+        deja de traducir. MP ya envía pending/authorized/paused/cancelled.
+        VALIDACIÓN (decisión a): validar el status recibido contra los choices
+        de Subscription. Si es conocido -> persistir. Si es DESCONOCIDO ->
+        NO actualizar el registro y registrar logger.warning (no corromper datos).
+      valid_states: [pending, authorized, paused, cancelled]
+      unknown_state_policy: "Ignorar (no actualizar) + logger.warning."
+      cross_ref: |
+        Ver subscription-cancellation.yaml (webhook_interaction): cuando el
+        status validado sea 'cancelled' y Tenant.cancelled_at sea NULL, este
+        mismo método debe marcar Tenant.cancelled_at=now, cancellation_reason='other'
+        (red de seguridad para fallo parcial y cancelaciones externas a SmartVenta).
+
+# -----------------------------------------------------------------------------
+# 4. Cambios de código (plan de implementación)
+# -----------------------------------------------------------------------------
+code_changes:
+  - file: tenants/models.py
+    changes:
+      - "Subscription.STATUS_CHOICES -> [pending, authorized, paused, cancelled]; default='authorized'."
+      - "Tenant.get_plan(): quitar acceso a sub.plan; devolver self.plan."
+  - file: tenants/views.py
+    changes:
+      - "PublicTenantCreateView y CreateSubscriptionView: crear con status='authorized'."
+      - "CreateSubscriptionView y TenantDatesView: filtrar por status='authorized'."
+      - "MPWebhookView: eliminar traducción; persistir status de MP directo."
+  - file: "(migración)"
+    changes:
+      - "AlterField de status (choices/default) — la genera el equipo."
+      - "RunPython data migration: active -> authorized — la genera el equipo."
+
+# -----------------------------------------------------------------------------
+# 5. Consideraciones y riesgos
+# -----------------------------------------------------------------------------
+considerations:
+  risk: MEDIUM
+  notes:
+    - "Refactor transversal: revisar que no queden literales 'active' sin migrar (grep)."
+    - "La migración de datos y el AlterField los ejecuta el equipo, no este spec."
+    - "Consumidores externos (frontend) que comparen con 'active' deben pasar a 'authorized'."
+    - "Tras esta feature, subscription-cancellation consume 'authorized' como estado activo."
+    - "El webhook se vuelve más simple (sin status_map de traducción)."
+
+# -----------------------------------------------------------------------------
+# 6. Qué NO cambia
+# -----------------------------------------------------------------------------
+unchanged:
+  - "Estados paused y cancelled (mismos valores en local y MP)."
+  - "SubscriptionPayment (su status es texto libre de MP, no usa estos choices)."
+  - "Flujo de pagos (Payment) y cálculo de vigencia."
+  - "Creación del preapproval en MP (ya enviaba 'authorized')."

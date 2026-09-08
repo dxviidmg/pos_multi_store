@@ -85,6 +85,20 @@ class CustomAuthToken(ObtainAuthToken):
                 store = sw.store if sw else None
                 tenant = store.tenant if store else None
 
+        # Gate de acceso por vigencia: si el tenant venció, el owner puede
+        # entrar en "modo pago"; managers y vendedores quedan bloqueados.
+        if tenant is not None and not tenant.has_access():
+            if role != 'owner':
+                access_until = tenant.access_until()
+                venc = access_until.isoformat() if access_until else "la fecha de tu último pago"
+                return Response(
+                    {
+                        "detail": f"La suscripción del negocio venció el {venc}. Contacta al propietario.",
+                        "code": "subscription_expired",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         data = {
             'user_id': user.pk,
             'token': token.key,
@@ -104,4 +118,9 @@ class CustomAuthToken(ObtainAuthToken):
         }
         if role == 'owner':
             data['store_count'] = Store.objects.filter(tenant=tenant).count()
+            # Marcar modo pago si el tenant venció (owner puede entrar a renovar).
+            if tenant is not None and not tenant.has_access():
+                data['access_blocked'] = True
+                access_until = tenant.access_until()
+                data['access_until'] = access_until.isoformat() if access_until else None
         return Response(data)
