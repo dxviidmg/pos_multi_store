@@ -55,6 +55,42 @@ class TenantAccessTests(TestCase):
         t.save(update_fields=["cancelled_at"])
         self.assertTrue(t.is_cancelled)
 
+    def test_subscription_status_active_by_default(self):
+        t = self._tenant("acc6")
+        self.assertEqual(t.subscription_status(), "active")
+
+    def test_subscription_status_cancelled_when_owner_cancels(self):
+        t = self._tenant("acc7")
+        t.cancelled_at = timezone.now()
+        t.save(update_fields=["cancelled_at"])
+        self.assertEqual(t.subscription_status(), "cancelled")
+
+    def test_subscription_status_expired_when_mp_cancelled_without_voluntary(self):
+        t = self._tenant("acc8")
+        # MP dejó la suscripción en cancelled/paused pero el owner NO canceló.
+        Subscription.objects.create(
+            tenant=t, mp_subscription_id="mp-exp", payer_email="a@b.com",
+            status="cancelled",
+        )
+        self.assertIsNone(t.cancelled_at)
+        self.assertEqual(t.subscription_status(), "expired")
+
+    def test_current_card_none_without_data(self):
+        t = self._tenant("acc9")
+        self.assertIsNone(t.current_card())
+
+    def test_current_card_returns_masked_data(self):
+        t = self._tenant("acc10")
+        Subscription.objects.create(
+            tenant=t, mp_subscription_id="mp-card", payer_email="a@b.com",
+            status="authorized", card_brand="visa", card_last_four="7155",
+            card_expiration_month=5, card_expiration_year=2031,
+        )
+        card = t.current_card()
+        self.assertEqual(card["brand"], "visa")
+        self.assertEqual(card["last_four"], "7155")
+        self.assertEqual(card["expiration"], "05/31")
+
 
 class SubscriptionStatusTests(TestCase):
     def test_default_status_is_authorized(self):

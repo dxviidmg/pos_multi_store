@@ -41,6 +41,7 @@ class TenantHasAccess(BasePermission):
         "current-plan",
         "plan-equivalent",
         "subscriptions-create",
+        "subscriptions-update-card",
         "subscription-detail",
         "mercadopago-preference",
         "tenant-info",

@@ -90,6 +90,36 @@ class Tenant(CreatedAtModel):
         """Estado de negocio derivado: cancelado si cancelled_at tiene valor."""
         return self.cancelled_at is not None
 
+    def subscription_status(self):
+        """
+        Estado de negocio derivado con 3 valores:
+          - 'cancelled': el owner canceló voluntariamente (cancelled_at marcado).
+          - 'expired': MP dejó la última suscripción en paused/cancelled por
+                       fallo de cobro/tarjeta y el owner NO canceló.
+          - 'active': en cualquier otro caso.
+        NOTA: 'expired' NO corta el acceso; el acceso depende de la vigencia.
+        """
+        if self.cancelled_at is not None:
+            return "cancelled"
+        last_sub = self.subscription_set.order_by("-created_at").first()
+        if last_sub and last_sub.status in ("paused", "cancelled"):
+            return "expired"
+        return "active"
+
+    def current_card(self):
+        """Datos de tarjeta de la última suscripción, o None."""
+        last_sub = self.subscription_set.order_by("-created_at").first()
+        if not last_sub or not last_sub.card_last_four:
+            return None
+        exp = None
+        if last_sub.card_expiration_month and last_sub.card_expiration_year:
+            exp = f"{last_sub.card_expiration_month:02d}/{str(last_sub.card_expiration_year)[-2:]}"
+        return {
+            "brand": last_sub.card_brand,
+            "last_four": last_sub.card_last_four,
+            "expiration": exp,
+        }
+
     def access_until(self):
         """Fecha (date) hasta la que el tenant conserva acceso: fin del último periodo pagado."""
         last_payment = (
@@ -163,6 +193,12 @@ class Subscription(CreatedAtModel):
     payer_email = models.EmailField()
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="authorized")
+    # Datos NO sensibles de la tarjeta (para que el cliente identifique cuál usó).
+    # Se capturan desde el webhook del pago (card.* y payment_method.id de MP).
+    card_brand = models.CharField(max_length=20, blank=True, default="")
+    card_last_four = models.CharField(max_length=4, blank=True, default="")
+    card_expiration_month = models.IntegerField(null=True, blank=True)
+    card_expiration_year = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.tenant} - {self.status}"

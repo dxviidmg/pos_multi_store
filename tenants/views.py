@@ -372,8 +372,8 @@ class CurrentPlanView(APIView):
         tenant = request.user.get_tenant()
         plan = tenant.get_plan()
 
-        # Estado de negocio (derivado de cancelled_at) y fecha de acceso.
-        subscription_status = "cancelled" if tenant.is_cancelled else "active"
+        # Estado de negocio (3 valores derivados) y fecha de acceso.
+        subscription_status = tenant.subscription_status()
         access_until = tenant.access_until()
         access_until_iso = (
             timezone.make_aware(
@@ -381,6 +381,7 @@ class CurrentPlanView(APIView):
             ).isoformat()
             if access_until else None
         )
+        current_card = tenant.current_card()
 
         if not plan:
             return Response({
@@ -388,6 +389,7 @@ class CurrentPlanView(APIView):
                 "message": "No hay un plan asignado",
                 "subscription_status": subscription_status,
                 "access_until": access_until_iso,
+                "current_card": current_card,
             })
 
         return Response({
@@ -402,6 +404,7 @@ class CurrentPlanView(APIView):
             },
             "subscription_status": subscription_status,
             "access_until": access_until_iso,
+            "current_card": current_card,
         })
 
 
@@ -687,6 +690,81 @@ class SubscriptionCancelView(APIView):
         )
 
 
+class SubscriptionUpdateCardView(APIView):
+    """
+    Escenario 1 (preventivo): el owner cambia la tarjeta antes de que falle el
+    cobro. Actualiza el preapproval en MP con el nuevo card_token, SIN cancelar
+    ni recrear la suscripción.
+    """
+
+    def post(self, request):
+        if request.user.get_role() != 'owner':
+            return Response(
+                {"detail": "Solo el propietario puede actualizar la tarjeta"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        card_token = request.data.get("card_token")
+        if not card_token:
+            return Response(
+                {"detail": "card_token es requerido"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tenant = request.user.get_tenant()
+        subscription = (
+            Subscription.objects.filter(tenant=tenant, status="authorized")
+            .order_by("-created_at")
+            .first()
+        )
+        if not subscription:
+            return Response(
+                {"detail": "No hay una suscripción activa"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        mp_access_token = settings.MERCADO_PAGO_ACCESS_TOKEN
+        payload = {"card_token_id": card_token}
+        payment_method_id = request.data.get("payment_method_id")
+        if payment_method_id:
+            payload["payment_method_id"] = payment_method_id
+
+        try:
+            mp_response = requests.put(
+                f"https://api.mercadopago.com/preapproval/{subscription.mp_subscription_id}",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {mp_access_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+        except Exception as e:
+            logger.error(f"[SubscriptionUpdateCard] MP request error: {e}")
+            return Response(
+                {"detail": "No se pudo actualizar la tarjeta. Contacta a soporte técnico."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if mp_response.status_code not in (200, 201):
+            logger.error(
+                f"[SubscriptionUpdateCard] MP update failed: {mp_response.status_code} - {mp_response.text}"
+            )
+            return Response(
+                {"detail": "No se pudo actualizar la tarjeta. Contacta a soporte técnico."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        logger.info(
+            f"[SubscriptionUpdateCard] tenant={tenant.short_name} card updated on sub {subscription.mp_subscription_id}"
+        )
+        # Los datos de la nueva tarjeta se actualizarán al llegar el webhook del
+        # próximo pago. Respondemos con los datos actuales conocidos.
+        return Response(
+            {"status": "authorized", "card_last_four": subscription.card_last_four},
+            status=status.HTTP_200_OK,
+        )
+
+
 class MPWebhookView(APIView):
     """Recibe notificaciones de Mercado Pago (pagos y suscripciones)."""
     permission_classes = [AllowAny]
@@ -749,11 +827,52 @@ class MPWebhookView(APIView):
             logger.info(f"[MPWebhook] duplicate external_reference={external_reference}, skipping")
             return Response(status=status.HTTP_200_OK)
 
+        # Guardar datos NO sensibles de la tarjeta en la suscripción (historial).
+        self._store_card_data(mp_payment)
+
         # Registrar pago
         Payment.objects.create(tenant=tenant, months=1, mp_external_reference=external_reference)
         logger.info(f"[MPWebhook] payment registered: tenant={tenant.short_name} amount={mp_payment.get('transaction_amount')}")
 
         return Response(status=status.HTTP_200_OK)
+
+    def _store_card_data(self, mp_payment):
+        """
+        Guarda marca, últimos 4 y vencimiento de la tarjeta en la Subscription
+        correspondiente (localizada por el subscription_id del preapproval).
+        Datos NO sensibles. Silencioso si no hay datos o no se localiza la sub.
+        """
+        try:
+            poi = mp_payment.get("point_of_interaction") or {}
+            tx = poi.get("transaction_data") or {}
+            subscription_id = tx.get("subscription_id")
+            if not subscription_id:
+                return
+
+            sub = Subscription.objects.filter(
+                mp_subscription_id=str(subscription_id)
+            ).first()
+            if not sub:
+                return
+
+            card = mp_payment.get("card") or {}
+            last_four = card.get("last_four_digits") or ""
+            exp_month = card.get("expiration_month")
+            exp_year = card.get("expiration_year")
+            pm = mp_payment.get("payment_method") or {}
+            brand = pm.get("id") or mp_payment.get("payment_method_id") or ""
+
+            sub.card_brand = brand
+            sub.card_last_four = last_four
+            sub.card_expiration_month = exp_month
+            sub.card_expiration_year = exp_year
+            sub.save(update_fields=[
+                "card_brand", "card_last_four",
+                "card_expiration_month", "card_expiration_year",
+            ])
+            logger.info(f"[MPWebhook] card data stored for sub {subscription_id}: {brand} ****{last_four}")
+        except Exception as e:
+            logger.warning(f"[MPWebhook] could not store card data: {e}")
 
     def _handle_subscription_update(self, data, request):
         """Actualiza estado local de suscripción cuando MP notifica cambios."""
@@ -787,16 +906,14 @@ class MPWebhookView(APIView):
             subscription.save(update_fields=["status"])
             logger.info(f"[MPWebhook] subscription {sub_id} updated to {subscription.status}")
 
-            # Red de seguridad: si MP cancela (por fallo de cobro o cancelación
-            # externa a SmartVenta) y el tenant no está marcado como cancelado,
-            # reflejarlo a nivel negocio con motivo 'other' (MP no envía motivo).
-            if new_status == "cancelled":
-                tenant = subscription.tenant
-                if tenant.cancelled_at is None:
-                    tenant.cancelled_at = timezone.now()
-                    tenant.cancellation_reason = "other"
-                    tenant.save(update_fields=["cancelled_at", "cancellation_reason"])
-                    logger.info(f"[MPWebhook] tenant {tenant.short_name} marked cancelled (reason=other) via webhook")
+            # NOTA: no marcamos Tenant.cancelled_at aquí. MP reporta 'cancelled'
+            # tanto para cancelaciones voluntarias como para fallos de cobro /
+            # tarjeta vencida, y no debemos tratar una tarjeta vencida como
+            # "el cliente canceló". La cancelación de negocio (cancelled_at) la
+            # marca ÚNICAMENTE el owner vía SubscriptionCancelView. Un preapproval
+            # cancelado por fallo de cobro se refleja solo en Subscription.status;
+            # el cliente pierde acceso por vigencia y el frontend le muestra
+            # "actualiza tu tarjeta".
         except Subscription.DoesNotExist:
             logger.warning(f"[MPWebhook] subscription not found: mp_subscription_id={sub_id}")
 
