@@ -3,6 +3,8 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
+from tenants.tasks import alert_tenants_without_payment
+
 from tenants.models import Plan, Tenant, Payment, Subscription
 
 
@@ -104,3 +106,37 @@ class SubscriptionStatusTests(TestCase):
     def test_status_choices_aligned_with_mp(self):
         values = {c[0] for c in Subscription.STATUS_CHOICES}
         self.assertEqual(values, {"pending", "authorized", "paused", "cancelled"})
+
+
+class TenantWithoutPaymentAlertTests(TestCase):
+    def _old_tenant(self, short_name, hours_ago=25):
+        t = Tenant.objects.create(name=short_name, short_name=short_name)
+        # created_at es auto_now_add; forzar una fecha antigua.
+        Tenant.objects.filter(pk=t.pk).update(
+            created_at=timezone.now() - timedelta(hours=hours_ago)
+        )
+        return Tenant.objects.get(pk=t.pk)
+
+    def test_alerts_tenant_without_payment(self):
+        t = self._old_tenant("noPay1")
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 1")
+        t.refresh_from_db()
+        self.assertIsNotNone(t.no_payment_alert_sent_at)
+
+    def test_does_not_alert_twice(self):
+        self._old_tenant("noPay2")
+        alert_tenants_without_payment(hours=24)
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 0")
+
+    def test_does_not_alert_with_payment(self):
+        t = self._old_tenant("noPay3")
+        Payment.objects.create(tenant=t, months=1)
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 0")
+
+    def test_does_not_alert_recent_tenant(self):
+        Tenant.objects.create(name="recent", short_name="recent")  # created ahora
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 0")

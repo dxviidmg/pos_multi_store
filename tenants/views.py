@@ -179,7 +179,7 @@ class PublicTenantCreateView(APIView):
             # Tenant.save() usará get_or_create y encontrará el owner ya creado
             tenant.save()
 
-            Subscription.objects.create(
+            subscription = Subscription.objects.create(
                 tenant=tenant,
                 mp_subscription_id=mp_data["id"],
                 card_token_id="",
@@ -196,6 +196,9 @@ class PublicTenantCreateView(APIView):
             username=owner.username,
             password=raw_password,
         )
+
+        # Notificación interna a soporte: nuevo negocio registrado.
+        email_service.notify_new_tenant(tenant, subscription=subscription, plan=plan)
 
         return Response({
             "id": tenant.id,
@@ -800,10 +803,7 @@ class MPWebhookView(APIView):
         mp_payment = response.json()
         logger.info(f"[MPWebhook] payment status={mp_payment.get('status')} ref={mp_payment.get('external_reference')} amount={mp_payment.get('transaction_amount')}")
 
-        if mp_payment.get("status") != "approved":
-            return Response(status=status.HTTP_200_OK)
-
-        # Buscar tenant por external_reference (formato: short_name_MMYY o solo short_name)
+        # Localizar tenant por external_reference (short_name).
         external_reference = mp_payment.get("external_reference", "")
         if not external_reference:
             logger.warning(f"[MPWebhook] payment without external_reference, payment_id={payment_id}")
@@ -814,6 +814,17 @@ class MPWebhookView(APIView):
             tenant = Tenant.objects.get(short_name=short_name)
         except Tenant.DoesNotExist:
             logger.warning(f"[MPWebhook] tenant not found for short_name={short_name} (external_reference={external_reference})")
+            return Response(status=status.HTTP_200_OK)
+
+        pay_status = mp_payment.get("status")
+
+        # --- Pago RECHAZADO: avisar al cliente (tarjeta vencida vs otro error) ---
+        if pay_status == "rejected":
+            self._handle_rejected_payment(mp_payment, tenant)
+            return Response(status=status.HTTP_200_OK)
+
+        if pay_status != "approved":
+            # pending / in_process / etc.: no registrar aún.
             return Response(status=status.HTTP_200_OK)
 
         # Para pagos recurrentes de preapproval, generar external_reference único
@@ -830,11 +841,88 @@ class MPWebhookView(APIView):
         # Guardar datos NO sensibles de la tarjeta en la suscripción (historial).
         self._store_card_data(mp_payment)
 
+        # ¿Es el primer pago de este tenant? (antes de registrar el nuevo)
+        is_first_payment = not Payment.objects.filter(tenant=tenant).exists()
+
         # Registrar pago
         Payment.objects.create(tenant=tenant, months=1, mp_external_reference=external_reference)
         logger.info(f"[MPWebhook] payment registered: tenant={tenant.short_name} amount={mp_payment.get('transaction_amount')}")
 
+        poi = mp_payment.get("point_of_interaction") or {}
+        tx = poi.get("transaction_data") or {}
+        sub = Subscription.objects.filter(
+            mp_subscription_id=str(tx.get("subscription_id"))
+        ).first()
+
+        # Notificación interna a soporte solo en el primer pago.
+        if is_first_payment:
+            email_service.notify_first_payment(
+                tenant,
+                amount=mp_payment.get("transaction_amount"),
+                payment_id=mp_payment.get("id"),
+                subscription=sub,
+            )
+
+        # Recibo al cliente en cada cobro exitoso.
+        card_info = None
+        if sub and sub.card_last_four:
+            card_info = f"{sub.card_brand} ****{sub.card_last_four}"
+        owner_email = getattr(tenant.owner, "email", "")
+        if owner_email:
+            email_service.notify_client_payment_success(
+                owner_email,
+                amount=mp_payment.get("transaction_amount"),
+                card_info=card_info,
+            )
+
         return Response(status=status.HTTP_200_OK)
+
+    # status_detail de MP que indican tarjeta vencida
+    CARD_EXPIRED_DETAILS = {
+        "cc_rejected_bad_filled_date",
+        "cc_rejected_card_expired",
+    }
+
+    def _handle_rejected_payment(self, mp_payment, tenant):
+        """Avisa al cliente de un pago rechazado (tarjeta vencida vs otro error)."""
+        status_detail = mp_payment.get("status_detail", "")
+        card = mp_payment.get("card") or {}
+        last_four = card.get("last_four_digits") or ""
+        pm = mp_payment.get("payment_method") or {}
+        brand = pm.get("id") or mp_payment.get("payment_method_id") or ""
+        card_info = f"{brand} ****{last_four}" if last_four else None
+
+        owner_email = getattr(tenant.owner, "email", "")
+        is_expired = status_detail in self.CARD_EXPIRED_DETAILS
+
+        logger.info(
+            f"[MPWebhook] payment rejected tenant={tenant.short_name} detail={status_detail} expired={is_expired}"
+        )
+
+        # Correo al cliente
+        if owner_email:
+            if is_expired:
+                email_service.notify_client_card_expired(owner_email, card_info=card_info)
+            else:
+                email_service.notify_client_payment_failed(owner_email, card_info=card_info)
+
+        # Notificación interna a soporte
+        email_service.send_support_notification(
+            subject=f"[{tenant.short_name}] Pago rechazado",
+            context={
+                "title": "Pago rechazado",
+                "subtitle": "El cobro de la suscripción no se pudo procesar.",
+                "status_label": "Tarjeta vencida" if is_expired else "Pago rechazado",
+                "status_color": "#dc2626",
+                "rows": [
+                    {"label": "Negocio", "value": tenant.name},
+                    {"label": "Short name", "value": tenant.short_name},
+                    {"label": "Motivo (MP)", "value": status_detail},
+                    {"label": "Tarjeta", "value": card_info},
+                    {"label": "MP payment id", "value": mp_payment.get("id")},
+                ],
+            },
+        )
 
     def _store_card_data(self, mp_payment):
         """

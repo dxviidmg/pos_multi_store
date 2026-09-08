@@ -58,6 +58,8 @@ class Tenant(CreatedAtModel):
     cancellation_reason = models.CharField(
         max_length=30, choices=CANCELLATION_REASON_CHOICES, blank=True, default=""
     )
+    # Marca para no reenviar la alerta interna de "sin pago tras 24h".
+    no_payment_alert_sent_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.name

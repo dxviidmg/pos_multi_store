@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light">
-    <title>Bienvenido a SmartVenta</title>
+    <title>{{ title }}</title>
     <!--[if !mso]><!-->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <!--<![endif]-->
@@ -17,59 +17,48 @@
                     <!-- Header -->
                     <tr>
                         <td style="background-color: #04346b; padding: 36px 40px; text-align: center;">
-                            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em;">SmartVenta</h1>
+                            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em;">🛒 SmartVenta</h1>
                         </td>
                     </tr>
+
+                    <!-- Franja de estado -->
+                    {% if status_color %}
+                    <tr>
+                        <td style="background-color: {{ status_color }}; height: 5px; font-size: 0; line-height: 0;">&nbsp;</td>
+                    </tr>
+                    {% endif %}
 
                     <!-- Body -->
                     <tr>
                         <td style="padding: 40px;">
-                            <h2 style="color: #0f172a; margin: 0 0 16px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;">¡Bienvenido!</h2>
+                            <h2 style="color: #0f172a; margin: 0 0 16px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;">{{ title }}</h2>
                             <p style="color: #64748b; font-size: 16px; line-height: 1.7; margin: 0 0 24px;">
-                                Tu cuenta ha sido creada exitosamente. A continuación encontrarás tus credenciales de acceso:
+                                {{ message }}
                             </p>
 
-                            <!-- Credentials box -->
+                            {% if amount or card_info %}
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f0f4f8; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 24px;">
                                 <tr>
-                                    <td style="padding: 24px;">
-                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                                            <tr>
-                                                <td style="padding: 8px 0;">
-                                                    <span style="color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Usuario</span>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 0 0 16px;">
-                                                    <span style="color: #0f172a; font-size: 18px; font-weight: 700;">{{ username }}</span>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 8px 0;">
-                                                    <span style="color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Contraseña</span>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 0;">
-                                                    <code style="color: #04346b; font-size: 18px; font-weight: 700; background-color: #CAD2DE; padding: 4px 12px; border-radius: 8px;">{{ password }}</code>
-                                                </td>
-                                            </tr>
-                                        </table>
+                                    <td style="padding: 20px 24px;">
+                                        {% if amount %}
+                                        <p style="margin: 0 0 8px; color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Monto</p>
+                                        <p style="margin: 0 0 16px; color: #0f172a; font-size: 22px; font-weight: 700;">${{ amount }} MXN</p>
+                                        {% endif %}
+                                        {% if card_info %}
+                                        <p style="margin: 0 0 8px; color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Tarjeta</p>
+                                        <p style="margin: 0; color: #0f172a; font-size: 16px; font-weight: 600;">{{ card_info }}</p>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             </table>
-
-                            <p style="color: #047857; font-size: 14px; line-height: 1.6; margin: 0 0 24px; font-weight: 600;">
-                                🔒 Por seguridad, te recomendamos cambiar tu contraseña después de iniciar sesión por primera vez.
-                            </p>
+                            {% endif %}
 
                             {% if frontend_url %}
-                            <!-- Botón de acceso -->
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
                                 <tr>
                                     <td align="center">
                                         <a href="{{ frontend_url }}" target="_blank" style="display: inline-block; background-color: #04346b; color: #ffffff; font-size: 16px; font-weight: 600; letter-spacing: 0.01em; text-decoration: none; padding: 14px 32px; border-radius: 10px;">
-                                            Iniciar sesión
+                                            {{ cta_label|default:"Iniciar sesión" }}
                                         </a>
                                     </td>
                                 </tr>
