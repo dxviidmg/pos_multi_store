@@ -18,6 +18,7 @@ from .models import Payment, Plan, Subscription, SubscriptionPayment, Tenant
 from .serializers import PaymentSerializer, SubscriptionSerializer, TenantSerializer
 from .utils import render_redeploy
 from pos_multi_store.permissions import HasAPIKey
+from core.services.email import email_service
 
 # Create your views here.
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -159,12 +160,13 @@ class PublicTenantCreateView(APIView):
         # Pago exitoso → crear tenant, owner y suscripción en transacción
         with transaction.atomic():
             username = f"{short_name}.propietario"
+            raw_password = data.get('password', username)
             owner = User.objects.create(
                 username=username,
                 first_name=data['first_name'],
                 last_name=data['last_name'],
                 email=data['email'],
-                password=make_password(data.get('password', username)),
+                password=make_password(raw_password),
             )
 
             tenant = Tenant(
@@ -184,6 +186,14 @@ class PublicTenantCreateView(APIView):
                 status="active",
                 amount=plan.price,
             )
+
+        # Correo de bienvenida con credenciales (fuera de la transacción para
+        # que un fallo de envío no revierta el alta del tenant)
+        email_service.send_welcome_email(
+            user_email=owner.email,
+            username=owner.username,
+            password=raw_password,
+        )
 
         return Response({
             "id": tenant.id,
