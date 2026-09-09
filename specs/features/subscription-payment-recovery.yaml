@@ -1,0 +1,215 @@
+# =============================================================================
+# SmartVenta — Feature: Recuperación de pago y cambio de tarjeta
+# Spec-Driven Development · Nuevo endpoint + campos + estado derivado
+# Módulos afectados: tenants (Subscription, webhook, current-plan)
+# Relacionado: subscription-cancellation.yaml, subscription-status-mp-alignment.yaml
+# =============================================================================
+#
+# Problema de negocio:
+#   Cuando a un cliente se le vence/rechaza la tarjeta, MP marca el preapproval
+#   como 'paused' o 'cancelled'. Pero el cliente NO se quiere ir: solo necesita
+#   actualizar su tarjeta y seguir. Hoy:
+#     - No hay forma de distinguir "vencida por tarjeta" de "cancelada voluntaria".
+#     - No hay endpoint para actualizar la tarjeta / reactivar.
+#     - No se guarda qué tarjeta se usó (los clientes con varias no la reconocen).
+#
+# Solución (3 piezas en un mismo flujo de "recuperación de pago"):
+#   1. Estado de negocio DERIVADO con tres valores: active | cancelled | expired.
+#      - active:    todo bien.
+#      - cancelled: el owner canceló voluntariamente (Tenant.cancelled_at marcado).
+#      - expired:   MP paused/cancelled por cobro fallido y el owner NO canceló.
+#   2. Historial de tarjetas: guardar marca + últimos 4 + vencimiento en cada
+#      Subscription (cada recreación = una tarjeta/intento distinto).
+#   3. Cambio de tarjeta:
+#      - Preventivo (aún vigente): actualizar el preapproval sin cancelar.
+#      - Reactivo (ya cancelado por tarjeta): recrear la suscripción (reactivación).
+#
+# Decisiones (confirmadas):
+#   - Escenario 1 (preventivo): actualizar preapproval (opción B).
+#   - Escenario 2 (reactivo): MP deja el preapproval en 'cancelled' por tarjeta
+#     vencida; se recrea la suscripción.
+#   - Estado 'expired' DERIVADO (sin campo booleano nuevo).
+#   - Guardar por transparencia: card_brand, card_last_four, card_expiration_*.
+#   - Datos de tarjeta se capturan en el WEBHOOK del pago (fuente confiable).
+#   - El webhook NUNCA marca Tenant.cancelled_at (ver subscription-cancellation).
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Cambios en modelos (migración)
+# -----------------------------------------------------------------------------
+models:
+  Subscription:
+    new_fields:
+      - name: card_brand
+        type: CharField
+        max_length: 20
+        blank: true
+        default: ""
+        description: 'Marca de la tarjeta (visa, master, amex). De payment_method.id.'
+      - name: card_last_four
+        type: CharField
+        max_length: 4
+        blank: true
+        default: ""
+        description: 'Últimos 4 dígitos. De card.last_four_digits.'
+      - name: card_expiration_month
+        type: IntegerField
+        null: true
+        blank: true
+        description: 'Mes de vencimiento. De card.expiration_month.'
+      - name: card_expiration_year
+        type: IntegerField
+        null: true
+        blank: true
+        description: 'Año de vencimiento. De card.expiration_year.'
+    security_note: |
+      NO se guarda número completo, CVV ni token de pago (PCI). Solo datos no
+      sensibles ya visibles en cualquier recibo (marca, últimos 4, vencimiento).
+    history_note: |
+      El historial de tarjetas NO requiere modelo nuevo: cada Subscription es un
+      registro con su propia tarjeta/intento. Al recrear (cambio de tarjeta) se
+      crea una nueva Subscription y la anterior queda como 'cancelled' (histórico).
+    external_reference_note: |
+      El external_reference es SIEMPRE tenant.short_name en todas las suscripciones
+      del tenant (no cambia entre tarjetas). Sirve solo para identificar el tenant.
+      La unicidad de suscripción va por mp_subscription_id y la de pago por payment_id.
+      Para vincular un pago a SU suscripción concreta (cuál tarjeta) se usa el
+      subscription_id que MP incluye en point_of_interaction.transaction_data.
+
+  Tenant:
+    changed_fields: []
+    note: |
+      Sin campos nuevos. El estado 'expired' se DERIVA (ver derived_status).
+      cancelled_at ya existe (spec de cancelación) para la cancelación voluntaria.
+
+# -----------------------------------------------------------------------------
+# 2. Estado de negocio derivado (subscription_status con 3 valores)
+# -----------------------------------------------------------------------------
+derived_status:
+  description: |
+    subscription_status expone 3 valores derivados, sin campo persistido nuevo.
+  rules:
+    - "Si Tenant.cancelled_at IS NOT NULL -> 'cancelled' (cancelación voluntaria del owner)."
+    - "Si cancelled_at es NULL y la última Subscription está en ('paused','cancelled') -> 'expired' (problema de cobro/tarjeta)."
+    - "En otro caso -> 'active'."
+  frontend_messages:
+    active:    "Suscripción activa."
+    cancelled: "Cancelaste tu suscripción."
+    expired:   "Tu tarjeta venció o el cobro falló. Actualízala para seguir."
+  important:
+    - "'expired' NO corta el acceso por sí mismo: el acceso depende de la vigencia (end_of_validity)."
+    - "Un cliente 'expired' con días pagados restantes SIGUE usando el sistema hasta que venza."
+
+# -----------------------------------------------------------------------------
+# 3. Cambios en API (contratos)
+# -----------------------------------------------------------------------------
+api_changes:
+
+  # --- Cambio de tarjeta PREVENTIVO (aún vigente) ---
+  "POST /subscriptions/update-card/ (SubscriptionUpdateCardView) [NUEVO]":
+    scenario: "Escenario 1: el cliente cambia la tarjeta antes de que falle el cobro."
+    auth: "Token. Solo owner (403 si no)."
+    request_body:
+      card_token: "token de la nueva tarjeta (obligatorio)"
+      payment_method_id: "opcional (credit_card/debit_card)"
+    behavior:
+      - "Obtener la última Subscription 'authorized' del tenant (404 si no hay)."
+      - "PUT /preapproval/{mp_subscription_id} en MP con el nuevo card_token_id (NO se cancela)."
+      - "MP devuelve/confirma; actualizar datos de tarjeta en la Subscription."
+      - "No cambia mp_subscription_id ni el estado; la suscripción sigue authorized."
+    responses:
+      "200": { status: "authorized", card_last_four: "4820" }
+      "403": { detail: "Solo el propietario puede actualizar la tarjeta" }
+      "404": { detail: "No hay una suscripción activa" }
+      "500": { detail: "No se pudo actualizar la tarjeta. Contacta a soporte técnico." }
+
+  # --- Reactivación tras tarjeta vencida ---
+  "POST /subscriptions/create/ (CreateSubscriptionView) [EXISTENTE - reúso]":
+    scenario: "Escenario 2: MP ya canceló por tarjeta; el cliente reactiva con tarjeta nueva."
+    behavior:
+      - "Reutiliza el flujo actual: cancela suscripciones previas y crea una nueva (authorized)."
+      - "Reset de cancelación al reactivar: Tenant.cancelled_at=NULL, cancellation_reason='' (ya implementado)."
+      - "La nueva Subscription guarda los datos de la nueva tarjeta (vía webhook del pago)."
+
+  # --- current-plan expone el estado de 3 valores ---
+  "GET /current-plan/ (CurrentPlanView) [MODIFICADO]":
+    changed_fields:
+      - name: subscription_status
+        from: "active | cancelled"
+        to: "active | cancelled | expired"
+        note: "Derivado (ver derived_status)."
+    added_fields:
+      - name: current_card
+        type: object | null
+        description: "Datos de la tarjeta de la última suscripción."
+        example: { brand: "visa", last_four: "7155", expiration: "05/31" }
+
+  # --- Webhook del pago captura datos de tarjeta ---
+  "POST /webhooks/mp/ (_handle_payment) [MODIFICADO]":
+    behavior:
+      - "Al procesar un pago approved, extraer card.last_four_digits, card.expiration_month/year y payment_method.id."
+      - "Localizar la Subscription (por subscription_id del preapproval) y guardar esos datos de tarjeta."
+
+  # --- Listado de suscripciones expone datos de tarjeta (historial) ---
+  "GET /subscriptions/ (SubscriptionView) [MODIFICADO]":
+    added_fields:
+      - name: card_brand
+        type: string
+        example: "visa"
+      - name: card_last_four
+        type: string
+        example: "7155"
+      - name: card_expiration_month
+        type: integer | null
+      - name: card_expiration_year
+        type: integer | null
+      - name: card_expiration
+        type: string | null
+        example: "05/31"
+        note: "Derivado MM/AA para mostrar."
+    purpose: "Historial de tarjetas: cada Subscription trae la tarjeta con que se creó/cobró."
+
+# -----------------------------------------------------------------------------
+# 4. Cambios de código (plan de implementación)
+# -----------------------------------------------------------------------------
+code_changes:
+  - file: tenants/models.py
+    changes:
+      - "Subscription: agregar card_brand, card_last_four, card_expiration_month, card_expiration_year."
+      - "Migración correspondiente (la genera el equipo)."
+  - file: tenants/views.py
+    changes:
+      - "Nueva SubscriptionUpdateCardView (PUT preapproval con nuevo card_token, sin cancelar)."
+      - "CurrentPlanView: subscription_status con 3 valores (derivado) + current_card."
+      - "_handle_payment: guardar datos de tarjeta en la Subscription del pago."
+      - "Helper para derivar subscription_status (active/cancelled/expired)."
+  - file: tenants/urls.py
+    changes:
+      - "path('subscriptions/update-card/', views.SubscriptionUpdateCardView.as_view(), name='subscriptions-update-card')."
+  - file: pos_multi_store/permissions.py
+    changes:
+      - "Agregar 'subscriptions-update-card' a la PAYMENT_ALLOWLIST (owner vencido puede actualizar tarjeta)."
+
+# -----------------------------------------------------------------------------
+# 5. Consideraciones y riesgos
+# -----------------------------------------------------------------------------
+considerations:
+  risk: MEDIUM
+  notes:
+    - "MP puede no devolver datos de tarjeta al crear el preapproval; por eso se capturan en el webhook del pago."
+    - "PCI: nunca guardar PAN completo, CVV ni token; solo marca/últimos4/vencimiento."
+    - "El estado 'expired' es derivado; mantener la regla en un único helper para consistencia entre endpoints."
+    - "update-card (Escenario 1) debe estar en la PAYMENT_ALLOWLIST para que un owner recién vencido pueda usarla."
+    - "Escenario 2 (recrear) ya cancela la suscripción previa y limpia cancelled_at; verificar que no dispare falso 'expired' tras reactivar."
+    - "El brand viene de payment_method.id (ej. 'visa', 'master'); normalizar para mostrar."
+
+# -----------------------------------------------------------------------------
+# 6. Qué NO cambia
+# -----------------------------------------------------------------------------
+unchanged:
+  - "El webhook NO marca Tenant.cancelled_at (decisión: tarjeta vencida != cancelación)."
+  - "El acceso se sigue rigiendo por la vigencia (end_of_validity), no por el estado de MP."
+  - "cancelled_at solo lo marca el owner vía SubscriptionCancelView."
+  - "No se crea un modelo de historial aparte: cada Subscription ya es el histórico."
+  - "No se guardan datos sensibles de tarjeta."

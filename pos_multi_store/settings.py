@@ -285,3 +285,6 @@ DEFAULT_FROM_EMAIL = f'SmartVenta <{EMAIL_HOST_USER}>'
 
 # URL base del frontend (para enlaces en correos: verificación, reset, etc.)
 FRONTEND_URL = MERCADO_PAGO_BACK_URL
+
+# Correo interno de soporte (notificaciones de seguimiento de clientes/MP)
+SUPPORT_EMAIL = config('SUPPORT_EMAIL')

@@ -22,6 +22,7 @@ urlpatterns += [
     path('plan-equivalent/', views.PlanEquivalentView.as_view(), name='plan-equivalent'),
     path('subscriptions/create/', views.CreateSubscriptionView.as_view(), name='subscriptions-create'),
     path('subscriptions/cancel/', views.SubscriptionCancelView.as_view(), name='subscriptions-cancel'),
+    path('subscriptions/update-card/', views.SubscriptionUpdateCardView.as_view(), name='subscriptions-update-card'),
     path('subscriptions/', views.SubscriptionView.as_view(), name='subscription-detail'),
     path('tenant-dates/', views.TenantDatesView.as_view(), name='tenant-dates'),
     path('webhooks/mp/', views.MPWebhookView.as_view(), name='mp-webhook'),

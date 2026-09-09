@@ -73,7 +73,7 @@ models:
     business_rules:
       - "Estado cancelado = (cancelled_at IS NOT NULL). No hay campo booleano."
       - "cancelled_at/reason los marca SOLO el endpoint POST /subscriptions/cancel/."
-      - "El webhook de MP actualiza Subscription.status y, como red de seguridad, marca Tenant.cancelled_at (reason='other') si aún es NULL (ver webhook_interaction)."
+      - "El webhook de MP actualiza SOLO Subscription.status; NO marca Tenant.cancelled_at (ver webhook_interaction). Un 'cancelled' de MP puede ser por tarjeta vencida/fallo de cobro y no debe tratarse como cancelación de negocio."
       - "access_until NO se persiste: se deriva del último Payment.end_of_validity del tenant."
       - "Estar cancelado NO corta el acceso; el acceso depende de la vigencia (ver tenant-access-gating)."
       - "Al reactivar (nuevo pago) se resetea: cancelled_at=NULL, cancellation_reason=''."
@@ -169,8 +169,9 @@ business_logic:
     - "7. Guardado local en transaction.atomic() (Subscription y Tenant juntos o ninguno):"
     - "   7a. Subscription.status='cancelled' (espejo de MP)."
     - "   7b. Tenant: cancelled_at=now, cancellation_reason=reason."
-    - "8. Si el guardado local (paso 7) falla tras MP OK: queda MP cancelado; el webhook de MP"
-    - "   reconciliará (marca Subscription y Tenant.cancelled_at con reason='other') -> ver webhook_interaction."
+    - "8. Si el guardado local (paso 7) falla tras MP OK: queda MP cancelado y Tenant SIN marcar."
+    - "   El webhook NO reconcilia Tenant.cancelled_at (ver webhook_interaction). Es un caso raro;"
+    - "   el tenant pierde acceso por vigencia igualmente. Se corrige a mano si se detecta."
     - "9. Calcular access_until = último Payment.end_of_validity del tenant (null si aún no hay Payment)."
     - "10. Responder {status: 'cancelled', access_until}."
 
@@ -181,14 +182,14 @@ business_logic:
     - "El acceso NO se corta al cancelar; se respeta hasta esa fecha."
 
   webhook_interaction:
-    - "MPWebhookView actualiza Subscription.status (espejo de MP)."
+    - "MPWebhookView actualiza SOLO Subscription.status (espejo de MP); NO marca Tenant.cancelled_at."
     - "Tras la alineación a MP, el webhook persiste el status directo (sin traducción)."
-    - "RED DE SEGURIDAD (opción b): si MP notifica 'cancelled' y Tenant.cancelled_at es NULL,"
-    - "  el webhook TAMBIÉN marca Tenant.cancelled_at=now y cancellation_reason='other'."
-    - "  Cubre: (1) fallo parcial (MP OK pero guardado local falló) y"
-    - "         (2) cancelaciones externas a SmartVenta (usuario cancela en MP, o MP cancela por fallos de cobro)."
-    - "Si Tenant.cancelled_at ya tiene valor (canceló por nuestro endpoint), el webhook NO lo sobrescribe (conserva el reason real)."
-    - "Nota: 'other' se usa porque MP no envía el motivo de negocio."
+    - "DECISIÓN: MP reporta 'cancelled' tanto para cancelación voluntaria como para"
+    - "  tarjeta vencida / fallo de cobro. NO se puede distinguir de forma fiable, así que el"
+    - "  webhook NUNCA marca cancelled_at (evita tratar 'tarjeta vencida' como 'el cliente canceló')."
+    - "cancelled_at lo marca ÚNICAMENTE el owner vía SubscriptionCancelView (cancelación voluntaria)."
+    - "Tarjeta vencida/fallo de cobro: Subscription.status='cancelled' pero cancelled_at=NULL;"
+    - "  el cliente pierde acceso por vigencia y el frontend muestra 'actualiza tu tarjeta'."
 
 # -----------------------------------------------------------------------------
 # 4. Cambios de código (plan de implementación)
@@ -221,8 +222,8 @@ considerations:
   risk: MEDIUM
   notes:
     - "Consistencia MP<->negocio: cancelar primero en MP; guardado local en transaction.atomic()."
-    - "Fallo parcial (MP OK, guardado local falla): el webhook de MP reconcilia (marca Tenant.cancelled_at con reason='other')."
-    - "Cancelaciones externas a SmartVenta (usuario cancela en MP / MP cancela por cobro fallido): también las refleja el webhook con reason='other'."
+    - "Fallo parcial (MP OK, guardado local falla): caso raro; el webhook NO reconcilia cancelled_at. El tenant pierde acceso por vigencia igual; se corrige a mano si se detecta."
+    - "Tarjeta vencida / fallo de cobro: MP pone Subscription.status='cancelled' pero NO se marca cancelled_at; el frontend muestra 'actualiza tu tarjeta', no 'cancelaste'."
     - "Idempotencia: si Tenant.cancelled_at ya tiene valor, el endpoint devuelve 409 (evita doble acción)."
     - "Validar reason en backend aunque el frontend restrinja las opciones."
     - "access_until debe ser consistente entre GET /current-plan/ y la respuesta del cancel."
@@ -238,6 +239,6 @@ unchanged:
   - "STATUS_CHOICES de Subscription (ya incluye 'cancelled')."
   - "Flujo de creación de suscripción (CreateSubscriptionView)."
   - "Registro de pagos (Payment) y cálculo de vigencia."
-  - "MPWebhookView actualiza Subscription.status y marca Tenant.cancelled_at (reason='other') si estaba NULL (red de seguridad)."
+  - "MPWebhookView actualiza SOLO Subscription.status; NUNCA marca Tenant.cancelled_at (evita falso 'cancelado' por tarjeta vencida)."
   - "El acceso: sigue derivándose de la vigencia, no de cancelled_at."
   - "No hay reembolsos ni prorrateo."

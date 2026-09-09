@@ -3,6 +3,8 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
+from tenants.tasks import alert_tenants_without_payment
+
 from tenants.models import Plan, Tenant, Payment, Subscription
 
 
@@ -55,6 +57,42 @@ class TenantAccessTests(TestCase):
         t.save(update_fields=["cancelled_at"])
         self.assertTrue(t.is_cancelled)
 
+    def test_subscription_status_active_by_default(self):
+        t = self._tenant("acc6")
+        self.assertEqual(t.subscription_status(), "active")
+
+    def test_subscription_status_cancelled_when_owner_cancels(self):
+        t = self._tenant("acc7")
+        t.cancelled_at = timezone.now()
+        t.save(update_fields=["cancelled_at"])
+        self.assertEqual(t.subscription_status(), "cancelled")
+
+    def test_subscription_status_expired_when_mp_cancelled_without_voluntary(self):
+        t = self._tenant("acc8")
+        # MP dejó la suscripción en cancelled/paused pero el owner NO canceló.
+        Subscription.objects.create(
+            tenant=t, mp_subscription_id="mp-exp", payer_email="a@b.com",
+            status="cancelled",
+        )
+        self.assertIsNone(t.cancelled_at)
+        self.assertEqual(t.subscription_status(), "expired")
+
+    def test_current_card_none_without_data(self):
+        t = self._tenant("acc9")
+        self.assertIsNone(t.current_card())
+
+    def test_current_card_returns_masked_data(self):
+        t = self._tenant("acc10")
+        Subscription.objects.create(
+            tenant=t, mp_subscription_id="mp-card", payer_email="a@b.com",
+            status="authorized", card_brand="visa", card_last_four="7155",
+            card_expiration_month=5, card_expiration_year=2031,
+        )
+        card = t.current_card()
+        self.assertEqual(card["brand"], "visa")
+        self.assertEqual(card["last_four"], "7155")
+        self.assertEqual(card["expiration"], "05/31")
+
 
 class SubscriptionStatusTests(TestCase):
     def test_default_status_is_authorized(self):
@@ -68,3 +106,37 @@ class SubscriptionStatusTests(TestCase):
     def test_status_choices_aligned_with_mp(self):
         values = {c[0] for c in Subscription.STATUS_CHOICES}
         self.assertEqual(values, {"pending", "authorized", "paused", "cancelled"})
+
+
+class TenantWithoutPaymentAlertTests(TestCase):
+    def _old_tenant(self, short_name, hours_ago=25):
+        t = Tenant.objects.create(name=short_name, short_name=short_name)
+        # created_at es auto_now_add; forzar una fecha antigua.
+        Tenant.objects.filter(pk=t.pk).update(
+            created_at=timezone.now() - timedelta(hours=hours_ago)
+        )
+        return Tenant.objects.get(pk=t.pk)
+
+    def test_alerts_tenant_without_payment(self):
+        t = self._old_tenant("noPay1")
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 1")
+        t.refresh_from_db()
+        self.assertIsNotNone(t.no_payment_alert_sent_at)
+
+    def test_does_not_alert_twice(self):
+        self._old_tenant("noPay2")
+        alert_tenants_without_payment(hours=24)
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 0")
+
+    def test_does_not_alert_with_payment(self):
+        t = self._old_tenant("noPay3")
+        Payment.objects.create(tenant=t, months=1)
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 0")
+
+    def test_does_not_alert_recent_tenant(self):
+        Tenant.objects.create(name="recent", short_name="recent")  # created ahora
+        result = alert_tenants_without_payment(hours=24)
+        self.assertEqual(result, "alertas enviadas: 0")

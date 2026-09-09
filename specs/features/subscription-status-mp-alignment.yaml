@@ -139,10 +139,11 @@ business_logic:
       valid_states: [pending, authorized, paused, cancelled]
       unknown_state_policy: "Ignorar (no actualizar) + logger.warning."
       cross_ref: |
-        Ver subscription-cancellation.yaml (webhook_interaction): cuando el
-        status validado sea 'cancelled' y Tenant.cancelled_at sea NULL, este
-        mismo método debe marcar Tenant.cancelled_at=now, cancellation_reason='other'
-        (red de seguridad para fallo parcial y cancelaciones externas a SmartVenta).
+        Ver subscription-cancellation.yaml (webhook_interaction): el webhook
+        actualiza SOLO Subscription.status. NO marca Tenant.cancelled_at, porque
+        MP reporta 'cancelled' también por tarjeta vencida/fallo de cobro y no
+        debe tratarse como cancelación de negocio. cancelled_at solo lo marca el
+        owner vía SubscriptionCancelView.
 
 # -----------------------------------------------------------------------------
 # 4. Cambios de código (plan de implementación)
