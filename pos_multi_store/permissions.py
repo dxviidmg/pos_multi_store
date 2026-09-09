@@ -35,6 +35,13 @@ class TenantHasAccess(BasePermission):
         "code": "subscription_expired",
     }
 
+    # Mensaje para tenant cancelado (negocio dado de baja). Distinto de
+    # subscription_expired: aquí no hay renovación desde la app.
+    CANCELLED_MESSAGE = {
+        "detail": "Este negocio está inactivo. Contacta a soporte.",
+        "code": "tenant_inactive",
+    }
+
     # Endpoints (url_name del namespace 'tenants') que un owner vencido SÍ puede
     # usar para pagar/renovar. Todo lo demás queda bloqueado.
     PAYMENT_ALLOWLIST = {
@@ -57,6 +64,12 @@ class TenantHasAccess(BasePermission):
         tenant = user.get_tenant()
         if tenant is None:
             return True
+
+        # Bloqueo duro por cancelación de tenant: aplica a TODOS (incluido el
+        # owner) y sin allowlist de pago. No hay autoservicio de reactivación.
+        if tenant.cancelled_at is not None:
+            self.message = self.CANCELLED_MESSAGE
+            return False
 
         if tenant.has_access():
             return True

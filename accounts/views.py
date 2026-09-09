@@ -85,6 +85,17 @@ class CustomAuthToken(ObtainAuthToken):
                 store = sw.store if sw else None
                 tenant = store.tenant if store else None
 
+        # Bloqueo por cancelación de negocio: aplica a TODOS (incluido el owner).
+        # No hay reactivación desde la app; se maneja por soporte.
+        if tenant is not None and tenant.cancelled_at is not None:
+            return Response(
+                {
+                    "detail": "Este negocio está inactivo. Contacta a soporte.",
+                    "code": "tenant_inactive",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Gate de acceso por vigencia: si el tenant venció, el owner puede
         # entrar en "modo pago"; managers y vendedores quedan bloqueados.
         if tenant is not None and not tenant.has_access():
