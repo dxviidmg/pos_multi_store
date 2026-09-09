@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.db import models
@@ -6,6 +8,13 @@ from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 
 MONTHY_PRICE_BY_STORE = 500
+
+# Días de gracia tras el fin de vigencia del último pago: durante este periodo
+# el acceso sigue siendo COMPLETO para todos (owner, managers y vendedores).
+ACCESS_GRACE_DAYS = 7
+# Ventana para tenants recién creados sin ningún Payment (pago en proceso vía
+# webhook de MP). Dentro de esta ventana se concede acceso.
+NEW_TENANT_GRACE_HOURS = 24
 
 
 class CreatedAtModel(models.Model):
@@ -131,17 +140,53 @@ class Tenant(CreatedAtModel):
 
     def has_access(self):
         """
-        True si hoy <= end_of_validity (inclusive), en hora local (America/Mexico_City).
+        Determina si el tenant tiene acceso OPERATIVO completo hoy.
 
-        PROVISIONAL: si el tenant aún no tiene ningún Payment se concede acceso
-        (return True), porque hoy el primer Payment se crea vía webhook de MP y
-        puede tardar/fallar. TODO: endurecer a False cuando el Payment se cree
-        en el alta (PublicTenantCreateView).
+        Reglas (America/Mexico_City):
+          1. Tenant cancelado (cancelled_at marcado) -> sin acceso. El corte por
+             cancelación es inmediato y aplica a cualquier plan.
+          2. Plan manual -> siempre con acceso (el cobro es presencial y puede
+             conciliarse días después; no vence por vigencia).
+          3. Con al menos un Payment -> acceso hasta end_of_validity + 7 días de
+             gracia (inclusive). Pasada la gracia, sin acceso completo.
+          4. Sin ningún Payment -> acceso solo si es sandbox, o si el tenant se
+             creó hace menos de 24h (primer pago en proceso vía webhook de MP).
         """
-        until = self.access_until()
-        if until is None:
+        if self.cancelled_at is not None:
+            return False
+
+        plan = self.get_plan()
+        if plan and plan.billing_type == "M":
             return True
-        return timezone.localdate() <= until
+
+        until = self.access_until()
+        if until is not None:
+            return timezone.localdate() <= until + timedelta(days=ACCESS_GRACE_DAYS)
+
+        # Sin ningún Payment.
+        if self.is_sandbox:
+            return True
+        return timezone.now() < self.created_at + timedelta(hours=NEW_TENANT_GRACE_HOURS)
+
+    def tenant_users(self):
+        """
+        Todos los usuarios asociados al tenant: owner + managers de tiendas +
+        vendedores (StoreWorker). Usado para invalidar tokens al cancelar.
+        """
+        from products.models import Store, StoreWorker
+
+        user_ids = {self.owner_id}
+        user_ids.update(
+            Store.objects.filter(tenant=self)
+            .exclude(manager__isnull=True)
+            .values_list("manager_id", flat=True)
+        )
+        user_ids.update(
+            StoreWorker.objects.filter(store__tenant=self).values_list(
+                "worker_id", flat=True
+            )
+        )
+        return User.objects.filter(id__in=user_ids)
 
     def count_products(self):
         from products.models import Product

@@ -12,6 +12,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import mixins, status, viewsets
+from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -668,27 +669,23 @@ class SubscriptionCancelView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Guardado local atómico: Subscription (MP) + Tenant (negocio) juntos.
+        # Guardado local atómico: Subscription (MP) + Tenant (negocio) +
+        # invalidación de tokens, todo junto. Al borrar los tokens, cualquier
+        # petición posterior desde cualquier máquina responderá 401 y el
+        # frontend cierra la sesión automáticamente.
         with transaction.atomic():
             subscription.status = "cancelled"
             subscription.save(update_fields=["status"])
             tenant.cancelled_at = timezone.now()
             tenant.cancellation_reason = reason
             tenant.save(update_fields=["cancelled_at", "cancellation_reason"])
-
-        access_until = tenant.access_until()
-        access_until_iso = (
-            timezone.make_aware(
-                datetime.combine(access_until, datetime.min.time())
-            ).isoformat()
-            if access_until else None
-        )
+            Token.objects.filter(user__in=tenant.tenant_users()).delete()
 
         logger.info(
             f"[SubscriptionCancel] tenant={tenant.short_name} cancelled reason={reason}"
         )
         return Response(
-            {"status": "cancelled", "access_until": access_until_iso},
+            {"status": "cancelled"},
             status=status.HTTP_200_OK,
         )
 
