@@ -541,6 +541,26 @@ class ConfirmDistributionView(APIView):
     def post(self, request):
         distribution_id = request.data.get("id")
         distribution = Distribution.objects.get(id=distribution_id)
+        
+        # Verificar si ya fue procesada
+        if distribution.transfer_datetime:
+            return Response(
+                {"detail": "Esta distribución ya fue procesada anteriormente."},
+                status=status.HTTP_409_CONFLICT
+            )
+        
+        # Verificar duplicados recientes (misma distribución en menos de 2 segundos)
+        recent = Distribution.objects.filter(
+            id=distribution_id,
+            created_at__gte=timezone.now() - timedelta(seconds=2)
+        ).exists()
+        
+        if recent:
+            return Response(
+                {"detail": "Distribución duplicada detectada. Por favor espera un momento."},
+                status=status.HTTP_409_CONFLICT
+            )
+        
         transfers = distribution.transfers.all()
         logs = []
 

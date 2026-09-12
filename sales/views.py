@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pandas as pd
@@ -142,6 +142,20 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         store = self.request.store
         seller = self.request.user
+
+        # Detectar duplicados: misma cantidad total en menos de 2 segundos
+        total_quantity = sum(p['quantity'] for p in store_products_data)
+        
+        if Sale.objects.filter(
+            store=store,
+            seller=seller,
+            products_sale__quantity=total_quantity,
+            created_at__gte=timezone.now() - timedelta(seconds=2)
+        ).exists():
+            return Response(
+                {"detail": "Venta duplicada detectada. Por favor espera un momento."},
+                status=status.HTTP_409_CONFLICT
+            )
 
         # Usar una transacción para asegurar la atomicidad
         with transaction.atomic():
