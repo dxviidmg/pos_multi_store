@@ -127,9 +127,6 @@ class Product(Base):
     image = models.ImageField(upload_to=path, null=True, blank=True)
     unit = models.CharField(max_length=2, choices=Unit.choices, default=Unit.PIEZA)
 
-    @property
-    def sells_by_weight(self):
-        return self.unit == Unit.KG
 
     def clean(self):
         if (
@@ -206,6 +203,10 @@ class StoreProduct(models.Model):
 
     def calculate_available_stock(self):
         return self.stock - self.calculate_reserved_stock()
+    
+    @property
+    def sells_by_fraction(self):
+        return self.product.unit in (Unit.KG, Unit.LT)
 
 class Distribution(CreatedAtModel):
     origin_store = models.ForeignKey(

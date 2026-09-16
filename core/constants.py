@@ -53,6 +53,8 @@ class Unit(models.TextChoices):
     """Unidades de medida"""
     PIEZA = "PZ", "Pieza"
     KG = "KG", "Kilogramo"
+    LT = "LT", "Litro"
+    BOTE = "BO", "Bote"
     COSTAL = "CO", "Costal"
 
 

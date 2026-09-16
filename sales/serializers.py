@@ -9,6 +9,7 @@ class ProductSaleSerializer(serializers.ModelSerializer):
     code = serializers.CharField(source='product.code', read_only=True)
     name = serializers.CharField(source='product.name', read_only=True)
     quantity = SmartDecimalField(max_digits=10, decimal_places=3)
+    sells_by_fraction = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ProductSale

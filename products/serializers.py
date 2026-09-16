@@ -166,6 +166,7 @@ class StoreProductSerializer(StoreProductBaseSerializer):
     available_stock = SmartDecimalField(read_only=True, max_digits=10, decimal_places=3)
     reserved_stock = SmartDecimalField(read_only=True, max_digits=10, decimal_places=3)
     store = StoreBaseSerializer(read_only=True)
+    sells_by_fraction = serializers.BooleanField(read_only=True)
 
 
 class ProductForStockSerializer(serializers.ModelSerializer):
