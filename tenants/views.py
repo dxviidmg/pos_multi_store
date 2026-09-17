@@ -253,9 +253,9 @@ class TenantInfoView(APIView):
                 days_diff = (payment.end_of_validity - date.today()).days
                 show_mp_modal = days_diff < 5
                 if days_diff < 0:
-                    notices.append({"notice": "Su periodo de servicio ha vencido. Renueve para mantener el acceso.", "variant": "error"})
+                    notices.append({"notice": "Su periodo de servicio ha vencido.", "variant": "error"})
                 elif days_diff == 0:
-                    notices.append({"notice": "Su periodo de servicio vence hoy. Renueve para evitar interrupciones.", "variant": "warning"})
+                    notices.append({"notice": "Su periodo de servicio vence hoy.", "variant": "warning"})
                 elif days_diff <= 5:
                     notices.append({"notice": f"Su periodo de servicio vence en {days_diff} días.", "variant": "warning"})
 
