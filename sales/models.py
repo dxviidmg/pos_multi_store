@@ -15,6 +15,7 @@ class Sale(CreatedAtModel):
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True, related_name='sales')
     total = models.DecimalField(max_digits=10, decimal_places=2)
+    profit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
     sale_type = models.CharField(max_length=12, choices=SALE_TYPE_CHOICES, default="V")
