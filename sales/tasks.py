@@ -79,7 +79,7 @@ def get_sales_for_dashboard(self, store_ids, year, month):
         if month != '0':
             sales_filter["created_at__month"] = month
 
-        sales = Sale.objects.filter(**sales_filter).values("store_id", "created_at", "total")
+        sales = Sale.objects.filter(**sales_filter).values("store_id", "created_at", "profit", "total")
 
         self.update_state(state='PROGRESS', meta={'current': 70, 'total': 100})
 
@@ -88,6 +88,7 @@ def get_sales_for_dashboard(self, store_ids, year, month):
                 "store_id": sale["store_id"],
                 "store_name": stores.get(sale["store_id"], ""),
                 "created_at": sale["created_at"].isoformat(),
+                "profit": float(sale["profit"]),
                 "total": float(sale["total"]),
             }
             for sale in sales
