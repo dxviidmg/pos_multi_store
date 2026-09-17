@@ -203,10 +203,6 @@ class StoreProduct(models.Model):
 
     def calculate_available_stock(self):
         return self.stock - self.calculate_reserved_stock()
-    
-    @property
-    def sells_by_fraction(self):
-        return self.product.unit in (Unit.KG, Unit.LT)
 
 class Distribution(CreatedAtModel):
     origin_store = models.ForeignKey(
