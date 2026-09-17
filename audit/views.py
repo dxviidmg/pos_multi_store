@@ -34,11 +34,23 @@ class ProductAuditView(APIView):
                 "name": p.name,
             })
 
-        # 2 — Costo en cero
-        zero_cost = list(
-            products.filter(Q(cost=0) | Q(cost__isnull=True))
-            .values("code", "name")
-        )
+        # 2 — Problemas de costos (cero, nulo o >= precio unitario)
+        cost_issues = []
+        for p in products.filter(
+            Q(cost=0) | Q(cost__isnull=True) | Q(cost__gte=F("unit_price"))
+        ).only("code", "name", "cost", "unit_price"):
+            issues = []
+            if p.cost is None or p.cost == 0:
+                issues.append("costo en cero o nulo")
+            if p.cost and p.unit_price and p.cost >= p.unit_price:
+                issues.append("costo >= precio unitario")
+            cost_issues.append({
+                "code": p.code,
+                "name": p.name,
+                "cost": p.cost,
+                "unit_price": p.unit_price,
+                "issues": " | ".join(issues),
+            })
 
         # 3 — Precio mayoreo inconsistente
         wholesale_issues = []
@@ -94,7 +106,7 @@ class ProductAuditView(APIView):
 
         return Response({
             "duplicate_codes": duplicates,
-            "zero_cost": zero_cost,
+            "cost_issues": cost_issues,
             "wholesale_issues": wholesale_issues,
             "missing_in_stores": missing,
         })
