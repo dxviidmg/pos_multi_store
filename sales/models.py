@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models import DecimalField, F, Sum
 
 from clients.models import Client
-from products.models import Product, Store, StoreProduct
+from products.models import Product, Store, StoreProduct, Unit
 from tenants.models import CreatedAtModel
 
 
@@ -15,6 +15,7 @@ class Sale(CreatedAtModel):
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True, related_name='sales')
     total = models.DecimalField(max_digits=10, decimal_places=2)
+    profit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="sales")
     seller = models.ForeignKey(User, on_delete=models.CASCADE)
     sale_type = models.CharField(max_length=12, choices=SALE_TYPE_CHOICES, default="V")
@@ -107,6 +108,10 @@ class ProductSale(models.Model):
 
     def get_profit(self):
         return (self.price - self.product.cost) * self.quantity
+    
+    @property
+    def sells_by_fraction(self):
+        return self.product.unit in (Unit.KG, Unit.LT)
     
 class Payment(CreatedAtModel):
     PAYMENT_METHOD_CHOICES = (

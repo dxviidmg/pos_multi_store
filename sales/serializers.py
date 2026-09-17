@@ -9,6 +9,7 @@ class ProductSaleSerializer(serializers.ModelSerializer):
     code = serializers.CharField(source='product.code', read_only=True)
     name = serializers.CharField(source='product.name', read_only=True)
     quantity = SmartDecimalField(max_digits=10, decimal_places=3)
+    sells_by_fraction = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ProductSale
@@ -24,6 +25,7 @@ class SaleSerializer(serializers.ModelSerializer):
     is_repeated = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
     paid = serializers.DecimalField(source='get_paid', max_digits=10, decimal_places=2, read_only=True)
+    profit = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     def get_is_cancelable(self, obj):
         return obj.is_cancelable()

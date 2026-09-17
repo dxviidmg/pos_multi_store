@@ -127,9 +127,6 @@ class Product(Base):
     image = models.ImageField(upload_to=path, null=True, blank=True)
     unit = models.CharField(max_length=2, choices=Unit.choices, default=Unit.PIEZA)
 
-    @property
-    def sells_by_weight(self):
-        return self.unit == Unit.KG
 
     def clean(self):
         if (
