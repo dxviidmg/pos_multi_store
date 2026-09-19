@@ -208,7 +208,13 @@ class StoreProductViewSet(viewsets.ModelViewSet):
         ).order_by("product__brand__name", "product__name")
 
         if q:
-            queryset = queryset[:200]
+            try:
+                limit = int(query_params.get("limit", 200))
+                if limit < 0:
+                    limit = 200
+            except (TypeError, ValueError):
+                limit = 200
+            queryset = queryset[:limit]
         
         # Agregar anotaciones de stock si es necesario
         if self.get_serializer_class() in (StoreProductSerializer, StoreProductCodeSerializer):
