@@ -29,12 +29,15 @@ def validate_excel_columns(df: pd.DataFrame, import_stock: str) -> None:
         "Precio mayoreo",
         "Cantidad minima mayoreo",
         "Precio Mayoreo en descuento de clientes",
+        "Unidad"
     ]
 
     if import_stock == "Y":
         expected_columns += ["Cantidad"]
 
     from products.utils import is_list_in_another
+    print(expected_columns)
+    print(list(df.columns))
     if not is_list_in_another(expected_columns, list(df.columns)):
         raise ValueError("Formato de excel incorrecto")
 
