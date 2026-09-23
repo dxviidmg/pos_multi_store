@@ -61,7 +61,7 @@ from .serializers import (
     StoreWorkerSerializer,
     TransferSerializer,
 )
-from .utils import is_list_in_another, is_positive_number
+from .utils import is_list_in_another, is_non_negative_number
 
 # Configuración de límites para archivos Excel
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -885,7 +885,7 @@ class ProductImportValidationView(APIView):
                                 data_row["status"] = "Departamento inexistente"
 
                     if import_stock == "Y":
-                        is_positivo = is_positive_number(data_row["quantity"])
+                        is_positivo = is_non_negative_number(data_row["quantity"])
 
                         if not is_positivo:
                             data_row["status"] = "Cantidad debe ser un número positivo"
@@ -935,7 +935,7 @@ class ProductImport(APIView):
 
         try:
             df = pd.read_excel(file_obj, nrows=MAX_ROWS).replace({np.nan: None})
-            
+
             if len(df) > MAX_ROWS:
                 return Response(
                     {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
@@ -949,12 +949,14 @@ class ProductImport(APIView):
             department_cache = {}
 
             logs = []
-            for data_row in df.to_dict(orient="records"):
+            for row_index, data_row in enumerate(df.to_dict(orient="records")):
 
                 data_row = clean_row_data(data_row)
 
                 quantity = data_row.pop("quantity", None)
                 brand_name = data_row["brand"]
+                if brand_name is not None:
+                    brand_name = str(brand_name).strip()
                 if brand_name not in brand_cache:
                     brand_cache[brand_name], _ = Brand.objects.get_or_create(
                         name=brand_name, tenant=tenant
@@ -963,6 +965,8 @@ class ProductImport(APIView):
                 data_row["brand"] = brand_cache[brand_name]
 
                 department_name = data_row["department"]
+                if department_name is not None:
+                    department_name = str(department_name).strip()
 
                 if department_name:
                     data_row["department"] = department_cache.get(
@@ -987,6 +991,16 @@ class ProductImport(APIView):
                 raw_unit = data_row.pop("unit", None)
                 data_row["unit"] = parse_unit(raw_unit)
 
+                # Productos a granel (KG) no pueden tener precio de mayoreo
+                if (
+                    data_row["unit"] == "KG"
+                    and data_row.get("wholesale_price") is not None
+                ):
+                    raise ValueError(
+                        "Productos a granel no pueden tener precio de mayoreo"
+                    )
+
+                data_row["name"] = str(data_row["name"])
                 if len(data_row["name"]) > 100:
                     data_row["name"] = data_row["name"][:100]
 
@@ -1000,23 +1014,27 @@ class ProductImport(APIView):
                 product.save()  # D
 
                 if import_stock == "Y":
-                    updated_stock = quantity
                     store = Store.objects.get(tenant=tenant)
                     sp = StoreProduct.objects.get(store=store, product=product)
-                    previous_stock = sp.stock
-                    sp.stock = quantity
-                    sp.save()
 
-                    logs.append(
-                        StoreProductLog(
-                            store_product=sp,
-                            user=request.user,
-                            previous_stock=previous_stock,
-                            updated_stock=updated_stock,
-                            action="A",
-                            movement="IM",  # Movimiento: Venta
+                    # Solo actualizar el stock si la cantidad es distinta de cero;
+                    # si es cero o vacía, se deja el stock como está.
+                    if quantity is not None and float(quantity) != 0:
+                        previous_stock = sp.stock
+                        updated_stock = quantity
+                        sp.stock = quantity
+                        sp.save()
+
+                        logs.append(
+                            StoreProductLog(
+                                store_product=sp,
+                                user=request.user,
+                                previous_stock=previous_stock,
+                                updated_stock=updated_stock,
+                                action="A",
+                                movement="IM",  # Movimiento: Venta
+                            )
                         )
-                    )
 
                 # Guardar los logs en la base de datos
             StoreProductLog.objects.bulk_create(logs)
@@ -1024,10 +1042,8 @@ class ProductImport(APIView):
             return Response({}, status=status.HTTP_200_OK)
 
         except ValueError as e:
-            print(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(e)
             return Response(
                 {"error": f"Unexpected error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
