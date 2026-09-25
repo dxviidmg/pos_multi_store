@@ -1170,21 +1170,21 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
         tenant = self.request.user.get_tenant()
         return StoreWorker.objects.filter(store__tenant=tenant)
 
-    def perform_create(self, serializer):
-        worker_data = self.request.data.pop("worker")
+    def create(self, request, *args, **kwargs):
+        worker_data = request.data.get("worker", {})
         worker = User.objects.create(**worker_data)
-        worker.set_password(worker_data["username"])  # Encripta la contraseña
+        worker.set_password(worker_data.get("username", ""))
         worker.save()
 
-        store = Store.objects.get(id=self.request.data["store_id"])
-        store_worker = StoreWorker.objects.create(worker=worker, store=store)
-        serializer = StoreWorkerSerializer(data=store_worker)
-        if serializer.is_valid():
-            store_worker = serializer.save()
-            return Response(
-                StoreWorkerSerializer(store_worker).data, status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        store = Store.objects.get(id=request.data["store_id"])
+        store_worker = StoreWorker.objects.create(
+            worker=worker,
+            store=store,
+            role=request.data.get("role", "V"),
+        )
+
+        serializer = self.get_serializer(store_worker)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 @method_decorator(get_store(), name="dispatch")

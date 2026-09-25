@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from tenants.models import Tenant
-from products.models import Store
+from products.models import Store, StoreWorker
 from .serializers import UserSerializer
 
 
@@ -33,10 +33,10 @@ class UserViewSet(viewsets.ModelViewSet):
                 # Validar si el request.user es owner
                 tenant = Tenant.objects.filter(owner=request.user).first()
                 if tenant:
-                    # Validar que user_id sea manager de una tienda del owner
-                    if not Store.objects.filter(tenant=tenant, manager_id=user_id).exists():
+                    is_manager = Store.objects.filter(tenant=tenant, manager_id=user_id).exists()
+                    is_worker = StoreWorker.objects.filter(store__tenant=tenant, worker_id=user_id).exists()
+                    if not is_manager and not is_worker:
                         return Response({'error': 'No puedes cambiar la contraseña de otro usuario'}, status=status.HTTP_403_FORBIDDEN)
-                    # Owner cambia contraseña de manager, validar contraseña del owner
                     if not request.user.check_password(old_password):
                         return Response({'error': 'Contraseña actual incorrecta'}, status=status.HTTP_400_BAD_REQUEST)
                 else:
