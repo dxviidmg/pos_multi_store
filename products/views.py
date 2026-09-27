@@ -321,6 +321,51 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         return queryset.order_by("brand__name", "name")
 
+    def perform_create(self, serializer):
+        product = serializer.save()
+
+        quantity = self.request.data.get("quantity")
+        if quantity is not None and quantity != "":
+            try:
+                quantity = float(quantity)
+                if quantity > 0:
+                    tenant = self.request.user.get_tenant()
+                    store = self.request.store
+
+                    if not store:
+                        store = Store.objects.filter(tenant=tenant).first()
+
+                    if store:
+                        store_product, created = StoreProduct.objects.get_or_create(
+                            product=product,
+                            store=store,
+                            defaults={"stock": quantity}
+                        )
+
+                        if not created:
+                            previous_stock = store_product.stock
+                            store_product.stock = quantity
+                            store_product.save()
+
+                            StoreProductLog.objects.create(
+                                store_product=store_product,
+                                user=self.request.user,
+                                previous_stock=previous_stock,
+                                updated_stock=quantity,
+                                action=LogAction.AJUSTE,
+                            )
+                        else:
+                            StoreProductLog.objects.create(
+                                store_product=store_product,
+                                user=self.request.user,
+                                previous_stock=0,
+                                updated_stock=quantity,
+                                action="E",  # Acción: Entrada (Alta)
+                                movement="IM",
+                            )
+            except (ValueError, TypeError):
+                pass
+
     def perform_update(self, serializer):
         instance = serializer.instance
         tracked_fields = ['cost', 'unit_price', 'wholesale_price', 'min_wholesale_quantity']
