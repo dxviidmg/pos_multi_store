@@ -34,21 +34,24 @@ class ProductAuditView(APIView):
                 "name": p.name,
             })
 
-        # 2 — Problemas de costos (cero, nulo o >= precio unitario)
+        # 2 — Problemas de costos (cero, nulo o >= precio unitario o >= mayoreo)
         cost_issues = []
         for p in products.filter(
-            Q(cost=0) | Q(cost__isnull=True) | Q(cost__gte=F("unit_price"))
-        ).only("code", "name", "cost", "unit_price"):
+            Q(cost=0) | Q(cost__isnull=True) | Q(cost__gte=F("unit_price")) | Q(cost__gte=F("wholesale_price"), wholesale_price__gt=0)
+        ).only("code", "name", "cost", "unit_price", "wholesale_price"):
             issues = []
             if p.cost is None or p.cost == 0:
                 issues.append("costo en cero o nulo")
             if p.cost and p.unit_price and p.cost >= p.unit_price:
                 issues.append("costo >= precio unitario")
+            if p.cost and p.wholesale_price and p.wholesale_price > 0 and p.cost >= p.wholesale_price:
+                issues.append("costo >= precio mayoreo")
             cost_issues.append({
                 "code": p.code,
                 "name": p.name,
                 "cost": p.cost,
                 "unit_price": p.unit_price,
+                "wholesale_price": p.wholesale_price,
                 "issues": " | ".join(issues),
             })
 
@@ -59,16 +62,22 @@ class ProductAuditView(APIView):
             Q(wholesale_price__gt=0, min_wholesale_quantity__isnull=True) |
             Q(wholesale_price__gt=0, min_wholesale_quantity=0) |
             Q(min_wholesale_quantity__gt=0, wholesale_price__isnull=True) |
-            Q(min_wholesale_quantity__gt=0, wholesale_price=0)
+            Q(min_wholesale_quantity__gt=0, wholesale_price=0) |
+            Q(wholesale_price__gt=0, wholesale_price__lte=F("cost")) |
+            Q(min_wholesale_quantity__lt=2, min_wholesale_quantity__gt=0)
         ).distinct()
         for p in qs:
             reasons = []
             if p.wholesale_price and p.wholesale_price >= p.unit_price:
                 reasons.append("mayoreo >= menudeo")
+            if p.wholesale_price and p.wholesale_price > 0 and p.cost and p.wholesale_price <= p.cost:
+                reasons.append("mayoreo <= costo")
             if p.wholesale_price and p.wholesale_price > 0 and (not p.min_wholesale_quantity):
                 reasons.append("tiene precio mayoreo sin cantidad mínima")
             if p.min_wholesale_quantity and p.min_wholesale_quantity > 0 and (not p.wholesale_price):
                 reasons.append("tiene cantidad mínima sin precio mayoreo")
+            if p.min_wholesale_quantity and p.min_wholesale_quantity > 0 and p.min_wholesale_quantity < 2:
+                reasons.append("cantidad mínima mayoreo debe ser >= 2")
             wholesale_issues.append({
                 "code": p.code,
                 "name": p.name,
@@ -90,19 +99,32 @@ class ProductAuditView(APIView):
                 .filter(store_count__lt=total_stores)
             )
             store_ids_set = set(stores.values_list("id", flat=True))
+            store_names_by_id = {s.id: s.name for s in stores}
+
+            product_ids = [e["product_id"] for e in product_store_counts]
+            products_dict = {p.id: p for p in products.filter(id__in=product_ids).only("id", "name", "code")}
+
+            all_store_products = StoreProduct.objects.filter(
+                product_id__in=product_ids, store__tenant=tenant
+            ).values_list("product_id", "store_id")
+
+            store_by_product = {}
+            for product_id, store_id in all_store_products:
+                if product_id not in store_by_product:
+                    store_by_product[product_id] = set()
+                store_by_product[product_id].add(store_id)
+
             for entry in product_store_counts:
-                p = products.only("id", "name", "code").get(id=entry["product_id"])
-                present_ids = set(
-                    StoreProduct.objects.filter(product_id=p.id, store__tenant=tenant)
-                    .values_list("store_id", flat=True)
-                )
-                missing_stores = list(
-                    stores.filter(id__in=store_ids_set - present_ids).values_list("name", flat=True)
-                )
-                missing.append({
-                    "code": p.code, "name": p.name,
-                    "missing_in": ", ".join(missing_stores),
-                })
+                product_id = entry["product_id"]
+                p = products_dict.get(product_id)
+                if p:
+                    present_ids = store_by_product.get(product_id, set())
+                    missing_store_ids = store_ids_set - present_ids
+                    missing_store_names = [store_names_by_id[sid] for sid in missing_store_ids]
+                    missing.append({
+                        "code": p.code, "name": p.name,
+                        "missing_in": ", ".join(missing_store_names),
+                    })
 
         return Response({
             "duplicate_codes": duplicates,
