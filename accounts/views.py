@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from tenants.models import Tenant
-from products.models import Store
+from products.models import Store, StoreWorker
 from .serializers import UserSerializer
 
 
@@ -33,10 +33,10 @@ class UserViewSet(viewsets.ModelViewSet):
                 # Validar si el request.user es owner
                 tenant = Tenant.objects.filter(owner=request.user).first()
                 if tenant:
-                    # Validar que user_id sea manager de una tienda del owner
-                    if not Store.objects.filter(tenant=tenant, manager_id=user_id).exists():
+                    is_manager = Store.objects.filter(tenant=tenant, manager_id=user_id).exists()
+                    is_worker = StoreWorker.objects.filter(store__tenant=tenant, worker_id=user_id).exists()
+                    if not is_manager and not is_worker:
                         return Response({'error': 'No puedes cambiar la contraseña de otro usuario'}, status=status.HTTP_403_FORBIDDEN)
-                    # Owner cambia contraseña de manager, validar contraseña del owner
                     if not request.user.check_password(old_password):
                         return Response({'error': 'Contraseña actual incorrecta'}, status=status.HTTP_400_BAD_REQUEST)
                 else:
@@ -85,6 +85,9 @@ class CustomAuthToken(ObtainAuthToken):
                 store = sw.store if sw else None
                 tenant = store.tenant if store else None
 
+        store_count = Store.objects.filter(tenant=tenant).count() if tenant else 0
+        multistore = store_count > 1
+
         # Bloqueo por cancelación de negocio: aplica a TODOS (incluido el owner).
         # No hay reactivación desde la app; se maneja por soporte.
         if tenant is not None and tenant.cancelled_at is not None:
@@ -126,9 +129,9 @@ class CustomAuthToken(ObtainAuthToken):
             'store_type_display': store.get_store_type_display() if store else None,
             'store_printer': store.get_store_printer() if store else None,
             'role': role,
+            'multistore': multistore,
         }
         if role == 'owner':
-            data['store_count'] = Store.objects.filter(tenant=tenant).count()
             # Marcar modo pago si el tenant venció (owner puede entrar a renovar).
             if tenant is not None and not tenant.has_access():
                 data['access_blocked'] = True
