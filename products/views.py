@@ -847,7 +847,7 @@ class ProductImportValidationView(APIView):
                     else:
                         prices = [data_row.get("cost"), data_row.get("unit_price")]
                         if v1 is not None and v2 is not None:
-                            prices.extend([v1, v2])
+                            prices.append(v1)
 
                         try:
                             prices = [
@@ -858,15 +858,28 @@ class ProductImportValidationView(APIView):
                                     "Costo y precio(s) deben ser mayores a 0"
                                 )
 
-                            if len(prices) == 4 and prices[2] > prices[1]:
+                            if len(prices) == 3 and prices[2] > prices[1]:
                                 data_row["status"] = (
                                     "Precio mayoreo es mas grande que precio unitario"
                                 )
 
-                            if len(prices) == 4 and prices[0] > prices[2]:
+                            if len(prices) == 3 and prices[0] > prices[2]:
                                 data_row["status"] = (
                                     "Precio mayoreo es mas chico que costo"
                                 )
+
+                            if len(prices) >= 2 and prices[0] >= prices[1]:
+                                data_row["status"] = (
+                                    "Costo debe ser menor que precio unitario"
+                                )
+
+                            if v2 is not None:
+                                try:
+                                    cmm = int(v2)
+                                    if cmm < 2:
+                                        data_row["status"] = "Cantidad minima mayoreo debe ser entero minimo 2"
+                                except (ValueError, TypeError):
+                                    data_row["status"] = "Cantidad minima mayoreo debe ser un numero entero"
 
                         except ValueError:
                             data_row["status"] = "Precios o costos inválidos"
