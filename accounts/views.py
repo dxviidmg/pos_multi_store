@@ -85,6 +85,9 @@ class CustomAuthToken(ObtainAuthToken):
                 store = sw.store if sw else None
                 tenant = store.tenant if store else None
 
+        store_count = Store.objects.filter(tenant=tenant).count() if tenant else 0
+        multistore = store_count > 1
+
         # Bloqueo por cancelación de negocio: aplica a TODOS (incluido el owner).
         # No hay reactivación desde la app; se maneja por soporte.
         if tenant is not None and tenant.cancelled_at is not None:
@@ -126,9 +129,9 @@ class CustomAuthToken(ObtainAuthToken):
             'store_type_display': store.get_store_type_display() if store else None,
             'store_printer': store.get_store_printer() if store else None,
             'role': role,
+            'multistore': multistore,
         }
         if role == 'owner':
-            data['store_count'] = Store.objects.filter(tenant=tenant).count()
             # Marcar modo pago si el tenant venció (owner puede entrar a renovar).
             if tenant is not None and not tenant.has_access():
                 data['access_blocked'] = True
