@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.core.files.uploadedfile import UploadedFile
 
+from core.constants import FRACTION_UNITS, Unit
+
 
 def validate_excel_columns(df: pd.DataFrame, import_stock: str) -> None:
     """Valida que el Excel tenga las columnas esperadas
@@ -135,7 +137,7 @@ def clean_row_data(row_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-VALID_UNITS = {"PZ", "KG", "CO"}
+VALID_UNITS = set(Unit.values)
 TRUTHY_VALUES = {"SI", "S", "1"}
 
 
@@ -146,7 +148,7 @@ def parse_unit(value) -> str:
         value: Valor de la celda (puede ser str, None, etc.)
         
     Returns:
-        Código de unidad válido ('PZ', 'KG', 'CO')
+        Código de unidad válido (ver core.constants.Unit)
         
     Raises:
         ValueError: Si el valor no es una unidad válida
@@ -155,8 +157,15 @@ def parse_unit(value) -> str:
         return "PZ"
     unit = str(value).strip().upper()
     if unit not in VALID_UNITS:
-        raise ValueError(f"Unidad inválida: '{value}'. Valores válidos: PZ, KG, CO")
+        raise ValueError(
+            f"Unidad inválida: '{value}'. Valores válidos: {', '.join(Unit.values)}"
+        )
     return unit
+
+
+def is_fraction_unit(unit) -> bool:
+    """True si la unidad se vende por fracción (KG, LT)"""
+    return unit in FRACTION_UNITS
 
 
 def parse_sells_by_weight_to_unit(value) -> str | None:

@@ -28,6 +28,7 @@ from .import_utils import (
     validate_quantities,
     clean_row_data,
     parse_unit,
+    is_fraction_unit,
     parse_sells_by_weight_to_unit,
 )
 from .models import (
@@ -908,14 +909,14 @@ class ProductImportValidationView(APIView):
                             data_row["status"] = "Cantidad debe ser un número positivo"
 
                     # Validar unidad
-                    if data_row.get("unit") is not None and str(data_row["unit"]).strip() != "":
-                        unit_val = str(data_row["unit"]).strip().upper()
-                        if unit_val not in ("PZ", "KG", "CO"):
-                            data_row["status"] = "Unidad inválida. Valores válidos: PZ, KG, CO"
+                    try:
+                        unit_val = parse_unit(data_row.get("unit"))
+                    except ValueError as e:
+                        data_row["status"] = str(e)
+                        unit_val = None
 
-                    # Validar venta por peso + mayoreo
-                    unit_for_check = data_row.get("unit")
-                    if unit_for_check and str(unit_for_check).strip().upper() == "KG" and data_row.get("wholesale_price") is not None:
+                    # Productos por fracción (KG, LT) no pueden tener precio de mayoreo
+                    if is_fraction_unit(unit_val) and data_row.get("wholesale_price") is not None:
                         data_row["status"] = "Productos a granel no pueden tener precio de mayoreo"
 
                 data.append(data_row)
@@ -1008,9 +1009,9 @@ class ProductImport(APIView):
                 raw_unit = data_row.pop("unit", None)
                 data_row["unit"] = parse_unit(raw_unit)
 
-                # Productos a granel (KG) no pueden tener precio de mayoreo
+                # Productos por fracción (KG, LT) no pueden tener precio de mayoreo
                 if (
-                    data_row["unit"] == "KG"
+                    is_fraction_unit(data_row["unit"])
                     and data_row.get("wholesale_price") is not None
                 ):
                     raise ValueError(
