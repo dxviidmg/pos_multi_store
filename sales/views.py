@@ -840,23 +840,18 @@ class StoresCashSummaryView(APIView):
         for p in reserved_payments:
             reserved_map[p["sale__store_id"]][p["payment_method"]] = p["total"] or 0
 
-        # 2 — Ganancia por tienda (aggregate en ProductSale)
+        # 2 — Ganancia por tienda (suma de Sale.profit)
         profits = (
-            ProductSale.objects.filter(
-                sale__store_id__in=store_ids,
-                sale__is_canceled=False,
-                sale__reservation_in_progress=False,
-                sale__created_at__date__range=date_range,
+            Sale.objects.filter(
+                store_id__in=store_ids,
+                is_canceled=False,
+                reservation_in_progress=False,
+                created_at__date__range=date_range,
             )
-            .values("sale__store_id")
-            .annotate(
-                profit=Sum(
-                    (F("price") - F("product__cost")) * F("quantity"),
-                    output_field=DecimalField(),
-                )
-            )
+            .values("store_id")
+            .annotate(profit=Sum("profit"))
         )
-        profit_map = {r["sale__store_id"]: r["profit"] or 0 for r in profits}
+        profit_map = {r["store_id"]: r["profit"] or 0 for r in profits}
 
         # 3 — Conteo de ventas y canceladas por tienda
         sales_counts = (
