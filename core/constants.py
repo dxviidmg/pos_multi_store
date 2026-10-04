@@ -58,4 +58,8 @@ class Unit(models.TextChoices):
     COSTAL = "CO", "Costal"
 
 
+# Unidades que se venden por fracción (cantidades decimales)
+FRACTION_UNITS = (Unit.KG, Unit.LT)
+
+
 

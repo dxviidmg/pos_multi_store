@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models import DecimalField, F, Sum
 
 from clients.models import Client
-from products.models import Product, Store, StoreProduct, Unit
+from products.models import Product, Store, StoreProduct
 from tenants.models import CreatedAtModel
 
 
@@ -111,7 +111,7 @@ class ProductSale(models.Model):
     
     @property
     def sells_by_fraction(self):
-        return self.product.unit in (Unit.KG, Unit.LT)
+        return self.product.sells_by_fraction
     
 class Payment(CreatedAtModel):
     PAYMENT_METHOD_CHOICES = (
