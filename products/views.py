@@ -297,8 +297,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         department_id = self.request.GET.get("department_id")
         max_stock = self.request.GET.get("max_stock")
         code = self.request.GET.get("code")
+        q = self.request.GET.get("q")
 
         filters = Q(brand__tenant=tenant)
+
+        if q:
+            filters &= Q(name__icontains=q)
 
         if brand_id:
             filters &= Q(brand__id=brand_id)
