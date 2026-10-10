@@ -140,6 +140,10 @@ class StoreBaseSerializer(serializers.ModelSerializer):
     store_type_display = serializers.CharField(source='get_store_type_display', read_only=True)
     manager_username = serializers.CharField(source='manager.username', read_only=True)
     workers_count = serializers.IntegerField(read_only=True)
+    printer = serializers.SerializerMethodField()
+
+    def get_printer(self, obj):
+        return obj.get_store_printer()
 
     class Meta:
         model = Store

@@ -1204,6 +1204,29 @@ class StoreWorkerViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(store_worker)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def update(self, request, *args, **kwargs):
+        """Actualizar datos del trabajador (nombre, email, etc)."""
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        
+        # Actualizar datos del usuario (worker) si vienen en la request
+        worker_data = request.data.get("worker", {})
+        if worker_data:
+            for attr, value in worker_data.items():
+                if attr != "password":  # No permitir cambiar contraseña por aquí
+                    setattr(instance.worker, attr, value)
+            instance.worker.save()
+        
+        # Actualizar otros campos de StoreWorker (rol, etc)
+        data = request.data.copy()
+        data.pop("worker", None)  # Quitar worker del payload para evitar conflictos
+        
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response(serializer.data)
+
 
 @method_decorator(get_store(), name="dispatch")
 class StoreProductImportValidationView(APIView):
