@@ -39,6 +39,24 @@ class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets
         return self.request.user.get_tenant()
 
 
+class StoresCountView(APIView):
+    """Devuelve el conteo actual de tiendas y almacenes del tenant."""
+    
+    def get(self, request):
+        from products.models import Store
+        
+        tenant = request.user.get_tenant()
+        stores_count = Store.objects.filter(tenant=tenant, store_type="T").count()
+        warehouses_count = Store.objects.filter(tenant=tenant, store_type="A").count()
+        total = stores_count + warehouses_count
+        
+        return Response({
+            "stores": stores_count,
+            "warehouses": warehouses_count,
+            "total": total
+        })
+
+
 class TenantExistsView(APIView):
     permission_classes = [HasAPIKey]
     authentication_classes = []
