@@ -613,6 +613,8 @@ class SaleCancelView(APIView):
         )
 
     def _return_partial(self, request, sale):
+        from decimal import Decimal
+        
         products_data = request.data["products_to_return"]
         products_to_return = ProductSale.objects.filter(id__in=products_data.keys())
         if not products_to_return.exists():
@@ -623,7 +625,7 @@ class SaleCancelView(APIView):
         logs = []
         with transaction.atomic():
             for ps in products_to_return:
-                qty = products_data.get(str(ps.pk), 0)
+                qty = Decimal(str(products_data.get(str(ps.pk), 0)))
                 ps.quantity -= qty
                 if ps.quantity <= 0:
                     ps.delete()

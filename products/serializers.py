@@ -76,7 +76,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
 class ProductSearchSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source='brand.name', read_only=True)
     prices = serializers.SerializerMethodField()
-    sells_by_weight = serializers.BooleanField(read_only=True)
+    sells_by_fraction = serializers.BooleanField(read_only=True)
 
     def get_prices(self, obj):
         return {
@@ -89,7 +89,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ["id", "code", "brand_name", "name", "prices", "image", "sells_by_weight", "unit"]
+        fields = ["id", "code", "brand_name", "name", "prices", "image", "sells_by_fraction", "unit"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -97,7 +97,7 @@ class ProductSerializer(serializers.ModelSerializer):
     department_name = serializers.SerializerMethodField()
     apply_wholesale = serializers.SerializerMethodField()
     stock = serializers.SerializerMethodField()
-    sells_by_weight = serializers.BooleanField(read_only=True)
+    sells_by_fraction = serializers.BooleanField(read_only=True)
 
     def get_department_name(self, obj):
         return obj.department.name if obj.department else ''
@@ -119,7 +119,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'code', 'name', 'cost', 'unit_price', 'wholesale_price',
             'min_wholesale_quantity', 'wholesale_price_on_client_discount',
             'image', 'brand', 'department', 'brand_name', 'department_name',
-            'apply_wholesale', 'stock', 'sells_by_weight', 'unit',
+            'apply_wholesale', 'stock', 'sells_by_fraction', 'unit',
         ]
 
     def validate(self, data):
@@ -140,6 +140,10 @@ class StoreBaseSerializer(serializers.ModelSerializer):
     store_type_display = serializers.CharField(source='get_store_type_display', read_only=True)
     manager_username = serializers.CharField(source='manager.username', read_only=True)
     workers_count = serializers.IntegerField(read_only=True)
+    printer = serializers.SerializerMethodField()
+
+    def get_printer(self, obj):
+        return obj.get_store_printer()
 
     class Meta:
         model = Store
