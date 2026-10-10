@@ -34,13 +34,13 @@ SmartVenta es un POS diseñado para negocios minoristas con múltiples sucursale
 | **Clientes y descuentos** | Registro de clientes con descuentos por porcentaje y precios de mayoreo por producto |
 | **Corte de caja** | Resumen diario o por rango: ventas por método de pago, utilidad, flujo de caja, cancelaciones. Vista bulk multi-sucursal con datos del administrador y validación de catálogo completo |
 | **Utilidad por venta** | Cada venta guarda su utilidad (precio − costo × cantidad), recalculada al modificar o devolver productos. Alimenta el corte de caja y el dashboard de ventas |
-| **Roles y permisos** | Tres niveles: Propietario, Administrador de tienda y Vendedor |
+| **Roles y permisos** | Tres niveles: Propietario, Administrador de tienda y Vendedor. Edición de datos y rol de los trabajadores por sucursal |
 | **Importación masiva** | Carga de productos (con unidad de medida y stock inicial) e inventario desde Excel, con plantillas y validación fila por fila de precios, costos y mayoreo |
-| **Impresión de tickets** | Configuración de impresoras térmicas por sucursal |
+| **Impresión de tickets** | Configuración de impresoras térmicas por sucursal; la impresora asignada se incluye en los datos de cada sucursal |
 | **Auditoría** | Detección automática de ventas duplicadas, logs inconsistentes, discrepancias de stock, códigos de barras repetidos, problemas de costo (en cero, mayor o igual al precio unitario o al de mayoreo), precios de mayoreo inconsistentes, productos faltantes en tiendas y productos sin actividad |
 | **Bitácora** | Registro de cada movimiento de inventario: usuario, fecha, tipo, stock anterior/posterior |
 | **Catálogo con imágenes** | Fotos de productos en AWS S3, organizados por marca y departamento |
-| **Devoluciones** | Devoluciones parciales y cancelación de ventas con reversión automática de stock |
+| **Devoluciones** | Devoluciones parciales (incluye cantidades fraccionarias) y cancelación de ventas con reversión automática de stock |
 | **Notificaciones en tiempo real** | Avisos vía WebSocket de traspasos, distribuciones, apartados, solicitudes de ajuste de stock y posibles ventas duplicadas |
 | **Suscripción y facturación** | Cobro recurrente con Mercado Pago, cambio de tarjeta, historial de tarjetas, cancelación por el propietario y 7 días de gracia tras el vencimiento |
 | **Correos automáticos** | Bienvenida con credenciales, recibo de cada cobro y aviso de pago rechazado o tarjeta vencida |
@@ -94,7 +94,6 @@ SmartVenta es un POS diseñado para negocios minoristas con múltiples sucursale
 - Header `store-id` identifica la sucursal activa en cada request
 - 8 módulos Django: `tenants` · `accounts` · `products` · `clients` · `sales` · `logs` · `printers` · `audit`
 - Paquetes de soporte: `notifications` (consumers WebSocket) · `core` (constantes y servicio de correo)
-- Contratos OpenAPI 3.0 de cada módulo en [specs/](specs/)
 - Acceso controlado por vigencia de suscripción (`TenantHasAccess`): propietario vencido solo accede a endpoints de pago
 - Tareas pesadas (auditorías, reportes) delegadas a Celery workers
 - Índices optimizados en modelos críticos
@@ -198,7 +197,7 @@ La API expone los siguientes grupos de endpoints bajo `/api/`:
 | `/api/` | products | Productos, tiendas, marcas, departamentos, stock, transferencias, flujo de caja |
 | `/api/` | sales | Ventas, corte de caja, importación de ventas |
 | `/api/` | clients | Clientes y descuentos |
-| `/api/` | tenants | Configuración del negocio, planes, suscripción, cancelación, cambio de tarjeta y webhook de Mercado Pago |
+| `/api/` | tenants | Configuración del negocio, conteo de tiendas y almacenes, planes, suscripción, cancelación, cambio de tarjeta y webhook de Mercado Pago |
 | `/api/` | logs | Bitácora de movimientos de inventario |
 | `/api/` | printers | Configuración de impresoras |
 | `/api/` | audit | Auditorías asíncronas y consulta de resultados |
@@ -214,8 +213,6 @@ store-id: <id-de-la-tienda>
 ```
 
 Notificaciones en tiempo real vía WebSocket en `ws/notifications/`.
-
-La especificación completa de cada endpoint está en [specs/](specs/) (OpenAPI 3.0).
 
 ---
 

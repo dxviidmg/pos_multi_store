@@ -2,3 +2,5 @@
 *.sqlite3
 *.env
 *.env.prod
+# Specs (no versionadas)
+specs/
