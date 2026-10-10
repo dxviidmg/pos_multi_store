@@ -66,6 +66,9 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
 ### 2.4 Límite de Sucursales por Plan
 - El plan contratado define cuántas sucursales puede tener el negocio. El sistema valida si se puede crear una nueva tienda antes de permitir la creación.
 
+### 2.4.1 Conteo de Sucursales
+- Endpoint `stores-count/` devuelve el conteo actual de tiendas, almacenes y total del negocio, útil para comparar contra el límite del plan.
+
 ### 2.5 Visibilidad de Stock de Almacenes
 - Configuración por negocio: el owner puede decidir si los vendedores ven o no el stock disponible en almacenes. Esto se controla con la opción `displays_stock_in_storages`.
 
@@ -316,7 +319,7 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
 
 ### 9.2 Devolución Parcial
 - Se pueden devolver productos individuales de una venta sin cancelarla por completo.
-- Se indica qué productos devolver y en qué cantidad.
+- Se indica qué productos devolver y en qué cantidad (se aceptan cantidades fraccionarias, p. ej. productos por peso).
 - El stock del producto devuelto se regresa al inventario.
 - Se recalcula el total de la venta descontando los productos devueltos.
 - Se actualiza el monto del pago al nuevo total.
@@ -532,6 +535,7 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
 - Al crear un vendedor, se genera un usuario con contraseña igual al username.
 - Cada vendedor está asociado a una tienda y tiene un rol (Administrador o Vendedor).
 - La respuesta de creación devuelve el mismo formato que el listado.
+- Se pueden editar los datos del usuario (nombre, email, etc.) y el rol del trabajador; la contraseña no se cambia por esta vía.
 
 ### 14.5 Cambio de Contraseña
 - Un usuario puede cambiar su propia contraseña (requiere contraseña actual).
@@ -545,7 +549,7 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
 - Catálogo de impresoras térmicas con: marca, modelo y altura de fuente.
 - Asignación de impresora a cada tienda (relación `StorePrinter`).
 - Cada tienda puede tener una impresora asignada.
-- Información de impresora visible en el login y en reportes.
+- Información de impresora visible en el login, en reportes y en los datos de cada sucursal (campo `printer`).
 
 ### 15.2 Soporte Técnico
 - El sistema soporta impresoras térmicas vía la librería `python-escpos`.
