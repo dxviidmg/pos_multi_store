@@ -46,6 +46,9 @@ XLS_SIGNATURE = b"\xd0\xcf\x11\xe0"
 UTF8_BOM = b"\xef\xbb\xbf"
 DELIMITERS = ("\t", ",", ";")
 
+NUMERIC_EDIT_FIELDS = ("cost", "unit_price", "wholesale_price")
+TEXT_EDIT_FIELDS = ("code",)
+EDITABLE_FIELDS = NUMERIC_EDIT_FIELDS + TEXT_EDIT_FIELDS
 WHOLESALE_MODE_QUANTITY = "quantity"
 WHOLESALE_MODE_IGNORE = "ignore"
 WHOLESALE_MODES = (WHOLESALE_MODE_QUANTITY, WHOLESALE_MODE_IGNORE)
@@ -206,6 +209,67 @@ def _row_error(row, first_row_by_code):
     if quantity is not None and not quantity >= 0:
         return "Inventario debe ser un número mayor o igual a 0"
     return None
+
+
+def _load_json(value, label):
+    if value in (None, ""):
+        return None
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{label} debe ser JSON válido")
+
+
+def parse_edits(value):
+    """
+    Lee `edits`: texto JSON `{"<excel_row>": {"<campo>": valor}}` con las correcciones del usuario.
+
+    Raises:
+        ValueError: Si no es JSON, no tiene esa forma o trae un campo que no se puede editar
+    """
+    data = _load_json(value, "edits")
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError("edits debe ser un objeto JSON")
+    edits = {}
+    for excel_row, changes in data.items():
+        if not isinstance(changes, dict):
+            raise ValueError("edits debe ser un objeto JSON")
+        unknown = set(changes) - set(EDITABLE_FIELDS)
+        if unknown:
+            raise ValueError(f"Campo no editable: {', '.join(sorted(unknown))}")
+        try:
+            edits[int(excel_row)] = changes
+        except ValueError:
+            raise ValueError("edits debe usar números de fila")
+    return edits
+
+
+def parse_removed_rows(value):
+    """Lee `removed_rows`: texto JSON con la lista de números de fila que el usuario quitó"""
+    data = _load_json(value, "removed_rows")
+    if data is None:
+        return set()
+    try:
+        return {int(row) for row in data}
+    except (TypeError, ValueError):
+        raise ValueError("removed_rows debe ser una lista JSON de números de fila")
+
+
+def _apply_edit(field, value):
+    if field in NUMERIC_EDIT_FIELDS:
+        return parse_money(value)
+    return _clean_text(value)
+
+
+def apply_edits(rows, edits, removed_rows):
+    """Quita las filas descartadas y aplica las correcciones; `excel_row` no cambia"""
+    return [
+        {**row, **{field: _apply_edit(field, value) for field, value in edits.get(row["excel_row"], {}).items()}}
+        for row in rows
+        if row["excel_row"] not in removed_rows
+    ]
 
 
 def parse_wholesale_options(mode, min_quantity):

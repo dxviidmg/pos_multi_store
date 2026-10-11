@@ -417,6 +417,7 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
 - Todos los productos llevan la marca indicada (se crea si no existe), unidad PZ. El reporte no trae cantidad mínima de mayoreo: con `wholesale_mode = quantity` se aplica `min_wholesale_quantity` a los productos con precio mayoreo; con `ignore` solo se importa el precio de menudeo. Los departamentos faltantes se crean; `- Sin Departamento -` o vacío deja el producto sin departamento.
 - Validaciones por fila: código no vacío ni de más de 50 caracteres, nombre no vacío, código no repetido en el archivo ni existente en el sistema, costo y precio de venta mayores a 0, costo menor que precio de venta, precio mayoreo (con `quantity`) numérico, no mayor al precio de venta ni menor al costo, inventario no negativo. El nombre se recorta a 100 caracteres.
 - Inventario: solo se carga con `import_stock = Y` y una sola sucursal; con varias se ignora. Una cantidad en 0 o vacía deja el stock sin cambios. Cada carga genera log de movimiento "Importación".
+- Correcciones sin volver a cargar el archivo corregido: ambos endpoints aceptan `edits` (JSON `{"<fila>": {"<campo>": valor}}` con `code`, `cost`, `unit_price`, `wholesale_price`) y `removed_rows` (JSON con las filas a descartar). Se aplican sobre lo leído del archivo antes de validar; `excel_row` conserva el número original.
 - La importación vuelve a validar el archivo; con errores responde 400 y no guarda nada. Se ejecuta en una sola transacción.
 - Mismos límites: 10,000 filas y 10MB.
 

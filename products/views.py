@@ -24,9 +24,12 @@ from .eleventa_import import (
     MAX_BRAND_LENGTH,
     MAX_NAME_LENGTH,
     SUCCESS_STATUS,
+    apply_edits,
     apply_wholesale_options,
+    parse_edits,
     parse_eleventa_file,
     parse_excluded_codes,
+    parse_removed_rows,
     parse_wholesale_options,
     serialize_rows,
     to_decimal,
@@ -1118,9 +1121,12 @@ def _load_eleventa_rows(request, tenant):
         request.data.get("wholesale_mode"), request.data.get("min_wholesale_quantity")
     )
 
-    rows = validate_eleventa_rows(
-        apply_wholesale_options(parse_eleventa_file(file_obj), min_wholesale_quantity)
+    edited_rows = apply_edits(
+        parse_eleventa_file(file_obj),
+        parse_edits(request.data.get("edits")),
+        parse_removed_rows(request.data.get("removed_rows")),
     )
+    rows = validate_eleventa_rows(apply_wholesale_options(edited_rows, min_wholesale_quantity))
     valid_codes = [row["code"] for row in rows if row["status"] == SUCCESS_STATUS]
     existing = _existing_product_codes(tenant, valid_codes)
     rows = [

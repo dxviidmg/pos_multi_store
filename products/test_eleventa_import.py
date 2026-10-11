@@ -4,7 +4,10 @@ import unittest
 from .eleventa_import import (
     NO_DEPARTMENT_LABEL,
     SUCCESS_STATUS,
+    apply_edits,
     apply_wholesale_options,
+    parse_edits,
+    parse_removed_rows,
     parse_wholesale_options,
     parse_eleventa_file,
     parse_excluded_codes,
@@ -132,3 +135,38 @@ class WholesaleOptionsTests(unittest.TestCase):
         for mode, quantity in (("", "3"), ("quantity", "1"), ("quantity", "abc"), ("quantity", None)):
             with self.assertRaises(ValueError):
                 parse_wholesale_options(mode, quantity)
+
+
+class EditsTests(unittest.TestCase):
+    def rows(self, *lines):
+        return parse_eleventa_file(make_file(*lines))
+
+    def test_edit_fixes_cost(self):
+        rows = self.rows("A\tB\t$0.00\t$2.00\t\t1\t0\tX")
+        fixed = apply_edits(rows, parse_edits('{"2": {"cost": "1.5"}}'), set())
+        self.assertEqual(fixed[0]["cost"], 1.5)
+        self.assertEqual(fixed[0]["excel_row"], 2)
+        self.assertEqual([r["status"] for r in validate_eleventa_rows(fixed)], [SUCCESS_STATUS])
+
+    def test_removed_rows_are_dropped_and_duplicates_resolve(self):
+        rows = self.rows("A\tB\t$1.00\t$2.00\t\t1\t0\tX", "A\tC\t$1.00\t$2.00\t\t1\t0\tX")
+        kept = apply_edits(rows, {}, parse_removed_rows("[2]"))
+        self.assertEqual([r["excel_row"] for r in kept], [3])
+        self.assertEqual([r["status"] for r in validate_eleventa_rows(kept)], [SUCCESS_STATUS])
+
+    def test_edit_cleans_code_and_sets_wholesale(self):
+        rows = self.rows("A\tB\t$1.00\t$2.00\t$9.00\t1\t0\tX")
+        fixed = apply_edits(rows, {2: {"code": " Z9 ", "wholesale_price": "1.5"}}, set())
+        self.assertEqual(fixed[0]["code"], "Z9")
+        self.assertEqual(fixed[0]["wholesale_price"], 1.5)
+        self.assertEqual([r["status"] for r in validate_eleventa_rows(apply_wholesale_options(fixed, 2))], [SUCCESS_STATUS])
+
+    def test_parse_edits_empty_and_invalid(self):
+        self.assertEqual(parse_edits(""), {})
+        self.assertEqual(parse_removed_rows(None), set())
+        for value in ("{", "[]", '{"2": 1}', '{"x": {"cost": 1}}', '{"2": {"image": "a"}}', '{"2": {"name": "a"}}', '{"2": {"quantity": "1"}}', '{"2": {"department": "a"}}'):
+            with self.assertRaises(ValueError):
+                parse_edits(value)
+        for value in ("{", '["a"]'):
+            with self.assertRaises(ValueError):
+                parse_removed_rows(value)
