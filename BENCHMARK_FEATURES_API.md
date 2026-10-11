@@ -411,6 +411,15 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
   - Si importar stock inicial junto con los productos.
 - Límites de seguridad: máximo 10,000 filas, máximo 10MB por archivo.
 
+#### Importación desde el reporte de inventario de otro sistema (Eleventa)
+- Endpoints: `POST /api/products/eleventa/import-validation/` y `POST /api/products/eleventa/import/`. Campos: `file`, `brand`, `wholesale_mode` (`quantity`/`ignore`), `min_wholesale_quantity` (entero ≥ 2, con `quantity`), `import_stock` (`Y`/`N`) y, en la importación, `excluded_codes` (texto JSON con la lista de códigos a omitir).
+- Archivo: texto separado por tabuladores, comas o punto y coma (Latin-1 o UTF-8) con extensión `.xls`, o Excel real (`.xls`, `.xlsx`). Columnas: Codigo, Descripcion, Precio Costo, Precio Venta, Precio Mayoreo, Inventario, Inv. Minimo (se ignora), Departamento. Los encabezados no distinguen acentos ni mayúsculas. Un `�` se lee como `ñ`.
+- Todos los productos llevan la marca indicada (se crea si no existe), unidad PZ. El reporte no trae cantidad mínima de mayoreo: con `wholesale_mode = quantity` se aplica `min_wholesale_quantity` a los productos con precio mayoreo; con `ignore` solo se importa el precio de menudeo. Los departamentos faltantes se crean; `- Sin Departamento -` o vacío deja el producto sin departamento.
+- Validaciones por fila: código no vacío ni de más de 50 caracteres, nombre no vacío, código no repetido en el archivo ni existente en el sistema, costo y precio de venta mayores a 0, costo menor que precio de venta, precio mayoreo (con `quantity`) numérico, no mayor al precio de venta ni menor al costo, inventario no negativo. El nombre se recorta a 100 caracteres.
+- Inventario: solo se carga con `import_stock = Y` y una sola sucursal; con varias se ignora. Una cantidad en 0 o vacía deja el stock sin cambios. Cada carga genera log de movimiento "Importación".
+- La importación vuelve a validar el archivo; con errores responde 400 y no guarda nada. Se ejecuta en una sola transacción.
+- Mismos límites: 10,000 filas y 10MB.
+
 ### 11.2 Importación de Stock desde Excel
 - Carga masiva de stock para productos existentes.
 - **Flujo en dos pasos:** validación + importación.
@@ -846,6 +855,7 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
 | 37 | Catálogo | Actualización masiva de precios | Cambiar precios de múltiples productos |
 | 38 | Catálogo | Unidades de medida | Pieza, Kilogramo, Litro, Bote, Costal |
 | 39 | Importación | Productos desde Excel | Carga masiva con validación previa |
+| 39b | Importación | Productos desde reporte de otro sistema | Eleventa: lee el reporte tal cual y omite productos elegidos |
 | 40 | Importación | Stock desde Excel | Ajuste o entrada masiva |
 | 41 | Importación | Ventas desde Excel | Migración de datos históricos |
 | 42 | Auditoría | Códigos duplicados | Detección automática |

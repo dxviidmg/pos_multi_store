@@ -35,7 +35,7 @@ SmartVenta es un POS diseñado para negocios minoristas con múltiples sucursale
 | **Corte de caja** | Resumen diario o por rango: ventas por método de pago, utilidad, flujo de caja, cancelaciones. Vista bulk multi-sucursal con datos del administrador y validación de catálogo completo |
 | **Utilidad por venta** | Cada venta guarda su utilidad (precio − costo × cantidad), recalculada al modificar o devolver productos. Alimenta el corte de caja y el dashboard de ventas |
 | **Roles y permisos** | Tres niveles: Propietario, Administrador de tienda y Vendedor. Edición de datos y rol de los trabajadores por sucursal |
-| **Importación masiva** | Carga de productos (con unidad de medida y stock inicial) e inventario desde Excel, con plantillas y validación fila por fila de precios, costos y mayoreo |
+| **Importación masiva** | Carga de productos (con unidad de medida y stock inicial) e inventario desde Excel, y de productos desde el reporte de inventario de otro sistema (Eleventa), con plantillas y validación fila por fila de precios, costos y mayoreo |
 | **Impresión de tickets** | Configuración de impresoras térmicas por sucursal; la impresora asignada se incluye en los datos de cada sucursal |
 | **Auditoría** | Detección automática de ventas duplicadas, logs inconsistentes, discrepancias de stock, códigos de barras repetidos, problemas de costo (en cero, mayor o igual al precio unitario o al de mayoreo), precios de mayoreo inconsistentes, productos faltantes en tiendas y productos sin actividad |
 | **Bitácora** | Registro de cada movimiento de inventario: usuario, fecha, tipo, stock anterior/posterior |
