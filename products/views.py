@@ -16,10 +16,22 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.constants import LogAction, LogMovement
+from core.constants import LogAction, LogMovement, Unit
 from logs.models import ProductPriceLog, StoreProductLog
 from notifications.utils import notify_store
 from .decorators import get_store
+from .eleventa_import import (
+    MAX_BRAND_LENGTH,
+    MAX_NAME_LENGTH,
+    SUCCESS_STATUS,
+    apply_wholesale_options,
+    parse_eleventa_file,
+    parse_excluded_codes,
+    parse_wholesale_options,
+    serialize_rows,
+    to_decimal,
+    validate_eleventa_rows,
+)
 from .import_utils import (
     validate_excel_columns,
     rename_product_columns,
@@ -1066,6 +1078,134 @@ class ProductImport(APIView):
                 {"error": f"Unexpected error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+EXISTING_CODES_CHUNK = 500
+
+
+def _existing_product_codes(tenant, codes):
+    """Códigos que ya existen en el catálogo del tenant (por bloques, por el límite de variables de SQL)"""
+    existing = set()
+    for start in range(0, len(codes), EXISTING_CODES_CHUNK):
+        chunk = codes[start:start + EXISTING_CODES_CHUNK]
+        existing.update(
+            Product.objects.filter(brand__tenant=tenant, code__in=chunk).values_list("code", flat=True)
+        )
+    return existing
+
+
+def _load_eleventa_rows(request, tenant):
+    """
+    Lee y valida el reporte subido en `request`.
+
+    Returns:
+        (rows, brand, import_stock): filas con `status`, marca y si se importa el inventario
+    Raises:
+        ValueError: Con el motivo en español si el archivo o la marca no son válidos
+    """
+    file_obj = request.FILES.get("file")
+    if not file_obj:
+        raise ValueError("No se envió el archivo")
+    validate_excel_file(file_obj)
+
+    brand = (request.data.get("brand") or "").strip()
+    if not brand:
+        raise ValueError("La marca es obligatoria")
+    if len(brand) > MAX_BRAND_LENGTH:
+        raise ValueError(f"La marca no puede pasar de {MAX_BRAND_LENGTH} caracteres")
+
+    _, min_wholesale_quantity = parse_wholesale_options(
+        request.data.get("wholesale_mode"), request.data.get("min_wholesale_quantity")
+    )
+
+    rows = validate_eleventa_rows(
+        apply_wholesale_options(parse_eleventa_file(file_obj), min_wholesale_quantity)
+    )
+    valid_codes = [row["code"] for row in rows if row["status"] == SUCCESS_STATUS]
+    existing = _existing_product_codes(tenant, valid_codes)
+    rows = [
+        {**row, "status": "Código existente en el sistema"} if row["code"] in existing else row
+        for row in rows
+    ]
+
+    # El inventario solo se carga con una sola sucursal (igual que can-include-quantity)
+    import_stock = (
+        request.data.get("import_stock") == "Y" and Store.objects.filter(tenant=tenant).count() == 1
+    )
+    return rows, brand, import_stock
+
+
+class EleventaImportValidationView(APIView):
+    """Valida un reporte de inventario de otro sistema (Eleventa) fila por fila"""
+
+    def post(self, request):
+        tenant = request.user.get_tenant()
+        try:
+            rows, _, _ = _load_eleventa_rows(request, tenant)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serialize_rows(rows), status=status.HTTP_200_OK)
+
+
+class EleventaImportView(APIView):
+    """Importa un reporte de inventario de otro sistema (Eleventa), omitiendo `excluded_codes`"""
+
+    def post(self, request):
+        tenant = request.user.get_tenant()
+        try:
+            rows, brand_name, import_stock = _load_eleventa_rows(request, tenant)
+            excluded_codes = parse_excluded_codes(request.data.get("excluded_codes"))
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if any(row["status"] != SUCCESS_STATUS for row in rows):
+            return Response(
+                {"error": "El archivo tiene errores"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        rows = [row for row in rows if row["code"] not in excluded_codes]
+        if not rows:
+            return Response(
+                {"error": "No hay productos para importar"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            brand, _ = Brand.objects.get_or_create(name=brand_name, tenant=tenant)
+            departments = {
+                name: Department.objects.get_or_create(name=name, tenant=tenant)[0]
+                for name in sorted({row["department"] for row in rows if row["department"]})
+            }
+            store = Store.objects.get(tenant=tenant) if import_stock else None
+
+            logs = []
+            for row in rows:
+                product = Product.objects.create(
+                    brand=brand,
+                    department=departments.get(row["department"]),
+                    code=row["code"],
+                    name=row["name"][:MAX_NAME_LENGTH],
+                    cost=to_decimal(row["cost"]),
+                    unit_price=to_decimal(row["unit_price"]),
+                    wholesale_price=to_decimal(row["wholesale_price"]) if row["wholesale_price"] else None,
+                    min_wholesale_quantity=row["min_wholesale_quantity"],
+                    unit=Unit.PIEZA,
+                )
+                if store and row["quantity"]:
+                    store_product = StoreProduct.objects.get(store=store, product=product)
+                    store_product.stock = to_decimal(row["quantity"])
+                    store_product.save()
+                    logs.append(
+                        StoreProductLog(
+                            store_product=store_product,
+                            user=request.user,
+                            previous_stock=0,
+                            updated_stock=store_product.stock,
+                            action=LogAction.AJUSTE,
+                            movement=LogMovement.IMPORTACION,
+                        )
+                    )
+            StoreProductLog.objects.bulk_create(logs)
+
+        return Response({}, status=status.HTTP_200_OK)
 
 
 class ProductReassignView(APIView):
