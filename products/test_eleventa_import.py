@@ -7,13 +7,11 @@ from .eleventa_import import (
     apply_edits,
     apply_wholesale_options,
     parse_edits,
-    parse_removed_rows,
-    parse_wholesale_options,
     parse_eleventa_file,
-    parse_excluded_codes,
-    parse_money,
+    parse_wholesale_options,
     validate_eleventa_rows,
 )
+from .import_corrections import parse_excluded_codes, parse_money, parse_removed_rows
 
 HEADER = "Codigo\tDescripcion\tPrecio Costo\tPrecio Venta\tPrecio Mayoreo\tInventario\tInv. Minimo\tDepartamento"
 

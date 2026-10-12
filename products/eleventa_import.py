@@ -7,15 +7,20 @@ Inv. Minimo, Departamento.
 """
 import csv
 import io
-import json
 import math
 import re
 import unicodedata
-from decimal import Decimal
 
 import pandas as pd
 
-SUCCESS_STATUS = "Exitoso"
+from .import_corrections import (
+    SUCCESS_STATUS,
+    apply_edits as apply_field_edits,
+    clean_text as _clean_text,
+    parse_edits as parse_field_edits,
+    parse_money,
+)
+
 MAX_ROWS = 10000
 MAX_CODE_LENGTH = 50
 MAX_NAME_LENGTH = 100
@@ -49,6 +54,10 @@ DELIMITERS = ("\t", ",", ";")
 NUMERIC_EDIT_FIELDS = ("cost", "unit_price", "wholesale_price")
 TEXT_EDIT_FIELDS = ("code",)
 EDITABLE_FIELDS = NUMERIC_EDIT_FIELDS + TEXT_EDIT_FIELDS
+EDIT_CONVERTERS = {
+    **{field: parse_money for field in NUMERIC_EDIT_FIELDS},
+    **{field: _clean_text for field in TEXT_EDIT_FIELDS},
+}
 WHOLESALE_MODE_QUANTITY = "quantity"
 WHOLESALE_MODE_IGNORE = "ignore"
 WHOLESALE_MODES = (WHOLESALE_MODE_QUANTITY, WHOLESALE_MODE_IGNORE)
@@ -60,21 +69,6 @@ def normalize_header(value):
     text = unicodedata.normalize("NFD", str(value if value is not None else ""))
     text = "".join(char for char in text if not unicodedata.combining(char))
     return re.sub(r"\s+", " ", text.replace(".", "")).strip().lower()
-
-
-def parse_money(value):
-    """'$1,234.00' → 1234.0; vacío → None; texto no numérico → NaN"""
-    text = re.sub(r"[$,\s]", "", str(value if value is not None else ""))
-    if text == "":
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return math.nan
-
-
-def _clean_text(value):
-    return str(value if value is not None else "").strip().replace("�", "ñ")
 
 
 def _decode_text(raw):
@@ -211,65 +205,14 @@ def _row_error(row, first_row_by_code):
     return None
 
 
-def _load_json(value, label):
-    if value in (None, ""):
-        return None
-    try:
-        return json.loads(value)
-    except (TypeError, ValueError):
-        raise ValueError(f"{label} debe ser JSON válido")
-
-
 def parse_edits(value):
-    """
-    Lee `edits`: texto JSON `{"<excel_row>": {"<campo>": valor}}` con las correcciones del usuario.
-
-    Raises:
-        ValueError: Si no es JSON, no tiene esa forma o trae un campo que no se puede editar
-    """
-    data = _load_json(value, "edits")
-    if data is None:
-        return {}
-    if not isinstance(data, dict):
-        raise ValueError("edits debe ser un objeto JSON")
-    edits = {}
-    for excel_row, changes in data.items():
-        if not isinstance(changes, dict):
-            raise ValueError("edits debe ser un objeto JSON")
-        unknown = set(changes) - set(EDITABLE_FIELDS)
-        if unknown:
-            raise ValueError(f"Campo no editable: {', '.join(sorted(unknown))}")
-        try:
-            edits[int(excel_row)] = changes
-        except ValueError:
-            raise ValueError("edits debe usar números de fila")
-    return edits
-
-
-def parse_removed_rows(value):
-    """Lee `removed_rows`: texto JSON con la lista de números de fila que el usuario quitó"""
-    data = _load_json(value, "removed_rows")
-    if data is None:
-        return set()
-    try:
-        return {int(row) for row in data}
-    except (TypeError, ValueError):
-        raise ValueError("removed_rows debe ser una lista JSON de números de fila")
-
-
-def _apply_edit(field, value):
-    if field in NUMERIC_EDIT_FIELDS:
-        return parse_money(value)
-    return _clean_text(value)
+    """Lee `edits` de la importación de Eleventa (campos de EDITABLE_FIELDS)"""
+    return parse_field_edits(value, EDITABLE_FIELDS)
 
 
 def apply_edits(rows, edits, removed_rows):
-    """Quita las filas descartadas y aplica las correcciones; `excel_row` no cambia"""
-    return [
-        {**row, **{field: _apply_edit(field, value) for field, value in edits.get(row["excel_row"], {}).items()}}
-        for row in rows
-        if row["excel_row"] not in removed_rows
-    ]
+    """Quita las filas descartadas y aplica las correcciones del usuario"""
+    return apply_field_edits(rows, edits, removed_rows, EDIT_CONVERTERS)
 
 
 def parse_wholesale_options(mode, min_quantity):
@@ -325,31 +268,3 @@ def validate_eleventa_rows(rows):
     return [
         {**row, "status": _row_error(row, first_row_by_code) or SUCCESS_STATUS} for row in rows
     ]
-
-
-def serialize_rows(rows):
-    """Filas listas para JSON (NaN no es JSON válido)"""
-    return [
-        {
-            key: (None if isinstance(value, float) and math.isnan(value) else value)
-            for key, value in row.items()
-        }
-        for row in rows
-    ]
-
-
-def parse_excluded_codes(value):
-    """Lee `excluded_codes` (texto JSON con una lista de códigos) en un set"""
-    if value in (None, ""):
-        return set()
-    try:
-        codes = json.loads(value)
-    except (TypeError, ValueError):
-        raise ValueError("excluded_codes debe ser una lista JSON de códigos")
-    if not isinstance(codes, list):
-        raise ValueError("excluded_codes debe ser una lista JSON de códigos")
-    return {str(code).strip() for code in codes}
-
-
-def to_decimal(value):
-    return Decimal(str(value))
