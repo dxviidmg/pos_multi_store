@@ -35,15 +35,10 @@ class Sale(CreatedAtModel):
     
     def __str__(self):
         return "{} {}".format(self.id, self.created_at)
-
-    def has_only_cash_payment(self):
-        payments = self.payments.all()
-        return payments.count() == 1 and payments.filter(payment_method="EF").exists()
         
     def is_cancelable(self):
         return (
             not self.reservation_in_progress and
-            self.has_only_cash_payment() and
             self.is_canceled == False and self.has_return == False
         )
 
