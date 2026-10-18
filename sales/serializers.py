@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from clients.serializers import ClientSerializer
 from products.serializers import SmartDecimalField
-from .models import ProductSale, Sale
+from .models import Payment, ProductSale, Sale
 
 
 class ProductSaleSerializer(serializers.ModelSerializer):
@@ -16,10 +16,17 @@ class ProductSaleSerializer(serializers.ModelSerializer):
         exclude = ["product", "sale"]
 
 
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = ["id", "payment_method", "amount", "reference", "created_at"]
+
+
 class SaleSerializer(serializers.ModelSerializer):
     seller_username = serializers.CharField(source='seller.username', read_only=True)
     is_cancelable = serializers.SerializerMethodField()
     payments_methods = serializers.SerializerMethodField()
+    payments = PaymentSerializer(many=True, read_only=True)
     client = ClientSerializer()
     products_sale = ProductSaleSerializer(many=True)
     is_repeated = serializers.SerializerMethodField()
