@@ -410,6 +410,9 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
   - Si los departamentos son obligatorios.
   - Si importar stock inicial junto con los productos.
 - Límites de seguridad: máximo 10,000 filas, máximo 10MB por archivo.
+- Correcciones sin volver a cargar el archivo: `products/import-validation/` y `products/import/` aceptan `edits` (JSON `{"<fila>": {"<campo>": valor}}` con `code`, `brand`, `department`, `name`, `cost`, `unit_price`, `wholesale_price`, `min_wholesale_quantity`, `wholesale_price_on_client_discount`, `unit`, `quantity`) y `removed_rows` (JSON con las filas a descartar); la importación acepta además `excluded_codes` (JSON con códigos a omitir, por ejemplo productos con inventario 0).
+- La importación vuelve a validar el archivo con las correcciones; con errores responde 400 y no guarda nada. Se ejecuta en una sola transacción.
+- Costo o precio unitario vacío se marca como error de validación; el inventario solo se carga con una sola sucursal.
 
 #### Importación desde el reporte de inventario de otro sistema (Eleventa)
 - Endpoints: `POST /api/products/eleventa/import-validation/` y `POST /api/products/eleventa/import/`. Campos: `file`, `brand`, `wholesale_mode` (`quantity`/`ignore`), `min_wholesale_quantity` (entero ≥ 2, con `quantity`), `import_stock` (`Y`/`N`) y, en la importación, `excluded_codes` (texto JSON con la lista de códigos a omitir).
