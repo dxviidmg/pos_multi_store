@@ -25,7 +25,7 @@ from products.models import CashFlow, Product, Store, StoreProduct
 from .cash_summary_utils import calculate_cash_summary
 from .models import Sale, ProductSale, Payment
 from .serializers import SaleSerializer, SaleCreateSerializer, SaleAuditSerializer
-from .tasks import get_sales_for_dashboard, get_cancellations_dashboard, get_products_dashboard
+from .tasks import get_sales_for_dashboard, get_cancellations_dashboard, get_department_dashboard, get_products_dashboard
 
 # Límites para archivos Excel
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -699,6 +699,25 @@ class ProductsDashboardView(APIView):
             store_ids = list(Store.objects.filter(tenant=tenant, store_type="T").values_list("id", flat=True))
 
         task = get_products_dashboard.delay(tenant.id, store_ids, year, month)
+        return Response({"task": task.id})
+
+
+class DepartmentDashboardView(APIView):
+    """
+    GET /api/department-dashboard/?department_id=...&year=...&month=...
+    Por tienda: ventas exitosas del periodo, inversión actual y unidades en existencia del departamento; además los 10 productos más vendidos del periodo.
+    department_id "0" = productos sin departamento; month "0" = todo el año.
+    """
+    def get(self, request):
+        department_id = request.query_params.get('department_id')
+        year = request.query_params.get('year')
+        month = request.query_params.get('month', '0')
+        if department_id is None or not year:
+            return Response({"detail": "Indica el departamento y el año."}, status=status.HTTP_400_BAD_REQUEST)
+
+        tenant = request.user.get_tenant()
+        store_ids = list(Store.objects.filter(tenant=tenant, store_type="T").values_list("id", flat=True))
+        task = get_department_dashboard.delay(store_ids, year, month, department_id)
         return Response({"task": task.id})
 
 

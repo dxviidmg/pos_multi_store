@@ -617,6 +617,13 @@ SmartVenta es un sistema POS en la nube diseñado para negocios minoristas con m
 - **Resumen:** total de productos, total de marcas, productos sin ventas en el periodo.
 - Filtro por año, mes y tienda.
 
+### 17.3b Dashboard por Departamento
+- Endpoint `GET /api/department-dashboard/?department_id=&year=&month=` (`month=0` = todo el año; `department_id=0` = productos sin departamento).
+- Por cada tienda: ventas exitosas del departamento en el periodo (excluye canceladas y apartados en curso), inversión actual (stock × costo) y el total de ambas.
+- También las unidades en existencia del departamento por tienda (`units`, suma del stock actual).
+- `top_products`: los 10 productos más vendidos del departamento en el periodo (por cantidad), con código, cantidad vendida y monto.
+- La inversión es la existencia de hoy, no depende del periodo.
+
 ### 17.4 Dashboard de Verificación de Stock
 - Lista de todos los productos marcados con `requires_stock_verification` en todas las tiendas.
 - Agrupado por tienda.
