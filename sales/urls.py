@@ -17,6 +17,7 @@ urlpatterns += [
     path('sales-dashboard/', views.SaleDashboardAsyncView.as_view(), name='sales-dashboard'),
     path('sales-dashboard-cancellations/', views.CancellationsDashboardView.as_view(), name='sales-dashboard-cancellations'),
     path('products-dashboard/', views.ProductsDashboardView.as_view(), name='products-dashboard'),
+    path('department-dashboard/', views.DepartmentDashboardView.as_view(), name='department-dashboard'),
     path('stores-cash-summary/', views.StoresCashSummaryView.as_view(), name='stores-cash-summary'),
     path('duplicate-sales/', views.DuplicateSalesView.as_view(), name='duplicate-sales'),
 ]

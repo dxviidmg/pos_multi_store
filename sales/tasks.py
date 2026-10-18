@@ -5,7 +5,7 @@ from django.db.models import Count, DecimalField, F, Q, QuerySet, Sum
 from django.db.models.functions import ExtractHour, ExtractWeekDay, TruncMonth
 from django.utils.timezone import now
 
-from products.models import Brand, Product, Store
+from products.models import Brand, Product, Store, StoreProduct
 from .models import Sale, Payment
 from .serializers import SaleAuditSerializer
 
@@ -211,3 +211,72 @@ def get_products_dashboard(tenant_id, store_ids, year, month):
             "products_without_sales": total_products - products_with_sales,
         },
     }
+
+
+@shared_task
+def get_department_dashboard(store_ids, year, month, department_id):
+    """Ventas exitosas del periodo, inversión actual (stock × costo) y unidades en existencia de un departamento, por tienda, más sus 10 productos más vendidos del periodo."""
+    from .models import ProductSale
+
+    # department_id "0" = productos sin departamento
+    department_filter = {"department_id": None} if department_id == "0" else {"department_id": department_id}
+
+    sale_filters = Q(
+        sale__store_id__in=store_ids,
+        sale__is_canceled=False,
+        sale__reservation_in_progress=False,
+        sale__created_at__year=year,
+        **{f"product__{k}": v for k, v in department_filter.items()},
+    )
+    if month != '0':
+        sale_filters &= Q(sale__created_at__month=month)
+
+    sales_by_store = {
+        r["sale__store_id"]: r["total"]
+        for r in ProductSale.objects.filter(sale_filters)
+        .values("sale__store_id")
+        .annotate(total=Sum(F("price") * F("quantity"), output_field=DecimalField()))
+    }
+
+    investment_by_store = {
+        r["store_id"]: r
+        for r in StoreProduct.objects.filter(
+            store_id__in=store_ids,
+            **{f"product__{k}": v for k, v in department_filter.items()},
+        )
+        .values("store_id")
+        .annotate(total=Sum(F("stock") * F("product__cost"), output_field=DecimalField()), units=Sum("stock"))
+    }
+
+    top_products = [
+        {
+            "id": r["product_id"],
+            "name": r["product__name"],
+            "code": r["product__code"],
+            "quantity": float(r["units_sold"]),
+            "sales": float(r["revenue"]),
+        }
+        for r in ProductSale.objects.filter(sale_filters)
+        .values("product_id", "product__name", "product__code")
+        .annotate(
+            units_sold=Sum("quantity"),
+            revenue=Sum(F("price") * F("quantity"), output_field=DecimalField()),
+        )
+        .order_by("-units_sold", "product__name")[:10]
+    ]
+
+    stores = []
+    for store in Store.objects.filter(id__in=store_ids).order_by("name"):
+        sales = float(sales_by_store.get(store.id) or 0)
+        investment = float(investment_by_store.get(store.id, {}).get("total") or 0)
+        units = float(investment_by_store.get(store.id, {}).get("units") or 0)
+        stores.append({
+            "id": store.id,
+            "name": store.name,
+            "sales": sales,
+            "investment": investment,
+            "units": units,
+            "total": sales + investment,
+        })
+
+    return {"stores": stores, "top_products": top_products}

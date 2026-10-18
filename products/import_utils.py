@@ -35,11 +35,9 @@ def validate_excel_columns(df: pd.DataFrame, import_stock: str) -> None:
     ]
 
     if import_stock == "Y":
-        expected_columns += ["Cantidad"]
+        expected_columns += ["Inventario"]
 
     from products.utils import is_list_in_another
-    print(expected_columns)
-    print(list(df.columns))
     if not is_list_in_another(expected_columns, list(df.columns)):
         raise ValueError("Formato de excel incorrecto")
 
@@ -64,7 +62,7 @@ def rename_product_columns(df: pd.DataFrame) -> pd.DataFrame:
             "Precio mayoreo": "wholesale_price",
             "Cantidad minima mayoreo": "min_wholesale_quantity",
             "Precio Mayoreo en descuento de clientes": "wholesale_price_on_client_discount",
-            "Cantidad": "quantity",
+            "Inventario": "quantity",
             "Unidad": "unit",
         }
     )

@@ -1,7 +1,6 @@
 import time
 from datetime import datetime, timedelta
 
-import numpy as np
 import pandas as pd
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -16,20 +15,26 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.constants import LogAction, LogMovement
+from core.constants import LogAction, LogMovement, Unit
 from logs.models import ProductPriceLog, StoreProductLog
 from notifications.utils import notify_store
 from .decorators import get_store
+from .eleventa_import import (
+    MAX_BRAND_LENGTH,
+    MAX_NAME_LENGTH,
+    apply_edits,
+    apply_wholesale_options,
+    parse_edits,
+    parse_eleventa_file,
+    parse_wholesale_options,
+    validate_eleventa_rows,
+)
+from .import_corrections import SUCCESS_STATUS, parse_excluded_codes, parse_removed_rows, serialize_rows, to_decimal
 from .import_utils import (
-    validate_excel_columns,
-    rename_product_columns,
     validate_store_product_columns,
     rename_store_product_columns,
     validate_quantities,
-    clean_row_data,
     parse_unit,
-    is_fraction_unit,
-    parse_sells_by_weight_to_unit,
 )
 from .models import (
     Brand,
@@ -43,6 +48,12 @@ from .models import (
     ProductConversion,
     StoreWorker,
     Transfer,
+)
+from .product_import import (
+    apply_template_edits,
+    parse_template_edits,
+    read_template_rows,
+    validate_product_rows,
 )
 from .serializers import (
     BrandSerializer,
@@ -62,7 +73,6 @@ from .serializers import (
     StoreWorkerSerializer,
     TransferSerializer,
 )
-from .utils import is_list_in_another, is_non_negative_number
 
 # Configuración de límites para archivos Excel
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -778,294 +788,255 @@ class ResetStoreStockView(APIView):
         return Response(status=status.HTTP_200_OK)
 
 
+def _load_product_rows(request, tenant):
+    """
+    Lee la plantilla subida en `request`, aplica las correcciones del usuario y la valida.
+
+    Returns:
+        (rows, import_stock): filas con `status` y si se importa el inventario
+    Raises:
+        ValueError: Con el motivo en español si el archivo o las correcciones no son válidos
+    """
+    file_obj = request.FILES.get("file")
+    if not file_obj:
+        raise ValueError("No se envió el archivo")
+    validate_excel_file(file_obj)
+
+    # El inventario solo se carga con una sola sucursal (igual que can-include-quantity)
+    import_stock = (
+        "Y"
+        if request.data.get("import_stock") == "Y" and Store.objects.filter(tenant=tenant).count() == 1
+        else "N"
+    )
+    rows = apply_template_edits(
+        read_template_rows(file_obj, import_stock),
+        parse_template_edits(request.data.get("edits")),
+        parse_removed_rows(request.data.get("removed_rows")),
+    )
+    lookups = {
+        "existing_codes": _existing_product_codes(tenant, [row["code"] for row in rows if row["code"]]),
+        "brands": set(Brand.objects.filter(tenant=tenant).values_list("name", flat=True)),
+        "departments": set(Department.objects.filter(tenant=tenant).values_list("name", flat=True)),
+    }
+    options = {
+        "create_brands": request.data.get("create_brands"),
+        "create_departments": request.data.get("create_departments"),
+        "departments_mandatory": request.data.get("departments_mandatory"),
+        "import_stock": import_stock,
+    }
+    return validate_product_rows(rows, lookups, options), import_stock
+
+
 @method_decorator(get_store(), name="dispatch")
 class ProductImportValidationView(APIView):
+    """Valida la plantilla de productos fila por fila (con las correcciones del usuario)"""
+
     def post(self, request):
-        file_obj = request.FILES.get("file")
-        if not file_obj:
-            return Response(
-                {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            validate_excel_file(file_obj)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        create_brands = request.data.get("create_brands")
-        create_departments = request.data.get("create_departments")
-        departments_mandatory = request.data.get("departments_mandatory")
-        import_stock = request.data.get("import_stock")
-
         tenant = request.user.get_tenant()
         try:
-            df = pd.read_excel(file_obj, nrows=MAX_ROWS).replace({np.nan: None})
-            
-            if len(df) > MAX_ROWS:
-                return Response(
-                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            validate_excel_columns(df, import_stock)
-            df = rename_product_columns(df)
-
-            if df.empty:
-                raise ValueError("El excel esta vacio")
-
-            data, codes = [], dict()
-
-            for _, data_row in enumerate(df.to_dict(orient="records")):
-                data_row = clean_row_data(data_row)
-
-                data_row["status"] = "Exitoso"
-                code = data_row["code"]
-                brand = data_row["brand"]
-                data_row["excel_row"] = _ + 2
-
-                if not code or code == "":
-                    data_row["status"] = "Sin código"
-                    data.append(data_row)
-                    continue
-
-                if not brand or brand == "":
-                    data_row["status"] = "Sin marca"
-                    data.append(data_row)
-                    continue
-
-                if Product.objects.filter(code=code, brand__tenant=tenant).exists():
-                    data_row["status"] = "Código existente en el sistema"
-                elif code in codes:
-                    data_row["status"] = "Código existente en la fila " + str(
-                        codes[code]
-                    )
-                else:
-                    codes[code] = data_row["excel_row"]
-
-                    v1, v2 = data_row.get("wholesale_price"), data_row.get(
-                        "min_wholesale_quantity"
-                    )
-                    if (v1 is None) ^ (v2 is None):
-                        data_row["status"] = (
-                            "Si existe mayoreo debe ingresar el precio mayoreo y la cantidad mínima"
-                        )
-                    else:
-                        prices = [data_row.get("cost"), data_row.get("unit_price")]
-                        if v1 is not None and v2 is not None:
-                            prices.append(v1)
-
-                        try:
-                            prices = [
-                                float(price) for price in prices if price is not None
-                            ]
-                            if not all(price > 0 for price in prices):
-                                data_row["status"] = (
-                                    "Costo y precio(s) deben ser mayores a 0"
-                                )
-
-                            if len(prices) == 3 and prices[2] > prices[1]:
-                                data_row["status"] = (
-                                    "Precio mayoreo es mas grande que precio unitario"
-                                )
-
-                            if len(prices) == 3 and prices[0] > prices[2]:
-                                data_row["status"] = (
-                                    "Precio mayoreo es mas chico que costo"
-                                )
-
-                            if len(prices) >= 2 and prices[0] >= prices[1]:
-                                data_row["status"] = (
-                                    "Costo debe ser menor que precio unitario"
-                                )
-
-                            if v2 is not None:
-                                try:
-                                    cmm = int(v2)
-                                    if cmm < 2:
-                                        data_row["status"] = "Cantidad minima mayoreo debe ser entero minimo 2"
-                                except (ValueError, TypeError):
-                                    data_row["status"] = "Cantidad minima mayoreo debe ser un numero entero"
-
-                        except ValueError:
-                            data_row["status"] = "Precios o costos inválidos"
-
-                    if create_brands == "N":
-                        try:
-                            Brand.objects.get(name=data_row["brand"])
-                        except Brand.DoesNotExist:
-                            data_row["status"] = "Marca inexistente"
-
-                    if create_departments == "N":
-                        try:
-                            Department.objects.get(name=data_row["departament"])
-                        except Department.DoesNotExist:
-                            if departments_mandatory == "Y":
-                                data_row["status"] = "Departamento inexistente"
-
-                    if import_stock == "Y":
-                        is_positivo = is_non_negative_number(data_row["quantity"])
-
-                        if not is_positivo:
-                            data_row["status"] = "Cantidad debe ser un número positivo"
-
-                    # Validar unidad
-                    try:
-                        unit_val = parse_unit(data_row.get("unit"))
-                    except ValueError as e:
-                        data_row["status"] = str(e)
-                        unit_val = None
-
-                    # Productos por fracción (KG, LT) no pueden tener precio de mayoreo
-                    if is_fraction_unit(unit_val) and data_row.get("wholesale_price") is not None:
-                        data_row["status"] = "Productos a granel no pueden tener precio de mayoreo"
-
-                data.append(data_row)
-
-            return Response(data, status=status.HTTP_200_OK)
-
+            rows, _ = _load_product_rows(request, tenant)
         except ValueError as e:
-            print(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            print(e)
-            return Response(
-                {"error": f"Unexpected error: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(serialize_rows(rows), status=status.HTTP_200_OK)
 
 
 class ProductImport(APIView):
+    """Importa la plantilla de productos, aplicando las correcciones y omitiendo `excluded_codes`"""
+
     def post(self, request):
-        file_obj = request.FILES.get("file")
-
-        if not file_obj:
-            return Response(
-                {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
+        tenant = request.user.get_tenant()
         try:
-            validate_excel_file(file_obj)
+            rows, import_stock = _load_product_rows(request, tenant)
+            excluded_codes = parse_excluded_codes(request.data.get("excluded_codes"))
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        tenant = self.request.user.get_tenant()
-        import_stock = request.data.get("import_stock")
+        if any(row["status"] != SUCCESS_STATUS for row in rows):
+            return Response(
+                {"error": "El archivo tiene errores"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        rows = [row for row in rows if row["code"] not in excluded_codes]
+        if not rows:
+            return Response(
+                {"error": "No hay productos para importar"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        try:
-            df = pd.read_excel(file_obj, nrows=MAX_ROWS).replace({np.nan: None})
-
-            if len(df) > MAX_ROWS:
-                return Response(
-                    {"error": f"Demasiadas filas. Máximo: {MAX_ROWS}"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            validate_excel_columns(df, import_stock)
-            df = rename_product_columns(df)
-
-            brand_cache = {}
-            department_cache = {}
+        with transaction.atomic():
+            brands = {}
+            departments = {}
+            store = Store.objects.get(tenant=tenant) if import_stock == "Y" else None
 
             logs = []
-            for row_index, data_row in enumerate(df.to_dict(orient="records")):
-
-                data_row = clean_row_data(data_row)
-
-                quantity = data_row.pop("quantity", None)
-                brand_name = data_row["brand"]
-                if brand_name is not None:
-                    brand_name = str(brand_name).strip()
-                if brand_name not in brand_cache:
-                    brand_cache[brand_name], _ = Brand.objects.get_or_create(
-                        name=brand_name, tenant=tenant
+            for row in rows:
+                if row["brand"] not in brands:
+                    brands[row["brand"]], _ = Brand.objects.get_or_create(name=row["brand"], tenant=tenant)
+                if row["department"] and row["department"] not in departments:
+                    departments[row["department"]], _ = Department.objects.get_or_create(
+                        name=row["department"], tenant=tenant
                     )
 
-                data_row["brand"] = brand_cache[brand_name]
-
-                department_name = data_row["department"]
-                if department_name is not None:
-                    department_name = str(department_name).strip()
-
-                if department_name:
-                    data_row["department"] = department_cache.get(
-                        department_name,
-                        Department.objects.get_or_create(
-                            name=department_name, tenant=tenant
-                        )[0],
-                    )
-                else:
-                    data_row["department"] = None
-
-                data_row["wholesale_price_on_client_discount"] = bool(
-                    data_row["wholesale_price_on_client_discount"]
+                product = Product.objects.create(
+                    brand=brands[row["brand"]],
+                    department=departments.get(row["department"]),
+                    code=row["code"],
+                    name=row["name"][:MAX_NAME_LENGTH],
+                    cost=to_decimal(row["cost"]),
+                    unit_price=to_decimal(row["unit_price"]),
+                    wholesale_price=to_decimal(row["wholesale_price"]) if row["wholesale_price"] is not None else None,
+                    min_wholesale_quantity=int(row["min_wholesale_quantity"]) if row["min_wholesale_quantity"] is not None else None,
+                    wholesale_price_on_client_discount=row["wholesale_price_on_client_discount"],
+                    unit=parse_unit(row["unit"]),
                 )
 
-                data_row["brand"] = brand_cache[brand_name]
-                data_row["wholesale_price_on_client_discount"] = bool(
-                    data_row["wholesale_price_on_client_discount"]
-                )
-
-                # Parsear unit (la columna legacy "Venta por peso" ya no existe en el rename)
-                raw_unit = data_row.pop("unit", None)
-                data_row["unit"] = parse_unit(raw_unit)
-
-                # Productos por fracción (KG, LT) no pueden tener precio de mayoreo
-                if (
-                    is_fraction_unit(data_row["unit"])
-                    and data_row.get("wholesale_price") is not None
-                ):
-                    raise ValueError(
-                        "Productos a granel no pueden tener precio de mayoreo"
-                    )
-
-                data_row["name"] = str(data_row["name"])
-                if len(data_row["name"]) > 100:
-                    data_row["name"] = data_row["name"][:100]
-
-                code_exists = Product.objects.filter(
-                    code=data_row["code"], brand__tenant=tenant
-                ).exists()
-                if code_exists:
-                    continue
-
-                product = Product(**data_row)
-                product.save()  # D
-
-                if import_stock == "Y":
-                    store = Store.objects.get(tenant=tenant)
-                    sp = StoreProduct.objects.get(store=store, product=product)
-
-                    # Solo actualizar el stock si la cantidad es distinta de cero;
-                    # si es cero o vacía, se deja el stock como está.
-                    if quantity is not None and float(quantity) != 0:
-                        previous_stock = sp.stock
-                        updated_stock = quantity
-                        sp.stock = quantity
-                        sp.save()
-
-                        logs.append(
-                            StoreProductLog(
-                                store_product=sp,
-                                user=request.user,
-                                previous_stock=previous_stock,
-                                updated_stock=updated_stock,
-                                action="A",
-                                movement="IM",  # Movimiento: Venta
-                            )
+                # Una cantidad en 0 o vacía deja el stock como está
+                if store and row["quantity"]:
+                    store_product = StoreProduct.objects.get(store=store, product=product)
+                    store_product.stock = to_decimal(row["quantity"])
+                    store_product.save()
+                    logs.append(
+                        StoreProductLog(
+                            store_product=store_product,
+                            user=request.user,
+                            previous_stock=0,
+                            updated_stock=store_product.stock,
+                            action=LogAction.AJUSTE,
+                            movement=LogMovement.IMPORTACION,
                         )
-
-                # Guardar los logs en la base de datos
+                    )
             StoreProductLog.objects.bulk_create(logs)
 
-            return Response({}, status=status.HTTP_200_OK)
+        return Response({}, status=status.HTTP_200_OK)
 
+
+EXISTING_CODES_CHUNK = 500
+
+
+def _existing_product_codes(tenant, codes):
+    """Códigos que ya existen en el catálogo del tenant (por bloques, por el límite de variables de SQL)"""
+    existing = set()
+    for start in range(0, len(codes), EXISTING_CODES_CHUNK):
+        chunk = codes[start:start + EXISTING_CODES_CHUNK]
+        existing.update(
+            Product.objects.filter(brand__tenant=tenant, code__in=chunk).values_list("code", flat=True)
+        )
+    return existing
+
+
+def _load_eleventa_rows(request, tenant):
+    """
+    Lee y valida el reporte subido en `request`.
+
+    Returns:
+        (rows, brand, import_stock): filas con `status`, marca y si se importa el inventario
+    Raises:
+        ValueError: Con el motivo en español si el archivo o la marca no son válidos
+    """
+    file_obj = request.FILES.get("file")
+    if not file_obj:
+        raise ValueError("No se envió el archivo")
+    validate_excel_file(file_obj)
+
+    brand = (request.data.get("brand") or "").strip()
+    if not brand:
+        raise ValueError("La marca es obligatoria")
+    if len(brand) > MAX_BRAND_LENGTH:
+        raise ValueError(f"La marca no puede pasar de {MAX_BRAND_LENGTH} caracteres")
+
+    _, min_wholesale_quantity = parse_wholesale_options(
+        request.data.get("wholesale_mode"), request.data.get("min_wholesale_quantity")
+    )
+
+    edited_rows = apply_edits(
+        parse_eleventa_file(file_obj),
+        parse_edits(request.data.get("edits")),
+        parse_removed_rows(request.data.get("removed_rows")),
+    )
+    rows = validate_eleventa_rows(apply_wholesale_options(edited_rows, min_wholesale_quantity))
+    valid_codes = [row["code"] for row in rows if row["status"] == SUCCESS_STATUS]
+    existing = _existing_product_codes(tenant, valid_codes)
+    rows = [
+        {**row, "status": "Código existente en el sistema"} if row["code"] in existing else row
+        for row in rows
+    ]
+
+    # El inventario solo se carga con una sola sucursal (igual que can-include-quantity)
+    import_stock = (
+        request.data.get("import_stock") == "Y" and Store.objects.filter(tenant=tenant).count() == 1
+    )
+    return rows, brand, import_stock
+
+
+class EleventaImportValidationView(APIView):
+    """Valida un reporte de inventario de otro sistema (Eleventa) fila por fila"""
+
+    def post(self, request):
+        tenant = request.user.get_tenant()
+        try:
+            rows, _, _ = _load_eleventa_rows(request, tenant)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        return Response(serialize_rows(rows), status=status.HTTP_200_OK)
+
+
+class EleventaImportView(APIView):
+    """Importa un reporte de inventario de otro sistema (Eleventa), omitiendo `excluded_codes`"""
+
+    def post(self, request):
+        tenant = request.user.get_tenant()
+        try:
+            rows, brand_name, import_stock = _load_eleventa_rows(request, tenant)
+            excluded_codes = parse_excluded_codes(request.data.get("excluded_codes"))
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if any(row["status"] != SUCCESS_STATUS for row in rows):
             return Response(
-                {"error": f"Unexpected error: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {"error": "El archivo tiene errores"}, status=status.HTTP_400_BAD_REQUEST
             )
+        rows = [row for row in rows if row["code"] not in excluded_codes]
+        if not rows:
+            return Response(
+                {"error": "No hay productos para importar"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            brand, _ = Brand.objects.get_or_create(name=brand_name, tenant=tenant)
+            departments = {
+                name: Department.objects.get_or_create(name=name, tenant=tenant)[0]
+                for name in sorted({row["department"] for row in rows if row["department"]})
+            }
+            store = Store.objects.get(tenant=tenant) if import_stock else None
+
+            logs = []
+            for row in rows:
+                product = Product.objects.create(
+                    brand=brand,
+                    department=departments.get(row["department"]),
+                    code=row["code"],
+                    name=row["name"][:MAX_NAME_LENGTH],
+                    cost=to_decimal(row["cost"]),
+                    unit_price=to_decimal(row["unit_price"]),
+                    wholesale_price=to_decimal(row["wholesale_price"]) if row["wholesale_price"] else None,
+                    min_wholesale_quantity=row["min_wholesale_quantity"],
+                    unit=Unit.PIEZA,
+                )
+                if store and row["quantity"]:
+                    store_product = StoreProduct.objects.get(store=store, product=product)
+                    store_product.stock = to_decimal(row["quantity"])
+                    store_product.save()
+                    logs.append(
+                        StoreProductLog(
+                            store_product=store_product,
+                            user=request.user,
+                            previous_stock=0,
+                            updated_stock=store_product.stock,
+                            action=LogAction.AJUSTE,
+                            movement=LogMovement.IMPORTACION,
+                        )
+                    )
+            StoreProductLog.objects.bulk_create(logs)
+
+        return Response({}, status=status.HTTP_200_OK)
 
 
 class ProductReassignView(APIView):
