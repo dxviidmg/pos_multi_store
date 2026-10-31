@@ -12,8 +12,12 @@ urlpatterns = router.urls
 
 urlpatterns += [
     path('tenants/', views.AdminTenantListView.as_view(), name='admin-tenant-list'),
+    path('tenants/create/', views.AdminTenantCreateView.as_view(), name='admin-tenant-create'),
+    path('admin-plans/', views.AdminPlansView.as_view(), name='admin-plans'),
+    path('admin-tenant-exists/', views.AdminTenantExistsView.as_view(), name='admin-tenant-exists'),
     path('payments-total/', views.AdminPaymentsTotalView.as_view(), name='admin-payments-total'),
     path('payments-by-tenant/', views.AdminPaymentsByTenantView.as_view(), name='admin-payments-by-tenant'),
+    path('payments/create/', views.AdminPaymentCreateView.as_view(), name='admin-payment-create'),
     path('tenant-exists/', views.TenantExistsView.as_view(), name='tenant-exists'),
     path('stores-count/', views.StoresCountView.as_view(), name='stores-count'),
     path('tenants/register/', views.PublicTenantCreateView.as_view(), name='public-tenant-create'),
