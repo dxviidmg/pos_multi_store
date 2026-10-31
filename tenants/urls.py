@@ -12,11 +12,19 @@ urlpatterns = router.urls
 
 urlpatterns += [
     path('tenants/', views.AdminTenantListView.as_view(), name='admin-tenant-list'),
+    path('tenants/create/', views.AdminTenantCreateView.as_view(), name='admin-tenant-create'),
+    path('admin-plans/', views.AdminPlansView.as_view(), name='admin-plans'),
+    path('admin-plans-stats/', views.AdminPlansWithStatsView.as_view(), name='admin-plans-stats'),
+    path('admin-plans/create/', views.AdminPlanCreateView.as_view(), name='admin-plan-create'),
+    path('admin-tenant-exists/', views.AdminTenantExistsView.as_view(), name='admin-tenant-exists'),
     path('payments-total/', views.AdminPaymentsTotalView.as_view(), name='admin-payments-total'),
     path('payments-by-tenant/', views.AdminPaymentsByTenantView.as_view(), name='admin-payments-by-tenant'),
+    path('payments/create/', views.AdminPaymentCreateView.as_view(), name='admin-payment-create'),
     path('tenant-exists/', views.TenantExistsView.as_view(), name='tenant-exists'),
     path('stores-count/', views.StoresCountView.as_view(), name='stores-count'),
-    path('create-tenant/', views.PublicTenantCreateView.as_view(), name='public-tenant-create'),
+    path('tenants/register/', views.PublicTenantCreateView.as_view(), name='public-tenant-create'),
+    # Alias deprecado: mantener hasta migrar el frontend a tenants/register/
+    path('create-tenant/', views.PublicTenantCreateView.as_view(), name='public-tenant-create-legacy'),
     path('plans/', views.PublicPlansView.as_view(), name='public-plans'),
     path('redeploy-render/', views.RenderRedeployView.as_view(), name='redeploy-render'),
     path('tenant-info/', views.TenantInfoView.as_view(), name='tenant-info'),

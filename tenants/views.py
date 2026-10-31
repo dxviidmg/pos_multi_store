@@ -100,6 +100,79 @@ class AdminTenantListView(APIView):
         return Response(data)
 
 
+class AdminTenantCreateView(APIView):
+    """
+    Alta manual de un negocio (tenant) desde el panel de administración.
+
+    No pasa por Mercado Pago: crea el tenant (y su usuario propietario, que
+    el modelo genera automáticamente en save()) sin suscripción ni cobro.
+    Solo accesible para superusuarios.
+
+    Campos:
+      - name (requerido)
+      - short_name (requerido, único; minúsculas, solo [a-z0-9.], máx. 10)
+      - is_sandbox (opcional, por defecto False)
+      - plan_id (opcional)
+    """
+    permission_classes = [IsSuperUser]
+
+    def post(self, request):
+        import re
+
+        data = request.data
+        name = (data.get("name") or "").strip()
+        # Igual que el registro público: minúsculas y solo [a-z0-9.].
+        short_name = re.sub(r"[^a-z0-9.]", "", (data.get("short_name") or "").strip().lower())
+
+        if not name or not short_name:
+            return Response(
+                {"error": "Los campos 'name' y 'short_name' son requeridos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(short_name) > 10:
+            return Response(
+                {"error": "El código de negocio no puede exceder 10 caracteres."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if Tenant.objects.filter(short_name=short_name).exists():
+            return Response(
+                {"error": "El código de negocio ya está en uso."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        plan = None
+        plan_id = data.get("plan_id")
+        if plan_id:
+            try:
+                plan = Plan.objects.get(id=plan_id)
+            except Plan.DoesNotExist:
+                return Response(
+                    {"error": "Plan no encontrado."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        tenant = Tenant(
+            name=name,
+            short_name=short_name,
+            is_sandbox=bool(data.get("is_sandbox", False)),
+            plan=plan,
+        )
+        tenant.save()  # crea el owner automáticamente
+
+        return Response(
+            {
+                "id": tenant.id,
+                "name": tenant.name,
+                "short_name": tenant.short_name,
+                "is_sandbox": tenant.is_sandbox,
+                "owner_username": tenant.owner.username,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class AdminPaymentsTotalView(APIView):
     """
     Devuelve la suma total de todos los pagos registrados (Payment.total).
@@ -192,6 +265,86 @@ class AdminPaymentsByTenantView(APIView):
             by_tenant.values(), key=lambda e: e["total_paid"], reverse=True
         )
         return Response(data)
+
+
+class AdminPaymentCreateView(APIView):
+    """
+    Registra manualmente un pago para un negocio (tenant) desde el panel de
+    administración, sin pasar por Mercado Pago.
+
+    El modelo Payment calcula automáticamente el monto (precio del plan ×
+    meses) y las fechas de vigencia (a partir del último pago), así que basta
+    con indicar el tenant y la cantidad de meses.
+
+    Solo accesible para superusuarios (administradores del sistema).
+
+    Campos:
+      - tenant_id (requerido)
+      - months (requerido, entero >= 1)
+    """
+    permission_classes = [IsSuperUser]
+
+    def post(self, request):
+        data = request.data
+        tenant_id = data.get("tenant_id")
+        months = data.get("months")
+
+        if not tenant_id:
+            return Response(
+                {"error": "El campo 'tenant_id' es requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            months = int(months)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "El campo 'months' debe ser un número entero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if months < 1:
+            return Response(
+                {"error": "El número de meses debe ser al menos 1."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response(
+                {"error": "Negocio no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not tenant.get_plan():
+            return Response(
+                {"error": "El negocio no tiene un plan asignado; no se puede calcular el monto."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment = Payment(tenant=tenant, months=months)
+        payment.save()  # calcula total y fechas de vigencia
+
+        return Response(
+            {
+                "id": payment.id,
+                "tenant_id": tenant.id,
+                "months": payment.months,
+                "total": float(payment.total or 0),
+                "start_of_validity": (
+                    payment.start_of_validity.isoformat()
+                    if payment.start_of_validity
+                    else None
+                ),
+                "end_of_validity": (
+                    payment.end_of_validity.isoformat()
+                    if payment.end_of_validity
+                    else None
+                ),
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class StoresCountView(APIView):
@@ -391,6 +544,208 @@ class PublicPlansView(APIView):
         plans = Plan.objects.filter(billing_type="S", is_sandbox=False).order_by('stores')
         serializer = PlanSerializer(plans, many=True)
         return Response(serializer.data)
+
+
+class AdminPlansView(APIView):
+    """
+    Lista los planes mensuales (billing_type="M") para el panel de
+    administración (alta manual de negocios). Solo superusuarios.
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        from .serializers import PlanSerializer
+        plans = Plan.objects.filter(billing_type="M").order_by("price")
+        serializer = PlanSerializer(plans, many=True)
+        return Response(serializer.data)
+
+
+class AdminPlansWithStatsView(APIView):
+    """
+    Lista TODOS los planes con estadísticas para el panel de administración:
+    nombre, precio, número de tiendas, tipo de facturación (manual o
+    suscripción) y cuántos negocios (tenants) tienen el plan asignado.
+
+    Solo accesible para superusuarios (administradores del sistema).
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        from django.db.models import Count
+
+        plans = (
+            Plan.objects.annotate(tenants_count=Count("tenant"))
+            .order_by("billing_type", "price")
+        )
+
+        data = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "price": float(p.price),
+                "stores": p.stores,
+                "billing_type": p.billing_type,  # "M" manual, "S" suscripción
+                "billing_type_label": p.get_billing_type_display(),
+                "mp_plan_id": p.mp_plan_id or "",
+                "is_sandbox": p.is_sandbox,
+                "tenants_count": p.tenants_count,
+            }
+            for p in plans
+        ]
+        return Response(data)
+
+
+class AdminPlanCreateView(APIView):
+    """
+    Crea un plan desde el panel de administración.
+
+    - Plan MANUAL (billing_type="M"): solo se guarda localmente con nombre,
+      precio y número de sucursales.
+    - Plan de SUSCRIPCIÓN (billing_type="S"): además se crea el plan
+      correspondiente en Mercado Pago (preapproval_plan, mensual en MXN) y se
+      guarda su id en mp_plan_id. Es TODO o NADA: si MP falla, no se crea el
+      plan local y se devuelve el error de MP.
+
+    Solo accesible para superusuarios (administradores del sistema).
+
+    Campos:
+      - name (requerido)
+      - price (requerido, número > 0)
+      - stores (requerido, entero >= 1)
+      - billing_type (requerido, "M" o "S")
+    """
+    permission_classes = [IsSuperUser]
+
+    def post(self, request):
+        data = request.data
+        name = (data.get("name") or "").strip()
+        billing_type = (data.get("billing_type") or "").strip().upper()
+
+        if not name:
+            return Response(
+                {"error": "El campo 'name' es requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if billing_type not in ("M", "S"):
+            return Response(
+                {"error": "El campo 'billing_type' debe ser 'M' (manual) o 'S' (suscripción)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            price = float(data.get("price"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "El campo 'price' debe ser un número."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if price <= 0:
+            return Response(
+                {"error": "El precio debe ser mayor a 0."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            stores = int(data.get("stores"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "El campo 'stores' debe ser un número entero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if stores < 1:
+            return Response(
+                {"error": "El número de sucursales debe ser al menos 1."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        mp_plan_id = None
+
+        # Para suscripción, crear primero el plan en Mercado Pago (todo o nada).
+        if billing_type == "S":
+            plan_payload = {
+                "reason": f"SmartVenta - {name}",
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": price,
+                    "currency_id": "MXN",
+                },
+                "back_url": settings.MERCADO_PAGO_BACK_URL,
+            }
+            plan_headers = {
+                "Authorization": f"Bearer {settings.MERCADO_PAGO_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            }
+            logger.info(f"[AdminPlanCreate] Creando plan en MP: {plan_payload}")
+            try:
+                mp_resp = requests.post(
+                    "https://api.mercadopago.com/preapproval_plan",
+                    json=plan_payload,
+                    headers=plan_headers,
+                    timeout=20,
+                )
+            except requests.RequestException as exc:
+                logger.error(f"[AdminPlanCreate] Error de red con MP: {exc}")
+                return Response(
+                    {"error": "No se pudo conectar con Mercado Pago.", "details": str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            if mp_resp.status_code not in (200, 201):
+                try:
+                    details = mp_resp.json()
+                except ValueError:
+                    details = mp_resp.text
+                logger.error(f"[AdminPlanCreate] MP rechazó el plan: {mp_resp.status_code} - {details}")
+                return Response(
+                    {"error": "No se pudo crear el plan en Mercado Pago.", "details": details},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            mp_plan_id = mp_resp.json().get("id")
+
+        # Solo si MP salió bien (o es manual) se crea el plan local.
+        plan = Plan.objects.create(
+            name=name,
+            price=price,
+            stores=stores,
+            billing_type=billing_type,
+            mp_plan_id=mp_plan_id,
+            is_sandbox=False,
+        )
+
+        return Response(
+            {
+                "id": plan.id,
+                "name": plan.name,
+                "price": float(plan.price),
+                "stores": plan.stores,
+                "billing_type": plan.billing_type,
+                "billing_type_label": plan.get_billing_type_display(),
+                "mp_plan_id": plan.mp_plan_id or "",
+                "is_sandbox": plan.is_sandbox,
+                "tenants_count": 0,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminTenantExistsView(APIView):
+    """
+    Verifica si un short_name ya está en uso. Solo superusuarios.
+    Normaliza igual que el alta: minúsculas y solo [a-z0-9.].
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        import re
+
+        raw = request.query_params.get("short_name", "")
+        short_name = re.sub(r"[^a-z0-9.]", "", raw.strip().lower())
+        if not short_name:
+            return Response({"error": "short_name is required"}, status=400)
+        exists = Tenant.objects.filter(short_name=short_name).exists()
+        return Response({"exists": exists})
 
 
 class TenantInfoView(APIView):
