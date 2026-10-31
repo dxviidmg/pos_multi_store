@@ -595,6 +595,141 @@ class AdminPlansWithStatsView(APIView):
         return Response(data)
 
 
+class AdminPlanCreateView(APIView):
+    """
+    Crea un plan desde el panel de administración.
+
+    - Plan MANUAL (billing_type="M"): solo se guarda localmente con nombre,
+      precio y número de sucursales.
+    - Plan de SUSCRIPCIÓN (billing_type="S"): además se crea el plan
+      correspondiente en Mercado Pago (preapproval_plan, mensual en MXN) y se
+      guarda su id en mp_plan_id. Es TODO o NADA: si MP falla, no se crea el
+      plan local y se devuelve el error de MP.
+
+    Solo accesible para superusuarios (administradores del sistema).
+
+    Campos:
+      - name (requerido)
+      - price (requerido, número > 0)
+      - stores (requerido, entero >= 1)
+      - billing_type (requerido, "M" o "S")
+    """
+    permission_classes = [IsSuperUser]
+
+    def post(self, request):
+        data = request.data
+        name = (data.get("name") or "").strip()
+        billing_type = (data.get("billing_type") or "").strip().upper()
+
+        if not name:
+            return Response(
+                {"error": "El campo 'name' es requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if billing_type not in ("M", "S"):
+            return Response(
+                {"error": "El campo 'billing_type' debe ser 'M' (manual) o 'S' (suscripción)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            price = float(data.get("price"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "El campo 'price' debe ser un número."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if price <= 0:
+            return Response(
+                {"error": "El precio debe ser mayor a 0."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            stores = int(data.get("stores"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "El campo 'stores' debe ser un número entero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if stores < 1:
+            return Response(
+                {"error": "El número de sucursales debe ser al menos 1."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        mp_plan_id = None
+
+        # Para suscripción, crear primero el plan en Mercado Pago (todo o nada).
+        if billing_type == "S":
+            plan_payload = {
+                "reason": f"SmartVenta - {name}",
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": price,
+                    "currency_id": "MXN",
+                },
+                "back_url": settings.MERCADO_PAGO_BACK_URL,
+            }
+            plan_headers = {
+                "Authorization": f"Bearer {settings.MERCADO_PAGO_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            }
+            logger.info(f"[AdminPlanCreate] Creando plan en MP: {plan_payload}")
+            try:
+                mp_resp = requests.post(
+                    "https://api.mercadopago.com/preapproval_plan",
+                    json=plan_payload,
+                    headers=plan_headers,
+                    timeout=20,
+                )
+            except requests.RequestException as exc:
+                logger.error(f"[AdminPlanCreate] Error de red con MP: {exc}")
+                return Response(
+                    {"error": "No se pudo conectar con Mercado Pago.", "details": str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            if mp_resp.status_code not in (200, 201):
+                try:
+                    details = mp_resp.json()
+                except ValueError:
+                    details = mp_resp.text
+                logger.error(f"[AdminPlanCreate] MP rechazó el plan: {mp_resp.status_code} - {details}")
+                return Response(
+                    {"error": "No se pudo crear el plan en Mercado Pago.", "details": details},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            mp_plan_id = mp_resp.json().get("id")
+
+        # Solo si MP salió bien (o es manual) se crea el plan local.
+        plan = Plan.objects.create(
+            name=name,
+            price=price,
+            stores=stores,
+            billing_type=billing_type,
+            mp_plan_id=mp_plan_id,
+            is_sandbox=False,
+        )
+
+        return Response(
+            {
+                "id": plan.id,
+                "name": plan.name,
+                "price": float(plan.price),
+                "stores": plan.stores,
+                "billing_type": plan.billing_type,
+                "billing_type_label": plan.get_billing_type_display(),
+                "mp_plan_id": plan.mp_plan_id or "",
+                "is_sandbox": plan.is_sandbox,
+                "tenants_count": 0,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class AdminTenantExistsView(APIView):
     """
     Verifica si un short_name ya está en uso. Solo superusuarios.
