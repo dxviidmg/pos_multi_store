@@ -13,10 +13,9 @@ from django.utils import timezone
 from django.db import transaction
 from rest_framework import mixins, status, viewsets
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
 from .models import Payment, Plan, Subscription, SubscriptionPayment, Tenant
 from .serializers import PaymentSerializer, SubscriptionSerializer, TenantSerializer
 from .utils import render_redeploy
@@ -37,6 +36,65 @@ class TenantViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets
     
     def get_object(self):
         return self.request.user.get_tenant()
+
+
+class IsSuperUser(BasePermission):
+    """Permite acceso solo a superusuarios (administradores del sistema)."""
+    message = {
+        "detail": "No tienes permisos para acceder a este recurso.",
+        "code": "not_superuser",
+    }
+
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        return bool(user and user.is_authenticated and user.is_superuser)
+
+
+class AdminTenantListView(APIView):
+    """
+    Lista todos los tenants del sistema.
+
+    Solo accesible para superusuarios (administradores del sistema sin tenant).
+    Cualquier otro usuario autenticado recibe 403.
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        from datetime import timedelta
+
+        tenants = Tenant.objects.all().order_by("name")
+        data = []
+        for t in tenants:
+            plan = t.get_plan()
+            monthly_amount = float(plan.price) if plan else 0.0
+
+            # Domiciliada = tiene una suscripción activa (autorizada) en MP,
+            # es decir, el cobro recurrente está vigente con tarjeta.
+            last_sub = t.subscription_set.order_by("-created_at").first()
+            is_domiciliada = bool(last_sub and last_sub.status == "authorized")
+
+            until = t.access_until()
+            # Próximo pago = día siguiente al fin del periodo pagado vigente.
+            next_payment_date = (until + timedelta(days=1)).isoformat() if until else None
+
+            data.append(
+                {
+                    "id": t.id,
+                    "name": t.name,
+                    "short_name": t.short_name,
+                    "is_sandbox": t.is_sandbox,
+                    "is_cancelled": t.is_cancelled,
+                    "is_domiciliada": is_domiciliada,
+                    "subscription_status": t.subscription_status(),
+                    "has_access": t.has_access(),
+                    "is_paid": t.has_access() and not t.is_cancelled,
+                    "monthly_amount": monthly_amount,
+                    "access_until": until.isoformat() if until else None,
+                    "next_payment_date": next_payment_date,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                }
+            )
+        return Response(data)
 
 
 class StoresCountView(APIView):
