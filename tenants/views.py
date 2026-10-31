@@ -97,6 +97,28 @@ class AdminTenantListView(APIView):
         return Response(data)
 
 
+class AdminPaymentsTotalView(APIView):
+    """
+    Devuelve la suma total de todos los pagos registrados (Payment.total).
+
+    Solo accesible para superusuarios (administradores del sistema).
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        from django.db.models import Sum
+
+        agg = Payment.objects.aggregate(total=Sum("total"))
+        total = agg["total"] or 0
+        count = Payment.objects.count()
+        return Response(
+            {
+                "total_income": float(total),
+                "payments_count": count,
+            }
+        )
+
+
 class StoresCountView(APIView):
     """Devuelve el conteo actual de tiendas y almacenes del tenant."""
     
