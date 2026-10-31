@@ -730,6 +730,137 @@ class AdminPlanCreateView(APIView):
         )
 
 
+class AdminPlanUpdateView(APIView):
+    """
+    Edita un plan existente (nombre, precio y nº de sucursales).
+
+    El tipo de facturación (billing_type) NO se puede cambiar.
+
+    Si el plan está vinculado a Mercado Pago (mp_plan_id), al cambiar el
+    nombre o el precio se actualiza también el preapproval_plan en MP
+    (PUT /preapproval_plan/{id}). Es TODO o NADA: si MP falla, no se guarda el
+    cambio local y se devuelve el error de MP.
+
+    IMPORTANTE: cambiar el precio afecta a las NUEVAS suscripciones; los
+    suscriptores ya activos conservan su monto anterior.
+
+    Solo accesible para superusuarios (administradores del sistema).
+    """
+    permission_classes = [IsSuperUser]
+
+    def put(self, request, plan_id):
+        try:
+            plan = Plan.objects.get(id=plan_id)
+        except Plan.DoesNotExist:
+            return Response(
+                {"error": "Plan no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        data = request.data
+        name = (data.get("name") or "").strip()
+        if not name:
+            return Response(
+                {"error": "El campo 'name' es requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            price = float(data.get("price"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "El campo 'price' debe ser un número."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if price <= 0:
+            return Response(
+                {"error": "El precio debe ser mayor a 0."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            stores = int(data.get("stores"))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "El campo 'stores' debe ser un número entero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if stores < 1:
+            return Response(
+                {"error": "El número de sucursales debe ser al menos 1."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Si está vinculado a MP y cambió el nombre o el precio, sincronizar.
+        name_changed = plan.name != name
+        price_changed = float(plan.price) != price
+        if plan.mp_plan_id and (name_changed or price_changed):
+            mp_payload = {
+                "reason": f"SmartVenta - {name}",
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": price,
+                    "currency_id": "MXN",
+                },
+            }
+            mp_headers = {
+                "Authorization": f"Bearer {settings.MERCADO_PAGO_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            }
+            logger.info(f"[AdminPlanUpdate] Actualizando plan en MP {plan.mp_plan_id}: {mp_payload}")
+            try:
+                mp_resp = requests.put(
+                    f"https://api.mercadopago.com/preapproval_plan/{plan.mp_plan_id}",
+                    json=mp_payload,
+                    headers=mp_headers,
+                    timeout=20,
+                )
+            except requests.RequestException as exc:
+                logger.error(f"[AdminPlanUpdate] Error de red con MP: {exc}")
+                return Response(
+                    {"error": "No se pudo conectar con Mercado Pago.", "details": str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            if mp_resp.status_code not in (200, 201):
+                try:
+                    details = mp_resp.json()
+                except ValueError:
+                    details = mp_resp.text
+                logger.error(f"[AdminPlanUpdate] MP rechazó la edición: {mp_resp.status_code} - {details}")
+                return Response(
+                    {"error": "No se pudo actualizar el plan en Mercado Pago.", "details": details},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Guardar cambios locales solo si MP salió bien (o no aplica).
+        plan.name = name
+        plan.price = price
+        plan.stores = stores
+        plan.save(update_fields=["name", "price", "stores"])
+
+        from django.db.models import Count
+        tenants_count = Plan.objects.filter(id=plan.id).annotate(
+            c=Count("tenant")
+        ).values_list("c", flat=True).first() or 0
+
+        return Response(
+            {
+                "id": plan.id,
+                "name": plan.name,
+                "price": float(plan.price),
+                "stores": plan.stores,
+                "billing_type": plan.billing_type,
+                "billing_type_label": plan.get_billing_type_display(),
+                "mp_plan_id": plan.mp_plan_id or "",
+                "is_sandbox": plan.is_sandbox,
+                "tenants_count": tenants_count,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class AdminTenantExistsView(APIView):
     """
     Verifica si un short_name ya está en uso. Solo superusuarios.
