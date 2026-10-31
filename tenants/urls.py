@@ -16,7 +16,9 @@ urlpatterns += [
     path('payments-by-tenant/', views.AdminPaymentsByTenantView.as_view(), name='admin-payments-by-tenant'),
     path('tenant-exists/', views.TenantExistsView.as_view(), name='tenant-exists'),
     path('stores-count/', views.StoresCountView.as_view(), name='stores-count'),
-    path('create-tenant/', views.PublicTenantCreateView.as_view(), name='public-tenant-create'),
+    path('tenants/register/', views.PublicTenantCreateView.as_view(), name='public-tenant-create'),
+    # Alias deprecado: mantener hasta migrar el frontend a tenants/register/
+    path('create-tenant/', views.PublicTenantCreateView.as_view(), name='public-tenant-create-legacy'),
     path('plans/', views.PublicPlansView.as_view(), name='public-plans'),
     path('redeploy-render/', views.RenderRedeployView.as_view(), name='redeploy-render'),
     path('tenant-info/', views.TenantInfoView.as_view(), name='tenant-info'),
