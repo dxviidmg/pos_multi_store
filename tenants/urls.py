@@ -16,6 +16,7 @@ urlpatterns += [
     path('admin-plans/', views.AdminPlansView.as_view(), name='admin-plans'),
     path('admin-plans-stats/', views.AdminPlansWithStatsView.as_view(), name='admin-plans-stats'),
     path('admin-plans/create/', views.AdminPlanCreateView.as_view(), name='admin-plan-create'),
+    path('admin-plans/<int:plan_id>/', views.AdminPlanUpdateView.as_view(), name='admin-plan-update'),
     path('admin-tenant-exists/', views.AdminTenantExistsView.as_view(), name='admin-tenant-exists'),
     path('payments-total/', views.AdminPaymentsTotalView.as_view(), name='admin-payments-total'),
     path('payments-by-tenant/', views.AdminPaymentsByTenantView.as_view(), name='admin-payments-by-tenant'),
