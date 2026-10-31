@@ -130,6 +130,7 @@ class CustomAuthToken(ObtainAuthToken):
             'store_printer': store.get_store_printer() if store else None,
             'role': role,
             'multistore': multistore,
+            'is_superuser': user.is_superuser,
         }
         if role == 'owner':
             # Marcar modo pago si el tenant venció (owner puede entrar a renovar).
