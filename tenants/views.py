@@ -119,6 +119,78 @@ class AdminPaymentsTotalView(APIView):
         )
 
 
+class AdminPaymentsByTenantView(APIView):
+    """
+    Devuelve el histórico de pagos agrupado por tenant (negocio).
+
+    Por cada tenant con al menos un pago, regresa el total pagado histórico,
+    el número de pagos, la fecha del primer y último pago, y la lista
+    detallada de pagos (fecha y monto) para poder graficar la evolución.
+
+    Solo accesible para superusuarios (administradores del sistema).
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        payments = (
+            Payment.objects.select_related("tenant")
+            .order_by("tenant_id", "start_of_validity", "id")
+        )
+
+        # Agrupar en memoria para construir el detalle por tenant.
+        by_tenant = {}
+        for p in payments:
+            t = p.tenant
+            entry = by_tenant.get(t.id)
+            if entry is None:
+                entry = {
+                    "tenant_id": t.id,
+                    "name": t.name,
+                    "short_name": t.short_name,
+                    "is_sandbox": t.is_sandbox,
+                    "total_paid": 0.0,
+                    "payments_count": 0,
+                    "first_payment": None,
+                    "last_payment": None,
+                    "payments": [],
+                }
+                by_tenant[t.id] = entry
+
+            amount = float(p.total or 0)
+            # Fecha representativa del pago: cuándo se registró.
+            paid_date = (
+                p.created_at.date().isoformat()
+                if p.created_at
+                else (p.start_of_validity.isoformat() if p.start_of_validity else None)
+            )
+
+            entry["total_paid"] += amount
+            entry["payments_count"] += 1
+            if entry["first_payment"] is None:
+                entry["first_payment"] = paid_date
+            entry["last_payment"] = paid_date
+            entry["payments"].append(
+                {
+                    "id": p.id,
+                    "amount": amount,
+                    "months": p.months,
+                    "date": paid_date,
+                    "start_of_validity": (
+                        p.start_of_validity.isoformat() if p.start_of_validity else None
+                    ),
+                    "end_of_validity": (
+                        p.end_of_validity.isoformat() if p.end_of_validity else None
+                    ),
+                }
+            )
+
+        # Ordenar de mayor a menor total pagado.
+        data = sorted(
+            by_tenant.values(), key=lambda e: e["total_paid"], reverse=True
+        )
+        return Response(data)
+
+
 class StoresCountView(APIView):
     """Devuelve el conteo actual de tiendas y almacenes del tenant."""
     
