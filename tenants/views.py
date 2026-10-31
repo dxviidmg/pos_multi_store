@@ -84,6 +84,9 @@ class AdminTenantListView(APIView):
                     "short_name": t.short_name,
                     "is_sandbox": t.is_sandbox,
                     "is_cancelled": t.is_cancelled,
+                    "cancelled_at": (
+                        t.cancelled_at.isoformat() if t.cancelled_at else None
+                    ),
                     "is_domiciliada": is_domiciliada,
                     "subscription_status": t.subscription_status(),
                     "has_access": t.has_access(),
