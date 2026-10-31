@@ -14,6 +14,7 @@ urlpatterns += [
     path('tenants/', views.AdminTenantListView.as_view(), name='admin-tenant-list'),
     path('tenants/create/', views.AdminTenantCreateView.as_view(), name='admin-tenant-create'),
     path('admin-plans/', views.AdminPlansView.as_view(), name='admin-plans'),
+    path('admin-plans-stats/', views.AdminPlansWithStatsView.as_view(), name='admin-plans-stats'),
     path('admin-tenant-exists/', views.AdminTenantExistsView.as_view(), name='admin-tenant-exists'),
     path('payments-total/', views.AdminPaymentsTotalView.as_view(), name='admin-payments-total'),
     path('payments-by-tenant/', views.AdminPaymentsByTenantView.as_view(), name='admin-payments-by-tenant'),

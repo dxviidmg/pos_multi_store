@@ -560,6 +560,41 @@ class AdminPlansView(APIView):
         return Response(serializer.data)
 
 
+class AdminPlansWithStatsView(APIView):
+    """
+    Lista TODOS los planes con estadísticas para el panel de administración:
+    nombre, precio, número de tiendas, tipo de facturación (manual o
+    suscripción) y cuántos negocios (tenants) tienen el plan asignado.
+
+    Solo accesible para superusuarios (administradores del sistema).
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        from django.db.models import Count
+
+        plans = (
+            Plan.objects.annotate(tenants_count=Count("tenant"))
+            .order_by("billing_type", "price")
+        )
+
+        data = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "price": float(p.price),
+                "stores": p.stores,
+                "billing_type": p.billing_type,  # "M" manual, "S" suscripción
+                "billing_type_label": p.get_billing_type_display(),
+                "mp_plan_id": p.mp_plan_id or "",
+                "is_sandbox": p.is_sandbox,
+                "tenants_count": p.tenants_count,
+            }
+            for p in plans
+        ]
+        return Response(data)
+
+
 class AdminTenantExistsView(APIView):
     """
     Verifica si un short_name ya está en uso. Solo superusuarios.
