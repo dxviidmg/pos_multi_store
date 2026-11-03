@@ -299,6 +299,7 @@ class TransferViewSet(viewsets.ModelViewSet):
             'message': f'Nuevo traspaso de {transfer.quantity}x {transfer.product.name} desde {transfer.origin_store.name}',
         })
 
+@method_decorator(get_store(), name="dispatch")
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
 
@@ -335,6 +336,50 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(total_stock__lte=max_stock)
 
         return queryset.order_by("brand__name", "name")
+
+    def perform_create(self, serializer):
+        # Validar initial_stock (opcional, entero > 0) antes de crear nada
+        raw_initial_stock = self.request.data.get("initial_stock")
+        initial_stock = None
+        if raw_initial_stock not in (None, ""):
+            try:
+                initial_stock = int(raw_initial_stock)
+            except (TypeError, ValueError):
+                raise ValidationError({"initial_stock": "El stock inicial debe ser un número entero."})
+            if initial_stock <= 0:
+                raise ValidationError({"initial_stock": "El stock inicial debe ser mayor a cero."})
+
+        with transaction.atomic():
+            # Al crear el producto, el signal post_save genera un StoreProduct
+            # (stock 0) en cada sucursal del tenant.
+            product = serializer.save()
+
+            if initial_stock is not None:
+                store = getattr(self.request, "store", None)
+                if store is None:
+                    raise ValidationError({"error": "Sucursal no especificada para el stock inicial."})
+
+                try:
+                    store_product = (
+                        StoreProduct.objects
+                        .select_for_update()
+                        .get(store=store, product=product)
+                    )
+                except StoreProduct.DoesNotExist:
+                    raise ValidationError({"error": "La sucursal no pertenece al negocio del producto."})
+
+                previous_stock = store_product.stock
+                store_product.stock = previous_stock + initial_stock
+                store_product.save()
+
+                StoreProductLog.objects.create(
+                    store_product=store_product,
+                    user=self.request.user,
+                    previous_stock=previous_stock,
+                    updated_stock=store_product.stock,
+                    action=LogAction.ENTRADA,
+                    movement=LogMovement.MANUAL,
+                )
 
     def perform_update(self, serializer):
         instance = serializer.instance

@@ -19,13 +19,9 @@ class UserViewSet(viewsets.ModelViewSet):
         user_id = request.data.get('user_id')
         old_password = request.data.get('old_password')
         new_password = request.data.get('new_password')
-        confirm_password = request.data.get('confirm_password')
 
-        if not old_password or not new_password or not confirm_password:
+        if not old_password or not new_password:
             return Response({'error': 'Todos los campos son requeridos'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if new_password != confirm_password:
-            return Response({'error': 'Las contraseñas no coinciden'}, status=status.HTTP_400_BAD_REQUEST)
 
         if user_id:
             user_id = int(user_id)
