@@ -1186,6 +1186,32 @@ class DepartmentDeleteView(APIView):
         )
 
 
+class WorkerExistsView(APIView):
+    """
+    Verifica si un username ya está en uso por cualquier usuario del sistema.
+
+    El username es único global, por lo que la búsqueda NO se limita al negocio
+    del usuario logueado: validar solo contra los vendedores del tenant daría
+    falsos "disponible" cuando el username ya existe en otro negocio.
+
+    Comparación sin distinguir mayúsculas (el frontend genera el usuario en
+    minúsculas). Solo accesible para propietarios y administradores; los
+    vendedores quedan bloqueados para evitar enumeración de usuarios.
+    """
+
+    def get(self, request):
+        if request.user.get_role() not in ("owner", "manager"):
+            return Response(
+                {"error": "No tienes permisos para acceder a este recurso."},
+                status=403,
+            )
+        username = request.query_params.get("username", "").strip()
+        if not username:
+            return Response({"error": "username is required"}, status=400)
+        exists = User.objects.filter(username__iexact=username).exists()
+        return Response({"exists": exists})
+
+
 @method_decorator(get_store(), name="dispatch")
 class StoreWorkerViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
