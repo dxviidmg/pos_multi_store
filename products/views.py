@@ -828,8 +828,22 @@ class ResetStoreStockView(APIView):
         tenant = user.get_tenant()
         store = get_object_or_404(Store, id=pk, tenant=tenant)
         
-        store.store_products.update(stock=0)
-        
+        with transaction.atomic():
+            store_products = list(store.store_products.exclude(stock=0).select_for_update())
+            logs = [
+                StoreProductLog(
+                    store_product=sp,
+                    user=user,
+                    previous_stock=sp.stock,
+                    updated_stock=0,
+                    action=LogAction.AJUSTE,
+                    movement=LogMovement.MANUAL,
+                )
+                for sp in store_products
+            ]
+            store.store_products.filter(id__in=[sp.id for sp in store_products]).update(stock=0)
+            StoreProductLog.objects.bulk_create(logs)
+
         return Response(status=status.HTTP_200_OK)
 
 
